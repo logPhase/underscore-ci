@@ -53,6 +53,7 @@ enrichment.
 
 | Input | Default | Meaning |
 |---|---|---|
+| `mode` | `pr` | `pr`: analyze the PR diff (needs a `pull_request` event). `full`: whole-repo report, works on `workflow_dispatch` — see [On-demand full-repo report](#on-demand-full-repo-report). |
 | `delivery` | `artifact` | `artifact`: single-file HTML via the `report-file` output. `pages`: static dir via `publish-dir` for a Pages deploy step. |
 | `sln` | auto-detect | Repo-relative `.sln`/`.slnx` path — required only when the repo has several solutions. |
 | `lang` | `csharp` | `csharp` \| `java` \| `python` (C# is the supported bundle today). |
@@ -84,6 +85,29 @@ cleanup job prunes the folder (see the commented block in the example
 workflow). Note: *private* Pages requires GitHub Enterprise Cloud — that is
 why artifact is the default.
 
+## On-demand full-repo report
+
+Pass `mode: full` to get a whole-repo report (every journey and chapter — no
+PR diff) from a manually dispatched workflow. Copy
+[`examples/underscore-full.yml`](examples/underscore-full.yml) to
+`.github/workflows/underscore-full.yml` and run it from the Actions tab.
+
+- Runs on `workflow_dispatch` — no `pull_request` event or payload is needed,
+  and no PR comment is posted (`pr-number` output stays empty).
+- Report staging and delivery are identical to PR mode: the single-file HTML
+  lands at the `report-file` output. The example workflow commits it to an
+  orphan **`underscore-reports`** branch as
+  `reports/<UTC timestamp>-run-<n>/underscore-report.html` plus a stable
+  `latest/underscore-report.html` (needs `permissions: contents: write`).
+- **Failure posture differs from PR mode:** in full mode an analysis failure
+  always fails the step, regardless of `fail-on-error` — there is no PR to
+  post a failure comment on, and a green no-op would be misleading for a
+  manually dispatched run.
+- `INTENT_DRIFT_URL` / `INTENT_DRIFT_TOKEN` remain optional — omit them for a
+  structural-only report. In full mode enrichment adds **journey summaries**
+  (the `analyze` pipeline's workbook); BPMN diagrams and the PR overview
+  narrative are PR-mode enrichments and are not produced here.
+
 ## Structural-only vs enriched
 
 | | Structural-only | Enriched |
@@ -93,6 +117,10 @@ why artifact is the default.
 | Business-flow (BPMN) diagrams, PR overview narrative, journey knowledge | no | yes |
 | Data leaving your runner | none | PR diff + changed method bodies go to the hosted analyzer (and on to Anthropic) |
 | Cost | free compute on your runner | metered per-PR via analyzer credits |
+
+The enriched column describes `mode: pr`; in `mode: full` enrichment adds
+journey summaries instead (see
+[On-demand full-repo report](#on-demand-full-repo-report)).
 
 Enrichment soft-degrades: a missing/expired token or unreachable analyzer
 never fails the run — you simply get the structural report. `ANTHROPIC_API_KEY`

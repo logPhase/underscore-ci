@@ -14,6 +14,9 @@ set -euo pipefail
 CI_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DESKTOP_DIR="${1:-${UNDERSCORE_DESKTOP_DIR:-$(cd "$CI_DIR/.." && pwd)/underscore-desktop}}"
 IMAGE_TAG="${IMAGE_TAG:-ghcr.io/logphase/underscore-ci:dev}"
+# GitHub-hosted runners are linux/amd64 — force the platform so images built
+# on Apple Silicon don't ship as unrunnable arm64.
+IMAGE_PLATFORM="${IMAGE_PLATFORM:-linux/amd64}"
 CTX="$CI_DIR/.docker-context"
 
 [[ -d "$DESKTOP_DIR/backend" ]] || {
@@ -60,8 +63,8 @@ grep -q '__UNDERSCORE_REPORT_DATA__' "$SINGLEFILE" || {
 }
 cp "$SINGLEFILE" "$CTX/underscore-report.template.html"
 
-echo "==> docker build $IMAGE_TAG"
-docker build -t "$IMAGE_TAG" -f "$CI_DIR/Dockerfile" "$CI_DIR"
+echo "==> docker build $IMAGE_TAG ($IMAGE_PLATFORM)"
+docker build --platform "$IMAGE_PLATFORM" -t "$IMAGE_TAG" -f "$CI_DIR/Dockerfile" "$CI_DIR"
 
 echo "Built $IMAGE_TAG"
 echo "Push with: docker push $IMAGE_TAG"

@@ -1,8 +1,10 @@
 name: 'Underscore PR Analysis'
 description: >-
-  Runs Underscore PR impact analysis on the checked-out pull request and
-  publishes an interactive static report (journeys, impact overlay, BPMN,
-  chapter deep-dives). Requires actions/checkout with fetch-depth: 0.
+  Runs Underscore analysis on the checked-out repository and publishes an
+  interactive static report (journeys, impact overlay, BPMN, chapter
+  deep-dives). Default mode analyzes the pull request diff; mode 'full'
+  produces an on-demand whole-repo report. Requires actions/checkout with
+  fetch-depth: 0.
 author: 'logPhase'
 
 branding:
@@ -16,6 +18,17 @@ branding:
 # private (per-client pull tokens) while working on stock hosted runners.
 
 inputs:
+  mode:
+    description: >-
+      Analysis mode. 'pr' (default) analyzes the pull request diff and needs
+      a pull_request event. 'full' produces a whole-repo report and works on
+      workflow_dispatch — no PR payload is read, no PR comment is posted, and
+      the pr-number output stays empty. Note: in 'full' mode an analysis
+      failure ALWAYS fails the step, regardless of fail-on-error — there is
+      no PR to post a failure comment on, so a green no-op would be
+      misleading.
+    required: false
+    default: 'pr'
   delivery:
     description: >-
       Report delivery mode. 'artifact' (default) emits a single-file HTML
@@ -97,6 +110,7 @@ runs:
       shell: bash
       env:
         UNDERSCORE_IMAGE: ${{ inputs.image }}
+        MODE: ${{ inputs.mode }}
         DELIVERY: ${{ inputs.delivery }}
         SLN: ${{ inputs.sln }}
         UNDERSCORE_LANG: ${{ inputs.lang }}
@@ -124,6 +138,7 @@ runs:
           -e GH_TOKEN \
           -e INTENT_DRIFT_URL \
           -e INTENT_DRIFT_TOKEN \
+          -e MODE \
           -e DELIVERY \
           -e SLN \
           -e UNDERSCORE_LANG \

@@ -1,0 +1,85 @@
+# Underscore full-repo report — copy to .github/workflows/underscore-full.yml
+#
+# On-demand (workflow_dispatch): analyzes the WHOLE repository — every journey,
+# business flow, and chapter — and commits the single-file HTML report to an
+# orphan `underscore-reports` branch (timestamped run dir + latest/).
+#
+# Unlike the PR workflow, an analysis failure always fails this run: there is
+# no PR to fall back to a comment on, and a green no-op would be misleading.
+#
+# Secrets required:
+#   UNDERSCORE_GHCR_USER / UNDERSCORE_GHCR_TOKEN — pull auth for the private
+#     analysis image (the action does the docker login/pull itself)
+#   INTENT_DRIFT_URL / INTENT_DRIFT_TOKEN — hosted analyzer (omit token for
+#     structural-only)
+name: Underscore Full Report
+on: workflow_dispatch
+
+permissions:
+  contents: write # push the report to the underscore-reports branch
+
+# Serialize dispatches: overlapping runs would both commit on the same
+# underscore-reports tip and the later push would be rejected (non-fast-forward).
+concurrency:
+  group: underscore-reports
+
+jobs:
+  underscore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history — journey discovery walks the repo's git state
+      - id: underscore
+        uses: logPhase/underscore-ci@v1
+        with:
+          mode: full
+          ghcr-username: ${{ secrets.UNDERSCORE_GHCR_USER }}
+          ghcr-token: ${{ secrets.UNDERSCORE_GHCR_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # INTENT_DRIFT_* are optional — omit them for a structural-only
+          # report. In full mode enrichment adds journey summaries (BPMN
+          # diagrams and the PR overview narrative are PR-mode-only).
+          INTENT_DRIFT_URL: ${{ secrets.INTENT_DRIFT_URL }}
+          INTENT_DRIFT_TOKEN: ${{ secrets.INTENT_DRIFT_TOKEN }}
+
+      # Commit the single-file report to the orphan `underscore-reports`
+      # branch: reports/<UTC timestamp>-run-<n>/underscore-report.html plus a
+      # stable latest/underscore-report.html. Worktrees share the main
+      # checkout's config, so the actions/checkout persisted credentials and
+      # the git identity below apply — no extra token plumbing needed.
+      - name: Publish report to underscore-reports branch
+        run: |
+          set -euo pipefail
+
+          REPORT_FILE="${{ steps.underscore.outputs.report-file }}"
+          if [[ -z "$REPORT_FILE" || ! -f "$REPORT_FILE" ]]; then
+            echo "::error::report-file output missing — the analysis step produced no report"
+            exit 1
+          fi
+
+          git config user.name "underscore-bot"
+          git config user.email "bot@logphase.io"
+
+          WORKTREE=/tmp/underscore-reports
+          if git ls-remote --exit-code --heads origin underscore-reports >/dev/null; then
+            git fetch origin "underscore-reports:underscore-reports"
+            git worktree add "$WORKTREE" underscore-reports
+          else
+            # First run: create the orphan branch (git >= 2.42, ubuntu-latest).
+            git worktree add --orphan -b underscore-reports "$WORKTREE"
+            # An orphan worktree must start empty — drop anything inherited
+            # from the main checkout's index.
+            git -C "$WORKTREE" rm -rf --cached . >/dev/null 2>&1 || true
+          fi
+
+          STAMP="$(date -u +%Y%m%d-%H%M%S)"
+          DEST="reports/${STAMP}-run-${{ github.run_number }}"
+          mkdir -p "$WORKTREE/$DEST" "$WORKTREE/latest"
+          cp "$REPORT_FILE" "$WORKTREE/$DEST/underscore-report.html"
+          cp "$REPORT_FILE" "$WORKTREE/latest/underscore-report.html"
+
+          git -C "$WORKTREE" add -A
+          git -C "$WORKTREE" commit -m "underscore full report ${STAMP} (run ${{ github.run_number }})"
+          git -C "$WORKTREE" push origin underscore-reports

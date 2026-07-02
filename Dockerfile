@@ -55,3 +55,6 @@ COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]
+
+# Last on purpose: metadata-only layer, keeps everything above cache-stable.
+LABEL org.opencontainers.image.source="https://github.com/logPhase/underscore-ci"

@@ -6,3 +6,5 @@ public/pr-output.json
 dev-runs/
 .DS_Store
 *.tsbuildinfo
+# staged image inputs — never commit (contains the backend uberjar)
+.docker-context/
