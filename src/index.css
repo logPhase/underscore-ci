@@ -1,0 +1,1336 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600&display=swap");
+
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/* Dark mode support */
+@custom-variant dark (&:is(.dark *));
+
+/* Tailwind v4 theme tokens */
+@theme {
+  /* Fonts */
+  --font-sans: "Space Grotesk", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  /* Radius */
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+
+  /* App Colors */
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  /* Sidebar */
+  --color-sidebar: hsl(var(--sidebar-background));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+
+  --color-sidebar-primary: hsl(var(--sidebar-primary));
+  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
+
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-sidebar-ring: hsl(var(--sidebar-ring));
+
+  /* Container */
+  --container-2xl: 1400px;
+
+  /* Custom animations */
+  --animate-fade-in: fade-in 0.3s ease-out;
+  --animate-scale-in: scale-in 0.2s ease-out;
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+}
+/* 220 22% 8% */
+/* Base theme variables */
+:root {
+  --background: 220 22% 6%;
+  --foreground: 210 20% 88%;
+
+  --card: 220 20% 9%;
+  --card-foreground: 210 20% 88%;
+
+  --popover: 220 20% 10%;
+  --popover-foreground: 210 20% 88%;
+
+  --primary: 180 55% 45%;
+  --primary-foreground: 220 22% 6%;
+
+  --secondary: 220 15% 16%;
+  --secondary-foreground: 210 20% 78%;
+
+  --muted: 220 15% 13%;
+  --muted-foreground: 215 12% 45%;
+
+  --accent: 35 80% 55%;
+  --accent-foreground: 220 22% 6%;
+
+  --destructive: 0 65% 50%;
+  --destructive-foreground: 210 40% 98%;
+
+  --border: 220 15% 18%;
+  --input: 220 15% 18%;
+  --ring: 180 55% 45%;
+
+  --radius: 0.75rem;
+
+  --sidebar-background: 220 20% 9%;
+  --sidebar-foreground: 210 20% 78%;
+
+  --sidebar-primary: 180 55% 45%;
+  --sidebar-primary-foreground: 220 22% 6%;
+
+  --sidebar-accent: 220 16% 13%;
+  --sidebar-accent-foreground: 210 20% 78%;
+
+  --sidebar-border: 220 15% 18%;
+  --sidebar-ring: 180 55% 45%;
+}
+
+/* Optional container utility */
+@utility container {
+  margin-inline: auto;
+  padding-inline: 2rem;
+
+  @media (width >= 1400px) {
+    max-width: 1400px;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background font-sans text-foreground;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow: hidden;
+  }
+
+  code,
+  .font-mono {
+    font-family: var(--font-mono);
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(220 15% 22%);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(210 15% 35%);
+}
+
+/* Range input styling */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 2px;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: hsl(270 50% 55%);
+  cursor: pointer;
+  border: 2px solid hsl(220 20% 12%);
+  box-shadow: 0 0 6px hsl(270 50% 55% / 0.4);
+}
+
+/* SVG pointer events for stroked lines */
+.pointer-events-stroke {
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+/* Keyframes */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes fadeInBand {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes accordion-down {
+  from {
+    height: 0;
+  }
+
+  to {
+    height: var(--radix-accordion-content-height);
+  }
+}
+
+@keyframes accordion-up {
+  from {
+    height: var(--radix-accordion-content-height);
+  }
+
+  to {
+    height: 0;
+  }
+}
+
+/* Animation utilities */
+.animate-fade-in {
+  animation: var(--animate-fade-in);
+}
+
+.animate-scale-in {
+  animation: var(--animate-scale-in);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   CLI-parity port — --bpmn-* token system, reading/code typography, popup
+   chrome, paper theme. Ported from underscore_cli/webapp/src/index.css.
+   Everything below is additive: the Tailwind v4 @theme block above is the
+   desktop baseline; these tokens power the ported BPMN/journey surfaces.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* ────────────────────────────────────────────────────────────────────────────
+   BPMN canvas — scoped design tokens
+
+   The diagram is a distinct visual artifact within the app: engineering-
+   drawing aesthetic with a paper-warm dark palette, plex mono throughout,
+   and a Fraunces serif reserved only for the diagram title. These tokens
+   live behind `.bpmn-canvas-root` so they never leak into the rest of the
+   UI (which uses Space Grotesk / JetBrains Mono). The scoping is also why
+   downstream node/edge/canvas components reference these by name instead
+   of redefining colours per file.
+   ──────────────────────────────────────────────────────────────────────── */
+
+.bpmn-canvas-root {
+  /* Surfaces — warm dark navy, slightly hand-mixed to feel like ink on paper
+     rather than #000-stop-out. */
+  --bpmn-bg:           #0b0d10;
+  --bpmn-bg-deep:      #07090c;
+  --bpmn-surface:      #161a1f;
+  --bpmn-surface-hi:   #1e242b;
+  --bpmn-surface-soft: #11141a;
+
+  /* Borders — three weights so we can rank node emphasis without colour. */
+  --bpmn-border:       #2a3038;
+  --bpmn-border-em:    #3a4148;
+  --bpmn-border-soft:  #1d2128;
+
+  /* Text — warm off-white (paper) primary, cool grays for fallback levels. */
+  --bpmn-text:         #e8e4dc;
+  --bpmn-text-muted:   #8a8f97;
+  --bpmn-text-dim:     #5a5f67;
+
+  /* Status accents — deliberately muted, print-feel, not neon.
+     Reserved meanings:
+       mint  = added / grant / success-end
+       amber = modified / warning
+       rose  = deleted / deny / error-end
+       cyan  = decision (gateways only) and selection.
+     The cyan is the *only* bright value in the palette; everything else
+     is muted. That intentional asymmetry pulls the eye to decision points,
+     which is the load-bearing semantic in a BPMN diagram. */
+  --bpmn-mint:         #7dd3ae;
+  --bpmn-mint-soft:    #4a8a72;
+  --bpmn-amber:        #d4a574;
+  --bpmn-amber-soft:   #8a6e4e;
+  --bpmn-rose:         #d18589;
+  --bpmn-rose-soft:    #8a585c;
+  --bpmn-cyan:         #7dd3fc;
+
+  /* Typography — IBM Plex Mono for data, Fraunces serif for the diagram
+     title only. Plex has more engineering character than JetBrains Mono
+     (which the rest of the app uses) — distinct from the surrounding UI
+     by design. */
+  --bpmn-font-mono:    'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --bpmn-font-display: 'Fraunces', ui-serif, Georgia, serif;
+
+  /* Paper export — slightly warm cream, not pure white. Lifted from the
+     paper colour of engineering vellum so PNGs pasted into Slack / docs
+     read as artifacts rather than screenshots. */
+  --bpmn-paper:        #fbf8f1;
+  --bpmn-paper-edge:   #e6e0d2;
+}
+
+/* ── Journey-screen motion tokens ─────────────────────────────────────
+   One rhythm for the whole screen: enter 220ms ease-out, exit faster
+   (150ms), transform/opacity only (no layout-affecting properties).
+   Hierarchy-motion: panels enter from the direction they live in —
+   the code drawer rises from below, rail sections fade in place. */
+.code-drawer-enter {
+  animation: code-drawer-rise 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes code-drawer-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Rail sections (overview page / call-graph header) — quick fade-in so
+   view switches feel composed rather than popped. */
+.rail-section-enter {
+  animation: rail-section-in 200ms ease-out both;
+}
+@keyframes rail-section-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Primary-intent journey cards — a slow cyan breathing halo that says
+   "start here" without competing with the status-accent left-border
+   treatment the card already has (amber/red/green/sky-blue).
+   Box-shadow only — never animates layout properties. */
+.journey-primary-pulse {
+  animation: journey-primary-pulse 2400ms ease-in-out infinite;
+}
+@keyframes journey-primary-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 0 hsl(178 95% 62% / 0),
+      0 0 18px 0 hsl(178 95% 62% / 0.18);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px hsl(178 95% 62% / 0.45),
+      0 0 28px 4px hsl(178 95% 62% / 0.30);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .code-drawer-enter,
+  .rail-section-enter {
+    animation: none;
+  }
+  .journey-primary-pulse {
+    animation: none;
+    box-shadow: 0 0 0 1px hsl(178 95% 62% / 0.45);
+  }
+}
+
+/* ── Landing Library — card entrance + form expand ───────────────────
+   Cards stagger in (delay set inline, 40ms/card, capped); the collapsed
+   analyze bar expands in place at 200ms ease-out. Transform/opacity
+   only — both off under prefers-reduced-motion. */
+.library-card-enter {
+  animation: library-card-in 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes library-card-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.library-form-expand {
+  animation: library-form-in 200ms ease-out both;
+}
+@keyframes library-form-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .library-card-enter,
+  .library-form-expand {
+    animation: none;
+  }
+}
+
+/* Library interactive states — hover/active feedback the inline styles
+   can't express. Token-driven so dark + paper both work; color/filter
+   only on hover (no motion), a 150ms ride, and a subtle press scale
+   (transform — no layout shift). */
+.lib-btn-primary {
+  transition: filter 150ms ease, transform 100ms ease;
+}
+.lib-btn-primary:hover:not(:disabled) {
+  filter: brightness(1.12);
+}
+.lib-btn-ghost {
+  transition: color 150ms ease, border-color 150ms ease,
+    background-color 150ms ease, transform 100ms ease;
+}
+.lib-btn-ghost:hover:not(:disabled) {
+  color: var(--bpmn-text);
+  border-color: var(--bpmn-border-em);
+  background: var(--bpmn-surface-hi);
+}
+.lib-pill {
+  transition: background-color 150ms ease, border-color 150ms ease,
+    transform 100ms ease;
+}
+.lib-pill:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--bpmn-cyan) 16%, transparent);
+  border-color: color-mix(in srgb, var(--bpmn-cyan) 55%, transparent);
+}
+.lib-history-row {
+  transition: background-color 150ms ease;
+}
+.lib-history-row:hover:not(:disabled) {
+  background: var(--bpmn-surface-hi);
+}
+/* Favorite star — hidden until its card/header (.lib-star-scope) is
+   hovered or the button has keyboard focus; always visible once starred
+   (aria-pressed). Opacity only — no motion. */
+.lib-star {
+  opacity: 0;
+  transition: opacity 150ms ease, background-color 150ms ease;
+}
+.lib-star-scope:hover .lib-star,
+.lib-star:focus-visible,
+.lib-star[aria-pressed="true"] {
+  opacity: 1;
+}
+.lib-star:hover {
+  background: var(--bpmn-surface-hi);
+}
+.lib-btn-primary:active:not(:disabled),
+.lib-btn-ghost:active:not(:disabled),
+.lib-pill:active:not(:disabled) {
+  transform: scale(0.97);
+}
+@media (prefers-reduced-motion: reduce) {
+  .lib-btn-primary:active:not(:disabled),
+  .lib-btn-ghost:active:not(:disabled),
+  .lib-pill:active:not(:disabled) {
+    transform: none;
+  }
+}
+
+/* Session rail (session-shell.tsx) — nav/identity interaction states.
+   Token-driven so dark + paper both work. Active = surface lift + a
+   3px accent left bar (inset shadow — no layout shift) + ink text. */
+.rail-nav-item {
+  color: var(--bpmn-text-muted);
+  transition: background-color 150ms ease, color 150ms ease;
+}
+.rail-nav-item:hover:not(:disabled) {
+  background: var(--bpmn-surface-hi);
+  color: var(--bpmn-text);
+}
+.rail-nav-active,
+.rail-nav-active:hover {
+  background: var(--bpmn-surface-hi);
+  color: var(--bpmn-text);
+  box-shadow: inset 3px 0 0 0 var(--bpmn-cyan);
+}
+
+/* Bionic-reading aid (opt-in, see BionicText.tsx). Weight carries the
+   fixation anchor; a slight brightness lift keeps the bold prefixes
+   legible inside muted paragraph colors without changing hue. */
+.bionic-text b {
+  font-weight: 700;
+  color: color-mix(in srgb, currentColor 78%, #ffffff);
+}
+
+/* ── Code readability — JetBrains Mono + app-palette syntax theme ────
+   One surface class for EVERY place source renders (code panel, BPMN
+   step functions, drift map strips). 12px / 1.7 — the old 10.5-11px
+   grey-on-grey was the "really hard time reading" complaint. Token
+   colors stay on the app palette (cyan keywords, mint types, warm
+   strings) so highlighted code reads as part of the product, not a
+   pasted editor theme. */
+:root {
+  --code-font: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.code-surface {
+  font-family: var(--code-font);
+  font-size: 12px;
+  line-height: 1.7;
+  font-variant-ligatures: none;
+  tab-size: 4;
+  color: #d6d3cb; /* base text — brighter than the old zinc-300-on-deep */
+}
+
+.code-surface .token.comment,
+.code-surface .token.prolog,
+.code-surface .token.doctype,
+.code-surface .token.cdata { color: #767e87; font-style: italic; }
+
+.code-surface .token.keyword,
+.code-surface .token.boolean,
+.code-surface .token.null { color: #7dd3fc; }
+
+.code-surface .token.class-name,
+.code-surface .token.namespace,
+.code-surface .token.return-type,
+.code-surface .token.generic { color: #7dd3ae; }
+
+.code-surface .token.function { color: #e5c07b; }
+
+.code-surface .token.string,
+.code-surface .token.char,
+.code-surface .token.attr-value,
+.code-surface .token.interpolation-string { color: #ce9a6f; }
+
+.code-surface .token.number { color: #c5ae87; }
+
+.code-surface .token.operator,
+.code-surface .token.punctuation { color: #8a8f97; }
+
+.code-surface .token.property,
+.code-surface .token.constant,
+.code-surface .token.symbol { color: #b8c7e0; }
+
+.code-surface .token.preprocessor,
+.code-surface .token.directive,
+.code-surface .token.annotation { color: #9a8fc8; }
+
+/* ── Reading prose — Literata for narrative text ─────────────────────
+   The journey overview is READ, at length ("people would be reading
+   this a lot... make it immensely readable"). Mono stays for data and
+   labels; narrative paragraphs get a reading face at a reading size:
+   15px Literata / 1.75, measure-capped, brighter than the old
+   11-13px muted mono. */
+:root {
+  --reading-font: 'Literata', ui-serif, Georgia, 'Times New Roman', serif;
+}
+
+.prose-read {
+  font-family: var(--reading-font);
+  font-size: 15px;
+  line-height: 1.75;
+  letter-spacing: 0.004em;
+  color: var(--bpmn-text);
+  max-width: 68ch;
+}
+
+.prose-read b { font-weight: 600; }  /* bionic reading bolding */
+
+/* Smaller companion for secondary narrative (neighbor relations,
+   impact outcomes) — same face, one step down, still ≥13px. */
+.prose-read-sm {
+  font-family: var(--reading-font);
+  font-size: 13.5px;
+  line-height: 1.7;
+  letter-spacing: 0.004em;
+  color: var(--bpmn-text-muted);
+  max-width: 68ch;
+}
+
+.prose-read-sm b { font-weight: 600; }
+
+/* ── Business-flow popup — engineering-atelier chrome ────────────────
+   The flow popup is a PLACE, not a panel: layered navy depth, a
+   blueprint dot-grid under the diagram, a gradient hairline frame,
+   and one orchestrated entrance (scale+rise+fade, ease-out-expo).
+   Title set in Fraunces italic — same display voice as the diagram's
+   paper exports. */
+
+@keyframes bpmn-popup-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.965); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes bpmn-scrim-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.bpmn-popup-scrim {
+  animation: bpmn-scrim-in 200ms ease-out both;
+}
+
+.bpmn-popup-frame {
+  position: relative;
+  border-radius: 18px;
+  background:
+    radial-gradient(120% 90% at 18% 0%, hsl(222 32% 11%) 0%, transparent 55%),
+    linear-gradient(165deg, hsl(223 28% 8.5%) 0%, hsl(226 24% 4.5%) 60%);
+  box-shadow:
+    0 32px 90px rgb(0 0 0 / 0.6),
+    0 4px 18px rgb(0 0 0 / 0.45),
+    0 0 0 1px hsl(222 20% 14%),
+    0 0 64px -18px rgba(125, 211, 174, 0.18);
+  animation: bpmn-popup-in 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+/* gradient hairline frame — mint into cyan, fading through the middle */
+.bpmn-popup-frame::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    130deg,
+    rgba(125, 211, 174, 0.45) 0%,
+    rgba(125, 211, 174, 0.08) 28%,
+    rgba(125, 211, 252, 0.06) 70%,
+    rgba(125, 211, 252, 0.35) 100%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* blueprint dot-grid + corner vignette under the diagram */
+.bpmn-popup-canvas {
+  background-image:
+    radial-gradient(140% 100% at 50% 120%, rgba(0, 0, 0, 0.42) 0%, transparent 60%),
+    radial-gradient(circle, rgba(125, 211, 252, 0.055) 1px, transparent 1.4px);
+  background-size: 100% 100%, 24px 24px;
+}
+
+/* pulsing locator dot on the "select a step" hint */
+@keyframes bpmn-hint-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(125, 211, 174, 0.45); }
+  60%      { box-shadow: 0 0 0 5px rgba(125, 211, 174, 0); }
+}
+.bpmn-hint-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--bpmn-mint);
+  animation: bpmn-hint-pulse 2.2s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bpmn-popup-frame, .bpmn-popup-scrim { animation: none; }
+  .bpmn-hint-dot { animation: none; }
+}
+
+/* let the popup's blueprint grid show through the canvas component */
+.bpmn-popup-canvas .bpmn-canvas-root { background: transparent !important; } /* beats the inline var(--bpmn-bg) so the blueprint grid shows */
+
+/* ── Reading-paper surface — scoped token remap ──────────────────────
+   Two-surface system: WORKING canvases (diagrams, code, maps) stay
+   dark; READING pages flip to warm paper by remapping the --bpmn-*
+   tokens inside one scope. Same components, same semantics — mint
+   stays "added/success", amber stays "warning" — but in deep print
+   tones that hold 4.5:1+ on cream. Wrap any page in .reading-paper
+   to make it a document. */
+/* html.reading-paper out-ranks the :root dark baseline (0,1,1 beats
+   0,1,0); the descendant selector out-ranks .bpmn-canvas-root's own
+   dark token block, so a BPMN canvas nested in a paper scope flips. */
+html.reading-paper,
+.reading-paper,
+.reading-paper .bpmn-canvas-root {
+  --bpmn-bg:           #faf7f0;   /* warm cream, glare-free */
+  --bpmn-bg-deep:      #f3efe5;
+  --bpmn-surface:      #ffffff;
+  --bpmn-surface-hi:   #f6f2e9;
+  --bpmn-surface-soft: #f6f2e9;
+  --bpmn-border:       #d8d1bf;
+  --bpmn-border-em:    #c4bca6;
+  --bpmn-border-soft:  #e6dfcd;
+  --bpmn-text:         #2c2a25;   /* ink — 12.4:1 */
+  --bpmn-text-muted:   #5d5950;   /* 6.6:1 */
+  --bpmn-text-dim:     #8b8579;   /* labels/eyebrows only */
+  --bpmn-mint:         #2e7d5b;   /* deep sage */
+  --bpmn-mint-soft:    #5d9c7f;
+  --bpmn-amber:        #9a6217;   /* ochre ink */
+  --bpmn-amber-soft:   #b98a4a;
+  --bpmn-rose:         #b04a52;
+  --bpmn-cyan:         #1d6f8f;   /* slate blue */
+  background: var(--bpmn-bg);
+  -webkit-font-smoothing: antialiased;
+}
+/* reading sizes step UP on paper — this surface exists to be read */
+.reading-paper .prose-read    { font-size: 16px;  line-height: 1.8; }
+.reading-paper .prose-read-sm { font-size: 14px;  line-height: 1.75; }
+
+/* ── Paper variants of the popup chrome + light code theme ───────────
+   Popups opened from a paper page are paper too: add .reading-paper to
+   the dialog frame and the tokens flip; these rules restyle the
+   atelier chrome and re-pitch the syntax theme for ink-on-cream. */
+.reading-paper.bpmn-popup-frame,
+.reading-paper .bpmn-popup-frame {
+  background:
+    radial-gradient(120% 90% at 18% 0%, #ffffff 0%, transparent 55%),
+    linear-gradient(165deg, #fdfbf5 0%, #f3eee1 60%);
+  box-shadow:
+    0 32px 90px rgb(60 50 30 / 0.28),
+    0 4px 18px rgb(60 50 30 / 0.16),
+    0 0 0 1px #e3dccb;
+}
+.reading-paper.bpmn-popup-frame::before,
+.reading-paper .bpmn-popup-frame::before {
+  background: linear-gradient(
+    130deg,
+    rgba(46, 125, 91, 0.45) 0%,
+    rgba(46, 125, 91, 0.10) 28%,
+    rgba(29, 111, 143, 0.08) 70%,
+    rgba(29, 111, 143, 0.40) 100%
+  );
+}
+.reading-paper .bpmn-popup-canvas {
+  background-image:
+    radial-gradient(140% 100% at 50% 120%, rgba(120, 100, 60, 0.10) 0%, transparent 60%),
+    radial-gradient(circle, rgba(29, 111, 143, 0.10) 1px, transparent 1.4px);
+  background-size: 100% 100%, 24px 24px;
+}
+
+/* Light syntax theme — same token grammar, print pitches. Base ink is
+   near-black; keywords slate blue, types sage, functions ochre,
+   strings sienna — every pair ≥4.5:1 on the cream surfaces. */
+.reading-paper .code-surface { color: #33312b; }
+.reading-paper .code-surface .token.comment,
+.reading-paper .code-surface .token.prolog,
+.reading-paper .code-surface .token.doctype,
+.reading-paper .code-surface .token.cdata { color: #8a8478; }
+.reading-paper .code-surface .token.keyword,
+.reading-paper .code-surface .token.boolean,
+.reading-paper .code-surface .token.null { color: #1d6f8f; }
+.reading-paper .code-surface .token.class-name,
+.reading-paper .code-surface .token.namespace,
+.reading-paper .code-surface .token.return-type,
+.reading-paper .code-surface .token.generic { color: #2e7d5b; }
+.reading-paper .code-surface .token.function { color: #8a5a14; }
+.reading-paper .code-surface .token.string,
+.reading-paper .code-surface .token.char,
+.reading-paper .code-surface .token.attr-value,
+.reading-paper .code-surface .token.interpolation-string { color: #aa5d2b; }
+.reading-paper .code-surface .token.number { color: #7a6840; }
+.reading-paper .code-surface .token.operator,
+.reading-paper .code-surface .token.punctuation { color: #7b766b; }
+.reading-paper .code-surface .token.property,
+.reading-paper .code-surface .token.constant,
+.reading-paper .code-surface .token.symbol { color: #5a6c8f; }
+.reading-paper .code-surface .token.preprocessor,
+.reading-paper .code-surface .token.directive,
+.reading-paper .code-surface .token.annotation { color: #6b5da8; }
+
+/* ── Global theming — dark default, paper via toggle ─────────────────
+   The theme class lives on <html>; custom properties cascade from
+   there, so every token-driven surface flips at once. --page-bg is
+   the page-chrome background (wrappers previously hardcoded #0a0e14). */
+:root { --page-bg: #0a0e14; }
+.reading-paper { --page-bg: #faf7f0; }
+html.reading-paper, html.reading-paper body { background: #faf7f0; }
+
+/* The home header's animated network bg is tuned for dark glass (teal
+   glow on near-black); in paper it would read as smudge — hide it and
+   let the paper surface carry the band. */
+.reading-paper .entry-network-bg { display: none; }
+
+/* shadcn base variables under paper — the analyze/auth forms, tabs,
+   dialogs and every other --color-* consumer are built on these HSL
+   triples, which only had dark values; without this layer they render
+   as dark slabs on the cream page ("half black, half white"). Ink and
+   surfaces match the --bpmn-* paper palette; teal primary darkened to
+   hold 4.5:1 on cream. */
+.reading-paper {
+  --background: 42 50% 96%;
+  --foreground: 45 8% 18%;
+  --card: 40 33% 99%;
+  --card-foreground: 45 8% 18%;
+  --popover: 40 33% 99%;
+  --popover-foreground: 45 8% 18%;
+  --primary: 187 65% 28%;
+  --primary-foreground: 40 33% 99%;
+  --secondary: 42 22% 90%;
+  --secondary-foreground: 45 8% 24%;
+  --muted: 42 22% 91%;
+  --muted-foreground: 45 6% 42%;
+  --accent: 35 75% 42%;
+  --accent-foreground: 40 33% 99%;
+  --border: 42 16% 82%;
+  --input: 42 16% 82%;
+  --ring: 187 65% 28%;
+  --sidebar-background: 40 33% 97%;
+  --sidebar-foreground: 45 8% 24%;
+  --sidebar-accent: 42 22% 91%;
+  --sidebar-accent-foreground: 45 8% 24%;
+  --sidebar-border: 42 16% 82%;
+}
+/* Dark islands (the canvas stage) keep the dark shadcn values inside
+   paper, same as they keep the dark --bpmn-* tokens. */
+.reading-paper .theme-dark-island {
+  --background: 220 22% 6%;
+  --foreground: 210 20% 88%;
+  --card: 220 20% 9%;
+  --card-foreground: 210 20% 88%;
+  --popover: 220 20% 10%;
+  --popover-foreground: 210 20% 88%;
+  --primary: 180 55% 45%;
+  --primary-foreground: 220 22% 6%;
+  --secondary: 220 15% 16%;
+  --secondary-foreground: 210 20% 78%;
+  --muted: 220 15% 13%;
+  --muted-foreground: 215 12% 45%;
+  --accent: 35 80% 55%;
+  --accent-foreground: 220 22% 6%;
+  --border: 220 15% 18%;
+  --input: 220 15% 18%;
+  --ring: 180 55% 45%;
+}
+
+/* Tailwind-zinc chrome remap under paper — headers, index, banner use
+   zinc classes; map the common ones onto the tokens so the chrome
+   follows the theme without a per-component rewrite. */
+.reading-paper .text-zinc-100, .reading-paper .text-zinc-200 { color: var(--bpmn-text); }
+.reading-paper .text-zinc-300, .reading-paper .text-zinc-400 { color: var(--bpmn-text-muted); }
+.reading-paper .text-zinc-500, .reading-paper .text-zinc-600 { color: var(--bpmn-text-dim); }
+.reading-paper .text-zinc-700 { color: var(--bpmn-text-dim); }
+.reading-paper .bg-zinc-900, .reading-paper .bg-zinc-950,
+.reading-paper .bg-zinc-900\/70, .reading-paper .bg-zinc-900\/60,
+.reading-paper .bg-zinc-800 { background-color: var(--bpmn-surface); }
+.reading-paper .hover\:bg-zinc-800:hover,
+.reading-paper .hover\:bg-zinc-900:hover { background-color: var(--bpmn-surface-hi); }
+.reading-paper .hover\:text-zinc-200:hover,
+.reading-paper .hover\:text-zinc-300:hover { color: var(--bpmn-text); }
+.reading-paper .border-zinc-800, .reading-paper .border-zinc-800\/60,
+.reading-paper .border-zinc-800\/40 { border-color: var(--bpmn-border-soft); }
+.reading-paper .border-zinc-700 { border-color: var(--bpmn-border-em); }
+
+/* Dark islands — surfaces that stay dark in paper mode (call graph +
+   code panel are dark-native). Restores the dark tokens, the zinc
+   palette, and the dark syntax theme inside the island. */
+.reading-paper .theme-dark-island {
+  --bpmn-bg: #0b0d10; --bpmn-bg-deep: #07090c;
+  --bpmn-surface: #161a1f; --bpmn-surface-hi: #1e242b; --bpmn-surface-soft: #11141a;
+  --bpmn-border: #2a3038; --bpmn-border-em: #3a4148; --bpmn-border-soft: #1d2128;
+  --bpmn-text: #e8e4dc; --bpmn-text-muted: #8a8f97; --bpmn-text-dim: #5a5f67;
+  --bpmn-mint: #7dd3ae; --bpmn-mint-soft: #4a8a72;
+  --bpmn-amber: #d4a574; --bpmn-amber-soft: #8a6e4e;
+  --bpmn-rose: #d18589; --bpmn-cyan: #7dd3fc;
+}
+.reading-paper .theme-dark-island .text-zinc-100 { color: #f4f4f5; }
+.reading-paper .theme-dark-island .text-zinc-200 { color: #e4e4e7; }
+.reading-paper .theme-dark-island .text-zinc-300 { color: #d4d4d8; }
+.reading-paper .theme-dark-island .text-zinc-400 { color: #a1a1aa; }
+.reading-paper .theme-dark-island .text-zinc-500 { color: #71717a; }
+.reading-paper .theme-dark-island .text-zinc-600 { color: #52525b; }
+.reading-paper .theme-dark-island .bg-zinc-900 { background-color: #18181b; }
+.reading-paper .theme-dark-island .bg-zinc-800 { background-color: #27272a; }
+.reading-paper .theme-dark-island .hover\:bg-zinc-800:hover { background-color: #27272a; }
+.reading-paper .theme-dark-island .border-zinc-800 { border-color: #27272a; }
+.reading-paper .theme-dark-island .border-zinc-700 { border-color: #3f3f46; }
+.reading-paper .theme-dark-island .code-surface { color: #d6d3cb; }
+.reading-paper .theme-dark-island .code-surface .token.comment { color: #767e87; }
+.reading-paper .theme-dark-island .code-surface .token.keyword,
+.reading-paper .theme-dark-island .code-surface .token.boolean,
+.reading-paper .theme-dark-island .code-surface .token.null { color: #7dd3fc; }
+.reading-paper .theme-dark-island .code-surface .token.class-name,
+.reading-paper .theme-dark-island .code-surface .token.namespace { color: #7dd3ae; }
+.reading-paper .theme-dark-island .code-surface .token.function { color: #e5c07b; }
+.reading-paper .theme-dark-island .code-surface .token.string,
+.reading-paper .theme-dark-island .code-surface .token.char { color: #ce9a6f; }
+.reading-paper .theme-dark-island .code-surface .token.number { color: #c5ae87; }
+.reading-paper .theme-dark-island .code-surface .token.operator,
+.reading-paper .theme-dark-island .code-surface .token.punctuation { color: #8a8f97; }
+
+/* second remap pass — status-tinted text (the -200/-300 tints are
+   light-on-dark values; on paper they wash out) + opacity-suffixed
+   surfaces + inputs */
+.reading-paper .text-zinc-50, .reading-paper .text-white { color: var(--bpmn-text); }
+.reading-paper .text-amber-200, .reading-paper .text-amber-300,
+.reading-paper .text-amber-400, .reading-paper .text-amber-500,
+.reading-paper .text-amber-400\/80 { color: #9a6217; }
+.reading-paper .text-emerald-200, .reading-paper .text-emerald-300,
+.reading-paper .text-emerald-400, .reading-paper .text-emerald-400\/80 { color: #2e7d5b; }
+.reading-paper .text-red-200, .reading-paper .text-red-300,
+.reading-paper .text-red-400, .reading-paper .text-red-400\/80 { color: #b04a52; }
+.reading-paper .text-sky-200, .reading-paper .text-sky-300,
+.reading-paper .text-sky-400, .reading-paper .text-sky-400\/80 { color: #1d6f8f; }
+.reading-paper .text-cyan-300, .reading-paper .text-cyan-400 { color: #1d6f8f; }
+.reading-paper .bg-zinc-800\/60, .reading-paper .bg-zinc-800\/50,
+.reading-paper .bg-zinc-900\/40, .reading-paper .bg-zinc-900\/50,
+.reading-paper .bg-zinc-900\/80, .reading-paper .bg-zinc-900\/90,
+.reading-paper .bg-zinc-950\/60 { background-color: var(--bpmn-surface); }
+.reading-paper .bg-black\/30 { background-color: rgba(60, 50, 30, 0.07); }
+.reading-paper textarea, .reading-paper input[type="text"], .reading-paper input[type="search"] {
+  background-color: var(--bpmn-surface);
+  color: var(--bpmn-text);
+  border-color: var(--bpmn-border);
+}
+.reading-paper ::placeholder { color: var(--bpmn-text-dim); }
+/* island restores for the second pass */
+.reading-paper .theme-dark-island .text-zinc-50 { color: #fafafa; }
+.reading-paper .theme-dark-island .text-amber-300 { color: #fcd34d; }
+.reading-paper .theme-dark-island .text-amber-400 { color: #fbbf24; }
+.reading-paper .theme-dark-island .text-emerald-400 { color: #34d399; }
+.reading-paper .theme-dark-island .text-red-400 { color: #f87171; }
+.reading-paper .theme-dark-island textarea,
+.reading-paper .theme-dark-island input[type="text"] {
+  background-color: #18181b; color: #e4e4e7; border-color: #3f3f46;
+}
+.reading-paper .bg-zinc-700 { background-color: var(--bpmn-surface-hi); }
+.reading-paper .border-zinc-600 { border-color: var(--bpmn-border-em); }
+.reading-paper .text-amber-300\/90, .reading-paper .text-amber-200\/90,
+.reading-paper .text-amber-300\/80 { color: #9a6217; }
+.reading-paper .text-emerald-300\/90, .reading-paper .text-emerald-200\/90 { color: #2e7d5b; }
+
+/* ── Journey index cards — consistent surfaces, ink titles ───────────
+   Status is the chip + the left accent strip; the card body and the
+   headline are neutral in BOTH themes (hierarchy via weight/contrast,
+   never by recoloring headlines). Sides set longhand so the tailwind
+   border-l accent survives the cascade. */
+.journey-card {
+  background: var(--bpmn-surface);
+  border-top-color: var(--bpmn-border-soft);
+  border-right-color: var(--bpmn-border-soft);
+  border-bottom-color: var(--bpmn-border-soft);
+}
+.journey-card:hover {
+  background: var(--bpmn-surface-hi);
+  border-top-color: var(--bpmn-border-em);
+  border-right-color: var(--bpmn-border-em);
+  border-bottom-color: var(--bpmn-border-em);
+}
+.journey-card-title { color: var(--bpmn-text); }
+
+/* ── Token baseline at :root ─────────────────────────────────────────
+   The theme sweep moved page chrome (banner, canvas world, tooltips,
+   panels) onto the --bpmn-* tokens, and that chrome lives OUTSIDE
+   .bpmn-canvas-root. Dark values at :root make the tokens resolve
+   everywhere; html.reading-paper overrides them for paper mode. */
+:root {
+  --bpmn-bg:           #0b0d10;
+  --bpmn-bg-deep:      #07090c;
+  --bpmn-surface:      #161a1f;
+  --bpmn-surface-hi:   #1e242b;
+  --bpmn-surface-soft: #11141a;
+  --bpmn-border:       #2a3038;
+  --bpmn-border-em:    #3a4148;
+  --bpmn-border-soft:  #1d2128;
+  --bpmn-text:         #e8e4dc;
+  --bpmn-text-muted:   #8a8f97;
+  --bpmn-text-dim:     #5a5f67;
+  --bpmn-mint:         #7dd3ae;
+  --bpmn-mint-soft:    #4a8a72;
+  --bpmn-amber:        #d4a574;
+  --bpmn-amber-soft:   #8a6e4e;
+  --bpmn-rose:         #d18589;
+  --bpmn-cyan:         #7dd3fc;
+}
+
+/* ── BPMN canvas motion + stain classes (CLI-parity stage 3) ─────────
+   Ported from the webapp's index.css. Consumed by components/bpmn/
+   BpmnCanvas.tsx (progressive-reveal ghosting, spotlight underlay) and
+   BpmnNode.tsx (business-impact stain halo). Element positions stay
+   fixed; only opacity + a tiny blur vary, so the user's zoom and pan
+   stay exactly where they put them and the eye tracks the lit-up step
+   without re-orienting. */
+/* Ghosts sit at 22-25% — deliberately *above* the 0.2 opacity
+   threshold (fading elements should not linger below 0.2). At 6% the
+   previous version was unreadable; at 22% the user retains spatial
+   context for the whole flow while revealed elements still clearly
+   dominate at 100%. */
+.bpmn-ghosted,
+.bpmn-revealed {
+  transition:
+    opacity 520ms cubic-bezier(0.16, 1, 0.3, 1),
+    filter  520ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, filter;
+}
+.bpmn-ghosted {
+  opacity: 0.22;
+  filter: blur(0.4px);
+  pointer-events: none;
+}
+.bpmn-revealed {
+  opacity: 1;
+  filter: blur(0);
+}
+.bpmn-ghosted-edge,
+.bpmn-revealed-edge {
+  transition:
+    opacity 520ms cubic-bezier(0.22, 1, 0.36, 1) 120ms,
+    filter  520ms cubic-bezier(0.22, 1, 0.36, 1) 120ms;
+  will-change: opacity, filter;
+}
+.bpmn-ghosted-edge {
+  opacity: 0.18;
+  filter: blur(0.4px);
+  pointer-events: none;
+}
+.bpmn-revealed-edge {
+  opacity: 1;
+  filter: blur(0);
+}
+
+/* Spotlight underlay — a cyan-tinted shape rendered BEHIND the
+   just-revealed node that pulses in opacity. Used instead of
+   `filter: drop-shadow` on the wrapping <g> because SVG g filters
+   don't reliably produce the soft halo we want at all zoom levels —
+   a solid SVG shape underneath the node is unambiguous, GPU-friendly,
+   and crisp at any scale.
+   Element-level: the SVG shape itself is always rendered but stays
+   at opacity 0; the parent g's `.bpmn-spotlight-active` class
+   activates the pulse keyframe. */
+.bpmn-spotlight-underlay {
+  opacity: 0;
+  pointer-events: none;
+  fill: hsl(200 95% 65% / 0.85);
+}
+.bpmn-spotlight-active .bpmn-spotlight-underlay {
+  animation: bpmn-underlay-pulse 2200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes bpmn-underlay-pulse {
+  /* Rise → hold → decay. Soft tinted halo, peaks at 0.7 so the
+     node above it stays clearly readable. */
+  0%   { opacity: 0; }
+  20%  { opacity: 0.7; }
+  55%  { opacity: 0.45; }
+  100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Drop the blur, the spotlight animation, and shorten transitions
+     for users who prefer less motion. The class-flip still happens
+     so the visual state change is visible, just without the flourish. */
+  .bpmn-ghosted,
+  .bpmn-revealed,
+  .bpmn-ghosted-edge,
+  .bpmn-revealed-edge {
+    transition: opacity 160ms ease-out;
+    filter: none !important;
+  }
+  .bpmn-spotlight-active {
+    animation: none;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   Spatial canvas (/canvas) — scoped `--cw-*` design tokens.
+
+   The canvas world used to be a hard dark island even in paper mode.
+   These tokens give it a real dual palette: the DARK values are the
+   exact literals the SVG renderer used before (zero visual change in
+   dark mode); the `.reading-paper` override re-pitches every role for
+   warm paper. Colors computed in JS (per-service hues, health scores,
+   role colors) go through sub-components/canvas-theme.tsx instead.
+
+   Scoped under `.canvas-stage` (the page wrapper in
+   src/pages/canvas-world.tsx) so nothing leaks into other surfaces.
+   ════════════════════════════════════════════════════════════════════ */
+
+.canvas-stage {
+  /* Stage + chrome */
+  --cw-stage:            hsl(220, 22%, 6%);
+  --cw-minimap-bg:       hsl(220, 15%, 12%);
+  --cw-minimap-mask:     rgb(0, 0, 0); /* effective pre-token render */
+  --cw-minimap-node:     #4a9eff;
+  --cw-panel-bg:         hsl(220, 20%, 10%, 0.9);
+  --cw-panel-bg-solid:   hsl(220, 20%, 10%, 0.95);
+  --cw-panel-border:     hsl(220, 15%, 22%);
+
+  /* Label ramp (cool gray on dark → warm ink on paper) */
+  --cw-label-hi:         hsl(210, 20%, 88%);
+  --cw-label-82:         hsl(210, 20%, 82%);
+  --cw-label-80:         hsl(210, 20%, 80%);
+  --cw-label-75:         hsl(210, 20%, 75%);
+  --cw-label-70:         hsl(210, 20%, 70%);
+  --cw-label-65:         hsl(210, 20%, 65%);
+  --cw-label-65b:        hsl(210, 15%, 65%);
+  --cw-file-label:       hsl(210, 18%, 60%);
+  --cw-file-label-dim:   hsl(210, 18%, 55%);
+  --cw-text-60:          hsl(210, 15%, 60%);
+  --cw-text-muted:       hsl(210, 15%, 55%);
+  --cw-text-50:          hsl(210, 15%, 50%);
+  --cw-text-48:          hsl(210, 15%, 48%);
+  --cw-text-dim:         hsl(210, 15%, 45%);
+  --cw-text-42:          hsl(210, 15%, 42%);
+  --cw-text-40:          hsl(210, 15%, 40%);
+  --cw-text-faint:       hsl(210, 15%, 35%);
+  --cw-agg-text:         hsl(210, 12%, 50%);
+  --cw-membrane-text:    hsl(210, 25%, 55%);
+
+  /* Region membranes + structural strokes */
+  --cw-region-stroke:        hsl(210, 15%, 25%);
+  --cw-region-stroke-hover:  hsl(210, 30%, 55%);
+  --cw-pkg-stroke:           hsl(210, 15%, 38%);
+  --cw-expanded-stroke:      hsl(210, 20%, 45%);
+  --cw-spoke:                hsl(210, 15%, 22%);
+  --cw-shared-stroke:        hsl(180, 25%, 35%);
+  --cw-ok-stroke:            hsl(145, 40%, 40%);
+
+  /* Dark surfaces that must flip to light cards on paper */
+  --cw-node-fill:        hsl(220, 22%, 12%);
+  --cw-node-fill-deep:   hsl(220, 22%, 10%);
+  --cw-chip-bg:          hsl(220, 22%, 8%);
+  --cw-hoverlabel-bg:    hsl(220, 20%, 12%);
+  --cw-scrim:            hsl(220, 22%, 6%);
+  --cw-on-accent:        hsl(220, 22%, 6%);
+  --cw-badge-bg:         hsla(220, 22%, 8%, 0.9);
+  --cw-badge-bg-92:      hsla(220, 22%, 8%, 0.92);
+  --cw-badge-bg-85:      hsla(220, 22%, 8%, 0.85);
+  --cw-badge-bg-80:      hsla(220, 22%, 8%, 0.8);
+  --cw-pill-bg:          hsla(220, 22%, 10%, 0.92);
+  --cw-track:            hsl(220, 15%, 18%);
+  --cw-agg-pill:         hsl(220, 18%, 14%);
+  --cw-agg-pill-spine:   hsl(320, 15%, 14%);
+  --cw-agg-pill-stroke:  hsl(210, 12%, 30%);
+  --cw-agg-spine-stroke: hsl(320, 25%, 35%);
+  --cw-agg-spine-text:   hsl(320, 25%, 55%);
+  --cw-band-bg:          hsl(210, 10%, 25%);
+  --cw-band-text:        hsl(210, 10%, 50%);
+  --cw-band-label:       hsl(210, 10%, 38%);
+
+  /* Selection / call-chain hues — gold = focus, magenta = callee,
+     cyan-blue = caller */
+  --cw-gold:             hsl(50, 80%, 65%);
+  --cw-gold-bright:      hsl(50, 80%, 70%);
+  --cw-gold-soft:        hsl(50, 70%, 60%);
+  --cw-gold-deep:        hsl(50, 70%, 40%);
+  --cw-gold-scrim:       hsla(50, 60%, 30%, 0.9);
+  --cw-journey-gold:     hsl(45, 70%, 60%);
+  --cw-journey-gold-dim: hsl(45, 60%, 55%);
+  --cw-callee:           hsl(320, 55%, 55%);
+  --cw-callee-bright:    hsl(320, 55%, 65%);
+  --cw-callee-muted:     hsl(320, 40%, 55%);
+  --cw-caller:           hsl(200, 65%, 55%);
+  --cw-caller-bright:    hsl(200, 65%, 65%);
+  --cw-caller-soft:      hsl(200, 50%, 50%);
+  --cw-caller-55:        hsl(200, 50%, 55%);
+  --cw-caller-mid:       hsl(200, 55%, 60%);
+  --cw-caller-dot:       hsl(200, 55%, 55%);
+  --cw-particle:         hsl(200, 80%, 65%);
+
+  /* Status — amber = modified/warning, green = added, mint = impact,
+     red = violation/blast, ghosts = cyan (statistical) / purple (semantic) */
+  --cw-warn:             hsl(35, 75%, 55%);
+  --cw-warn-strong:      hsl(35, 80%, 55%);
+  --cw-warn-deep:        hsl(35, 70%, 48%);
+  --cw-warn-58:          hsl(35, 80%, 58%);
+  --cw-warn-glow-1:      hsl(35, 85%, 58%);
+  --cw-warn-glow-2:      hsl(35, 85%, 60%);
+  --cw-warn-text:        hsl(35, 60%, 55%);
+  --cw-added:            hsl(145, 60%, 50%);
+  --cw-mint:             hsl(160, 45%, 42%);
+  --cw-mint-bright:      hsl(160, 45%, 48%);
+  --cw-danger:           hsl(0, 60%, 50%);
+  --cw-danger-bright:    hsl(0, 65%, 55%);
+  --cw-danger-58:        hsl(0, 65%, 58%);
+  --cw-danger-60:        hsl(0, 65%, 60%);
+  --cw-danger-pulse:     hsl(0, 70%, 55%);
+  --cw-blast-text:       hsl(0, 60%, 65%);
+  --cw-blast-prompt:     hsl(0, 50%, 60%);
+  --cw-ghost-glyph:      hsl(200, 70%, 65%);
+  --cw-sghost-glyph:     hsl(260, 55%, 60%);
+
+  /* Teal accents — landmarks, semantic roles, flow overlay */
+  --cw-landmark:         hsl(180, 55%, 50%);
+  --cw-landmark-text:    hsl(180, 40%, 55%);
+  --cw-teal-text:        hsl(180, 45%, 55%);
+  --cw-teal-text-dim:    hsl(180, 35%, 50%);
+  --cw-teal-text-faint:  hsl(180, 30%, 45%);
+  --cw-teal-file-role:   hsl(180, 40%, 50%);
+  --cw-flow-title:       hsl(180, 55%, 60%);
+  --cw-flow-title-glow:  hsl(180, 55%, 40%);
+
+  /* Journeys FAB */
+  --cw-fab-g1:      hsl(174, 70%, 42%);
+  --cw-fab-g2:      hsl(180, 65%, 38%);
+  --cw-fab-text:    hsl(180, 80%, 96%);
+  --cw-fab-border:  hsl(174, 75%, 55%);
+  --cw-fab-shadow:  0 4px 14px hsl(174, 70%, 25%, 0.45),
+                    0 1px 0 hsl(174, 80%, 65%, 0.35) inset;
+
+  /* Stats pill (CodebaseStats) */
+  --cw-stats-bg:     hsl(220, 20%, 8%, 0.85);
+  --cw-stats-border: hsl(220, 15%, 20%);
+  --cw-stats-text:   hsl(210, 18%, 70%);
+}
+
+/* The spatial map surface — sits ON the page, slightly dimmer than the
+   page chrome so the map reads as a working surface, not a void. */
+.canvas-stage .react-flow__renderer {
+  background-color: var(--cw-stage);
+}
+
+/* Minimap mask. canvas-world.css declares
+   `fill: hsla(var(--background), 0.75)` — invalid at computed-value time
+   (space-separated triple + comma alpha), so the mask has always
+   inherited SVG-default black. The dark token reproduces that effective
+   black exactly; paper gets a real translucent-cream mask. */
+.canvas-stage .react-flow__minimap-mask {
+  fill: var(--cw-minimap-mask);
+}
+
+/* Paper palette — warm cream stage, tinted region ground, ink labels,
+   print-pitched status hues. Every text token holds ≥4.5:1 on the
+   region tints it actually sits on, not just the stage. */
+.reading-paper .canvas-stage {
+  --cw-stage:            hsl(42, 35%, 93%);
+  --cw-minimap-bg:       hsl(42, 28%, 88%);
+  --cw-minimap-mask:     rgba(231, 224, 207, 0.72);
+  --cw-minimap-node:     #3a6ea8;
+  --cw-panel-bg:         rgba(255, 253, 248, 0.92);
+  --cw-panel-bg-solid:   rgba(255, 253, 248, 0.96);
+  --cw-panel-border:     #d8d1bf;
+
+  --cw-label-hi:         hsl(45, 10%, 17%);
+  --cw-label-82:         hsl(45, 9%, 20%);
+  --cw-label-80:         hsl(45, 9%, 22%);
+  --cw-label-75:         hsl(45, 9%, 25%);
+  --cw-label-70:         hsl(45, 8%, 28%);
+  --cw-label-65:         hsl(45, 8%, 30%);
+  --cw-label-65b:        hsl(45, 8%, 30%);
+  --cw-file-label:       hsl(45, 8%, 32%);
+  --cw-file-label-dim:   hsl(45, 8%, 35%);
+  --cw-text-60:          hsl(45, 8%, 33%);
+  --cw-text-muted:       hsl(45, 8%, 36%);
+  --cw-text-50:          hsl(45, 7%, 40%);
+  --cw-text-48:          hsl(45, 7%, 42%);
+  --cw-text-dim:         hsl(45, 7%, 44%);
+  --cw-text-42:          hsl(45, 7%, 46%);
+  --cw-text-40:          hsl(45, 8%, 50%);
+  --cw-text-faint:       hsl(45, 7%, 52%);
+  --cw-agg-text:         hsl(45, 7%, 42%);
+  --cw-membrane-text:    hsl(45, 8%, 38%);
+
+  --cw-region-stroke:        hsl(42, 16%, 60%);
+  --cw-region-stroke-hover:  hsl(210, 32%, 42%);
+  --cw-pkg-stroke:           hsl(42, 14%, 55%);
+  --cw-expanded-stroke:      hsl(42, 16%, 58%);
+  --cw-spoke:                hsl(42, 14%, 70%);
+  --cw-shared-stroke:        hsl(180, 30%, 42%);
+  --cw-ok-stroke:            hsl(145, 45%, 34%);
+
+  --cw-node-fill:        hsl(40, 45%, 98%);
+  --cw-node-fill-deep:   hsl(42, 45%, 97%);
+  --cw-chip-bg:          hsl(40, 45%, 98%);
+  --cw-hoverlabel-bg:    hsl(40, 45%, 98%);
+  --cw-scrim:            hsl(42, 35%, 94%);
+  --cw-on-accent:        hsl(42, 45%, 97%);
+  --cw-badge-bg:         rgba(255, 253, 248, 0.9);
+  --cw-badge-bg-92:      rgba(255, 253, 248, 0.92);
+  --cw-badge-bg-85:      rgba(255, 253, 248, 0.85);
+  --cw-badge-bg-80:      rgba(255, 253, 248, 0.8);
+  --cw-pill-bg:          rgba(255, 253, 248, 0.92);
+  --cw-track:            hsl(42, 20%, 82%);
+  --cw-agg-pill:         hsl(42, 25%, 90%);
+  --cw-agg-pill-spine:   hsl(320, 18%, 90%);
+  --cw-agg-pill-stroke:  hsl(42, 12%, 60%);
+  --cw-agg-spine-stroke: hsl(320, 25%, 55%);
+  --cw-agg-spine-text:   hsl(320, 30%, 40%);
+  --cw-band-bg:          hsl(42, 12%, 70%);
+  --cw-band-text:        hsl(45, 7%, 42%);
+  --cw-band-label:       hsl(45, 7%, 50%);
+
+  --cw-gold:             hsl(43, 90%, 34%);
+  --cw-gold-bright:      hsl(43, 90%, 38%);
+  --cw-gold-soft:        hsl(45, 80%, 36%);
+  --cw-gold-deep:        hsl(45, 75%, 34%);
+  --cw-gold-scrim:       hsla(48, 70%, 86%, 0.92);
+  --cw-journey-gold:     hsl(43, 80%, 34%);
+  --cw-journey-gold-dim: hsl(43, 70%, 36%);
+  --cw-callee:           hsl(320, 60%, 40%);
+  --cw-callee-bright:    hsl(320, 55%, 45%);
+  --cw-callee-muted:     hsl(320, 45%, 42%);
+  --cw-caller:           hsl(200, 75%, 34%);
+  --cw-caller-bright:    hsl(200, 70%, 38%);
+  --cw-caller-soft:      hsl(200, 55%, 38%);
+  --cw-caller-55:        hsl(200, 55%, 40%);
+  --cw-caller-mid:       hsl(200, 60%, 36%);
+  --cw-caller-dot:       hsl(200, 60%, 38%);
+  --cw-particle:         hsl(200, 80%, 38%);
+
+  --cw-warn:             hsl(35, 80%, 42%);
+  --cw-warn-strong:      hsl(35, 85%, 42%);
+  --cw-warn-deep:        hsl(35, 75%, 40%);
+  --cw-warn-58:          hsl(35, 85%, 44%);
+  --cw-warn-glow-1:      hsl(35, 85%, 46%);
+  --cw-warn-glow-2:      hsl(35, 85%, 48%);
+  --cw-warn-text:        hsl(35, 70%, 38%);
+  --cw-added:            hsl(145, 60%, 33%);
+  --cw-mint:             hsl(160, 50%, 33%);
+  --cw-mint-bright:      hsl(160, 50%, 35%);
+  --cw-danger:           hsl(0, 62%, 42%);
+  --cw-danger-bright:    hsl(0, 65%, 44%);
+  --cw-danger-58:        hsl(0, 65%, 45%);
+  --cw-danger-60:        hsl(0, 65%, 45%);
+  --cw-danger-pulse:     hsl(0, 70%, 44%);
+  --cw-blast-text:       hsl(0, 60%, 40%);
+  --cw-blast-prompt:     hsl(0, 55%, 42%);
+  --cw-ghost-glyph:      hsl(200, 70%, 35%);
+  --cw-sghost-glyph:     hsl(260, 50%, 42%);
+
+  --cw-landmark:         hsl(180, 60%, 32%);
+  --cw-landmark-text:    hsl(180, 45%, 34%);
+  --cw-teal-text:        hsl(180, 50%, 32%);
+  --cw-teal-text-dim:    hsl(180, 40%, 35%);
+  --cw-teal-text-faint:  hsl(180, 35%, 37%);
+  --cw-teal-file-role:   hsl(180, 45%, 34%);
+  --cw-flow-title:       hsl(180, 60%, 30%);
+  --cw-flow-title-glow:  hsla(180, 40%, 80%, 0.5);
+
+  --cw-fab-g1:      hsl(174, 75%, 28%);
+  --cw-fab-g2:      hsl(180, 70%, 24%);
+  --cw-fab-text:    hsl(180, 80%, 96%);
+  --cw-fab-border:  hsl(174, 60%, 38%);
+  --cw-fab-shadow:  0 4px 14px hsl(174, 40%, 40%, 0.35),
+                    0 1px 0 hsl(174, 60%, 50%, 0.4) inset;
+
+  --cw-stats-bg:     rgba(255, 253, 248, 0.88);
+  --cw-stats-border: #d8d1bf;
+  --cw-stats-text:   hsl(45, 8%, 33%);
+}
+
+/* ── Window dragging (macOS hiddenInset title bar) ───────────────────
+   The window has titleBarStyle:"hiddenInset" and no native title bar, so
+   the window can only be moved where the content declares a drag region.
+   Mark the top chrome bands draggable; their interactive children opt back
+   out so buttons/inputs/links still click (and text stays selectable).
+   Without this the app can't be moved between screens / three-finger
+   dragged. */
+.win-drag {
+  -webkit-app-region: drag;
+}
+.win-drag :is(button, a, input, select, textarea, label, [role="button"], [contenteditable], [data-no-drag]) {
+  -webkit-app-region: no-drag;
+}

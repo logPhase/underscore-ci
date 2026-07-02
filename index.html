@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'"
+    />
+    <title>Underscore PR Report</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- Marker contract with scripts/inject-report-data.mjs: the CI action's
+         artifact step replaces the token below with the serialized
+         pr-output.json in the singlefile build. The boot loader reads this
+         tag first and falls back to fetch('./pr-output.json') while the
+         token is still the raw marker (dev / multi-file Pages build). -->
+    <script type="application/json" id="underscore-report-data">__UNDERSCORE_REPORT_DATA__</script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

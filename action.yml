@@ -1,0 +1,131 @@
+name: 'Underscore PR Analysis'
+description: >-
+  Runs Underscore PR impact analysis on the checked-out pull request and
+  publishes an interactive static report (journeys, impact overlay, BPMN,
+  chapter deep-dives). Requires actions/checkout with fetch-depth: 0.
+author: 'logPhase'
+
+branding:
+  icon: 'map'
+  color: 'purple'
+
+# Composite action, NOT a `runs.using: docker` container action: GitHub-hosted
+# runners pull container-action images during "Set up job", BEFORE any workflow
+# step can `docker login`, so a private GHCR image is impossible in that mode
+# (actions/runner#1919). Doing login + pull + run ourselves keeps the image
+# private (per-client pull tokens) while working on stock hosted runners.
+
+inputs:
+  delivery:
+    description: >-
+      Report delivery mode. 'artifact' (default) emits a single-file HTML
+      report for actions/upload-artifact via the report-file output.
+      'pages' leaves a static publish dir (publish-dir output) for a
+      GitHub Pages deploy step under pr-<number>/.
+    required: false
+    default: 'artifact'
+  sln:
+    description: >-
+      Repo-relative path to the .sln/.slnx to analyze. Only needed when the
+      repository contains more than one solution.
+    required: false
+    default: ''
+  lang:
+    description: "Language of the repository: csharp | java | python."
+    required: false
+    default: 'csharp'
+  fail-on-error:
+    description: >-
+      When 'true', an analysis failure fails the workflow. Default 'false':
+      the action posts a failure comment on the PR and exits green so the
+      client pipeline is never blocked by us.
+    required: false
+    default: 'false'
+  image:
+    description: >-
+      Analysis image to run. Override for dev/dogfood builds
+      (e.g. ghcr.io/logphase/underscore-ci:dev from scripts/build-image.sh).
+    required: false
+    default: 'ghcr.io/logphase/underscore-ci:v1'
+  ghcr-username:
+    description: >-
+      Username for ghcr.io pull auth (the private analysis image). Any
+      non-empty value works with a PAT-style pull token.
+    required: false
+    default: ''
+  ghcr-token:
+    description: >-
+      Pull token for the private analysis image (we issue it). Omit only if
+      the image input points at a registry the runner can reach anonymously.
+    required: false
+    default: ''
+
+outputs:
+  report-file:
+    description: >-
+      Workspace-relative path to the single-file HTML report
+      (.underscore-report/underscore-report.html). Empty in pages mode.
+    value: ${{ steps.analyze.outputs.report-file }}
+  publish-dir:
+    description: >-
+      Workspace-relative directory containing the static report
+      (.underscore-report). Feed this to a Pages deploy step with
+      destination_dir pr-<number>/.
+    value: ${{ steps.analyze.outputs.publish-dir }}
+  pr-number:
+    description: 'The pull request number the report was generated for.'
+    value: ${{ steps.analyze.outputs.pr-number }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Pull analysis image
+      shell: bash
+      env:
+        UNDERSCORE_IMAGE: ${{ inputs.image }}
+        GHCR_USERNAME: ${{ inputs.ghcr-username }}
+        GHCR_TOKEN: ${{ inputs.ghcr-token }}
+      run: |
+        if [[ -n "$GHCR_TOKEN" ]]; then
+          echo "$GHCR_TOKEN" | docker login ghcr.io \
+            -u "${GHCR_USERNAME:-x-access-token}" --password-stdin
+        fi
+        docker pull "$UNDERSCORE_IMAGE"
+
+    - name: Run Underscore PR analysis
+      id: analyze
+      shell: bash
+      env:
+        UNDERSCORE_IMAGE: ${{ inputs.image }}
+        DELIVERY: ${{ inputs.delivery }}
+        SLN: ${{ inputs.sln }}
+        UNDERSCORE_LANG: ${{ inputs.lang }}
+        FAIL_ON_ERROR: ${{ inputs.fail-on-error }}
+      # Recreates the mounts/env a `runs.using: docker` container action gets:
+      # workspace at /github/workspace, the event payload, and the GITHUB_OUTPUT
+      # / GITHUB_STEP_SUMMARY files so entrypoint.sh works unchanged.
+      # GITHUB_TOKEN / GH_TOKEN / INTENT_DRIFT_* are inherited from the `env:`
+      # block on the calling workflow step and passed through by name.
+      run: |
+        docker run --rm \
+          --workdir /github/workspace \
+          -v "$GITHUB_WORKSPACE:/github/workspace" \
+          -v "$GITHUB_EVENT_PATH:/github/workflow/event.json:ro" \
+          -v "$GITHUB_OUTPUT:/github/output" \
+          -v "$GITHUB_STEP_SUMMARY:/github/step-summary" \
+          -e GITHUB_WORKSPACE=/github/workspace \
+          -e GITHUB_EVENT_PATH=/github/workflow/event.json \
+          -e GITHUB_OUTPUT=/github/output \
+          -e GITHUB_STEP_SUMMARY=/github/step-summary \
+          -e GITHUB_REPOSITORY \
+          -e GITHUB_SERVER_URL \
+          -e GITHUB_RUN_ID \
+          -e GITHUB_TOKEN \
+          -e GH_TOKEN \
+          -e INTENT_DRIFT_URL \
+          -e INTENT_DRIFT_TOKEN \
+          -e DELIVERY \
+          -e SLN \
+          -e UNDERSCORE_LANG \
+          -e FAIL_ON_ERROR \
+          "$UNDERSCORE_IMAGE"

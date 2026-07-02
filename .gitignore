@@ -1,0 +1,8 @@
+node_modules
+report-dist
+report-dist-singlefile
+# dev fixtures are real analysis exports — never commit or ship them
+public/pr-output.json
+dev-runs/
+.DS_Store
+*.tsbuildinfo
