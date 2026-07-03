@@ -1,0 +1,32 @@
+# Exposes the viewer through the cluster's Azure Application Gateway ingress (AGIC).
+# Dev host: underscore-viewer-dev.apcoaflow.com (covered by the wildcard *.apcoaflow.com
+# cert in the `apcoaflow-tls` secret). NOTE: a DNS A record
+# underscore-viewer-dev.apcoaflow.com -> 20.16.69.225 (the app gateway public IP) must
+# be added by whoever manages the apcoaflow.com zone; until then reach it via
+#   curl --resolve underscore-viewer-dev.apcoaflow.com:443:20.16.69.225 https://underscore-viewer-dev.apcoaflow.com/
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: underscore-viewer
+  labels:
+    app: underscore-viewer
+  annotations:
+    appgw.ingress.kubernetes.io/ssl-redirect: "true"
+    appgw.ingress.kubernetes.io/backend-protocol: "http"
+spec:
+  ingressClassName: azure-application-gateway
+  tls:
+    - hosts:
+        - underscore-viewer-dev.apcoaflow.com
+      secretName: apcoaflow-tls
+  rules:
+    - host: underscore-viewer-dev.apcoaflow.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: underscore-viewer
+                port:
+                  number: 80

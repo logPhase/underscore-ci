@@ -12,6 +12,15 @@
 #     analysis image (the action does the docker login/pull itself)
 #   INTENT_DRIFT_URL / INTENT_DRIFT_TOKEN — hosted analyzer (omit token for
 #     structural-only)
+#
+# Optional repo variable:
+#   UNDERSCORE_VIEWER_URL — base URL of the hosted static viewer (nginx serving
+#     the underscore-reports branch). When set, the step summary links this run
+#     and the report index. Leave unset to skip the links cleanly.
+#
+# Optional enrichment knob (set as a workflow/env var on the `uses` step below):
+#   BPMN_MAX_JOURNEYS — cap BPMN diagramming to the top-N journeys by step count
+#     (unset = diagram all discovered journeys). Bounds analyzer cost on big repos.
 name: Underscore Full Report
 on: workflow_dispatch
 
@@ -39,10 +48,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # INTENT_DRIFT_* are optional — omit them for a structural-only
-          # report. In full mode enrichment adds journey summaries (BPMN
-          # diagrams and the PR overview narrative are PR-mode-only).
+          # report. In full mode enrichment adds BPMN business-flow diagrams
+          # plus journey summaries (the PR-overview narrative is PR-mode-only).
           INTENT_DRIFT_URL: ${{ secrets.INTENT_DRIFT_URL }}
           INTENT_DRIFT_TOKEN: ${{ secrets.INTENT_DRIFT_TOKEN }}
+          # Optional BPMN cost cap: diagram only the top-N journeys by step
+          # count. Unset = all discovered journeys. e.g. BPMN_MAX_JOURNEYS: '20'
+          # BPMN_MAX_JOURNEYS: '20'
 
       # Commit the single-file report to the orphan `underscore-reports`
       # branch: reports/<UTC timestamp>-run-<n>/underscore-report.html plus a
@@ -50,6 +62,11 @@ jobs:
       # checkout's config, so the actions/checkout persisted credentials and
       # the git identity below apply — no extra token plumbing needed.
       - name: Publish report to underscore-reports branch
+        env:
+          # Base URL of the hosted static viewer (nginx serving the
+          # underscore-reports branch). Empty when the repo variable is unset —
+          # the link block below is then skipped cleanly.
+          VIEWER_URL: ${{ vars.UNDERSCORE_VIEWER_URL }}
         run: |
           set -euo pipefail
 
@@ -80,6 +97,48 @@ jobs:
           cp "$REPORT_FILE" "$WORKTREE/$DEST/underscore-report.html"
           cp "$REPORT_FILE" "$WORKTREE/latest/underscore-report.html"
 
+          # Regenerate the branch landing page (index.html), listing every
+          # reports/<stamp>-run-<n>/ entry newest-first plus a stable link to
+          # latest/. This file is REQUIRED by the viewer: its docroot `index`
+          # and its readiness probe both resolve "/" -> index.html, so without
+          # it every viewer Pod stays NotReady and the Service serves nothing.
+          # Regenerated each run so new reports appear without a redeploy.
+          {
+            cat <<'HTML_HEAD'
+          <!doctype html>
+          <meta charset="utf-8">
+          <title>Underscore reports</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <style>body{font:16px/1.6 system-ui,sans-serif;max-width:48rem;margin:8vh auto;padding:0 1.5rem;color:#1c1c28}h1{font-size:1.5rem}a{color:#2b5fff}ul{padding-left:1.2rem}li{margin:.35em 0}.latest{margin:1rem 0 2rem}</style>
+          <h1>Underscore reports</h1>
+          <p class="latest">Newest report: <a href="latest/underscore-report.html">latest/underscore-report.html</a></p>
+          <ul>
+          HTML_HEAD
+            # Stamps are UTC YYYYmmdd-HHMMSS, so a reverse lexical sort is also
+            # reverse-chronological (newest first).
+            for d in $(ls -1 "$WORKTREE/reports" 2>/dev/null | sort -r); do
+              [ -f "$WORKTREE/reports/$d/underscore-report.html" ] || continue
+              printf '          <li><a href="reports/%s/underscore-report.html">%s</a></li>\n' "$d" "$d"
+            done
+            cat <<'HTML_TAIL'
+          </ul>
+          HTML_TAIL
+          } > "$WORKTREE/index.html"
+
           git -C "$WORKTREE" add -A
           git -C "$WORKTREE" commit -m "underscore full report ${STAMP} (run ${{ github.run_number }})"
           git -C "$WORKTREE" push origin underscore-reports
+
+          # Link to the hosted static viewer, when configured. UNDERSCORE_VIEWER_URL
+          # is the base URL of the nginx viewer that serves this branch's content;
+          # set it as a repo variable after deploying the viewer. Skipped cleanly
+          # when unset so the branch commit above is never affected.
+          if [[ -n "${VIEWER_URL:-}" ]]; then
+            BASE="${VIEWER_URL%/}"
+            {
+              echo "## Underscore full-repo report — hosted viewer"
+              echo ""
+              echo "- This run: ${BASE}/${DEST}/underscore-report.html"
+              echo "- All reports: ${BASE}/"
+            } >>"$GITHUB_STEP_SUMMARY"
+          fi

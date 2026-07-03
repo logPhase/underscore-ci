@@ -105,13 +105,23 @@ on_analysis_failure() {
 #                                intent-drift analyzer (no local fallback, no
 #                                ANTHROPIC_API_KEY in CI). Which enrichment
 #                                depends on the pipeline:
-#                                - pr:   BPMN flows + PR overview
+#                                - pr:   BPMN flows + PR overview + summaries
 #                                  (FLOW_ENABLED/FLOW_ANALYZER/OVERVIEW_ENABLED,
 #                                  read by pr! in backend main.clj)
-#                                - full: journey workbook summaries
-#                                  (FLOW_WORKBOOK_ENABLED — the ONLY enrichment
-#                                  hook analyze! has; the pr-pipeline vars are
-#                                  silently ignored by `analyze`)
+#                                - full: BPMN flows + journey workbook summaries.
+#                                  analyze! now runs the SAME PR-agnostic
+#                                  post-analysis enrichment pr! does — BPMN via
+#                                  FLOW_ENABLED+FLOW_ANALYZER (analyzer-only, no
+#                                  local fallback) and summaries via
+#                                  FLOW_WORKBOOK_ENABLED. The PR-overview
+#                                  narrative stays pr-mode-only: it is a PR-delta
+#                                  artifact and the analyzer /overview endpoint
+#                                  has no full-repo mode, so OVERVIEW_ENABLED is
+#                                  intentionally NOT set for full. Optional cost
+#                                  cap: BPMN_MAX_JOURNEYS (top-N journeys by step
+#                                  count) — passed through from the container env
+#                                  (action.yml forwards it); read directly by
+#                                  analyze!, so no re-export is needed here.
 # INTENT_DRIFT_TOKEN missing  -> structural-only; the pipeline soft-degrades
 #                                and never fails on enrichment.
 if [[ -n "${INTENT_DRIFT_TOKEN:-}" ]]; then
@@ -119,8 +129,8 @@ if [[ -n "${INTENT_DRIFT_TOKEN:-}" ]]; then
     export FLOW_ENABLED=1 FLOW_ANALYZER=1 OVERVIEW_ENABLED=1
     echo "Enrichment: enabled via ${INTENT_DRIFT_URL:-http://127.0.0.1:8767}"
   else
-    export FLOW_WORKBOOK_ENABLED=1
-    echo "Enrichment: journey summaries via ${INTENT_DRIFT_URL:-http://127.0.0.1:8767} (full mode; BPMN/PR-overview enrichment is pr-mode-only)"
+    export FLOW_ENABLED=1 FLOW_ANALYZER=1 FLOW_WORKBOOK_ENABLED=1
+    echo "Enrichment: BPMN flows + journey summaries via ${INTENT_DRIFT_URL:-http://127.0.0.1:8767}${BPMN_MAX_JOURNEYS:+ (BPMN_MAX_JOURNEYS=$BPMN_MAX_JOURNEYS)} (full mode; the PR-overview narrative is pr-mode-only)"
   fi
 else
   echo "Enrichment: INTENT_DRIFT_TOKEN not set — structural-only report"
@@ -228,14 +238,20 @@ else
     echo "## Underscore full-repo report"
     echo ""
     if [[ -f "$OUT_DIR/manifest.json" ]]; then
-      # No BPMN column here: business-flow enrichment is pr-pipeline-only,
-      # so counts.bpmn/bpmnFlows are always empty for `analyze` runs in CI.
+      # analyze! now runs BPMN enrichment too, so counts.bpmn/bpmnFlows can be
+      # non-empty for `analyze` runs — build-manifest counts them generically
+      # (run_manifest.clj), same as pr mode.
       jq -r '
         "**\(.project // "repository")** — whole-repo analysis",
         "",
-        "| Journeys | Summaries |",
-        "|---:|---:|",
-        "| \(.counts.journeys // 0) | \(.counts.summaries // 0) |"
+        "| Journeys | Business flows (BPMN) | Summaries |",
+        "|---:|---:|---:|",
+        "| \(.counts.journeys // 0) | \(.counts.bpmn // 0) | \(.counts.summaries // 0) |",
+        "",
+        (if ((.bpmnFlows // []) | length) > 0 then
+          "**Business flows:**",
+          ((.bpmnFlows // [])[] | "- \(.title)")
+        else empty end)
       ' "$OUT_DIR/manifest.json"
     else
       echo "_Analysis completed; no manifest was produced._"

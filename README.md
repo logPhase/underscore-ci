@@ -104,9 +104,24 @@ PR diff) from a manually dispatched workflow. Copy
   post a failure comment on, and a green no-op would be misleading for a
   manually dispatched run.
 - `INTENT_DRIFT_URL` / `INTENT_DRIFT_TOKEN` remain optional — omit them for a
-  structural-only report. In full mode enrichment adds **journey summaries**
-  (the `analyze` pipeline's workbook); BPMN diagrams and the PR overview
-  narrative are PR-mode enrichments and are not produced here.
+  structural-only report. In full mode enrichment now adds **BPMN business-flow
+  diagrams** *and* **journey summaries** (`analyze!` runs the same PR-agnostic
+  post-analysis enrichment `pr` does). The **PR-overview narrative** stays
+  PR-mode-only — it is a PR-delta artifact and the analyzer `/overview`
+  endpoint has no full-repo mode, so it is deliberately not produced here.
+- **BPMN cost.** BPMN synthesis is one analyzer session over the repo's
+  non-trivial journeys (a large repo can have ~40+). Set the optional
+  **`BPMN_MAX_JOURNEYS`** env var (on the `uses` step) to cap it to the top-N
+  journeys by step count; unset diagrams all discovered journeys. Trivial
+  (≤3-step) and kitchen-sink dispatcher journeys are always skipped. Omit
+  `INTENT_DRIFT_TOKEN` entirely to skip BPMN (and all) enrichment.
+- **Hosted viewer (optional).** After deploying the static viewer (nginx
+  serving the `underscore-reports` branch), set the repo **variable**
+  `UNDERSCORE_VIEWER_URL` to its base URL. The example workflow then adds two
+  links to the run's step summary: the per-run report
+  (`<UNDERSCORE_VIEWER_URL>/reports/<stamp>-run-<n>/underscore-report.html`)
+  and the report index (`<UNDERSCORE_VIEWER_URL>/`). Leave the variable unset
+  to skip the links; the branch commit is unaffected either way.
 
 ## Structural-only vs enriched
 
@@ -118,9 +133,10 @@ PR diff) from a manually dispatched workflow. Copy
 | Data leaving your runner | none | PR diff + changed method bodies go to the hosted analyzer (and on to Anthropic) |
 | Cost | free compute on your runner | metered per-PR via analyzer credits |
 
-The enriched column describes `mode: pr`; in `mode: full` enrichment adds
-journey summaries instead (see
-[On-demand full-repo report](#on-demand-full-repo-report)).
+The enriched column describes `mode: pr`; in `mode: full` enrichment adds BPMN
+business-flow diagrams and journey summaries (but not the PR-overview
+narrative) — see
+[On-demand full-repo report](#on-demand-full-repo-report).
 
 Enrichment soft-degrades: a missing/expired token or unreachable analyzer
 never fails the run — you simply get the structural report. `ANTHROPIC_API_KEY`

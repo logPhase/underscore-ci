@@ -118,8 +118,9 @@ runs:
       # Recreates the mounts/env a `runs.using: docker` container action gets:
       # workspace at /github/workspace, the event payload, and the GITHUB_OUTPUT
       # / GITHUB_STEP_SUMMARY files so entrypoint.sh works unchanged.
-      # GITHUB_TOKEN / GH_TOKEN / INTENT_DRIFT_* are inherited from the `env:`
-      # block on the calling workflow step and passed through by name.
+      # GITHUB_TOKEN / GH_TOKEN / INTENT_DRIFT_* / BPMN_MAX_JOURNEYS are
+      # inherited from the `env:` block on the calling workflow step and passed
+      # through by name (BPMN_MAX_JOURNEYS is an optional full-mode cost cap).
       run: |
         docker run --rm \
           --workdir /github/workspace \
@@ -138,6 +139,7 @@ runs:
           -e GH_TOKEN \
           -e INTENT_DRIFT_URL \
           -e INTENT_DRIFT_TOKEN \
+          -e BPMN_MAX_JOURNEYS \
           -e MODE \
           -e DELIVERY \
           -e SLN \
