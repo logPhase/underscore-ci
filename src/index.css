@@ -276,23 +276,24 @@ input[type="range"]::-webkit-slider-thumb {
    ──────────────────────────────────────────────────────────────────────── */
 
 .bpmn-canvas-root {
-  /* Surfaces — warm dark navy, slightly hand-mixed to feel like ink on paper
-     rather than #000-stop-out. */
-  --bpmn-bg:           #0b0d10;
-  --bpmn-bg-deep:      #07090c;
-  --bpmn-surface:      #161a1f;
-  --bpmn-surface-hi:   #1e242b;
-  --bpmn-surface-soft: #11141a;
+  /* Surfaces — logPhase indigo (matches the app --background/--card) so the
+     diagram sits on the brand canvas; the status accents below stay as the
+     load-bearing semantic layer. */
+  --bpmn-bg:           #0C0F1D;
+  --bpmn-bg-deep:      #080A12;
+  --bpmn-surface:      #141A2E;
+  --bpmn-surface-hi:   #1C2340;
+  --bpmn-surface-soft: #101423;
 
   /* Borders — three weights so we can rank node emphasis without colour. */
-  --bpmn-border:       #2a3038;
-  --bpmn-border-em:    #3a4148;
-  --bpmn-border-soft:  #1d2128;
+  --bpmn-border:       #2A3350;
+  --bpmn-border-em:    #3B4570;
+  --bpmn-border-soft:  #1A2133;
 
-  /* Text — warm off-white (paper) primary, cool grays for fallback levels. */
-  --bpmn-text:         #e8e4dc;
-  --bpmn-text-muted:   #8a8f97;
-  --bpmn-text-dim:     #5a5f67;
+  /* Text — cool off-white primary (matches --foreground), indigo-grays below. */
+  --bpmn-text:         #EAEEF9;
+  --bpmn-text-muted:   #7E88A3;
+  --bpmn-text-dim:     #556084;
 
   /* Status accents — deliberately muted, print-feel, not neon.
      Reserved meanings:
