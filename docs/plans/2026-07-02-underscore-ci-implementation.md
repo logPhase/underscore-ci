@@ -153,3 +153,12 @@ per PR; PR-comment reactions/replies show whether reviewers open reports.
 - Java/Python in the action (backend supports both — `--lang` is already
   plumbed through; bundle the sidecars when a client needs them)
 - Report-mode AskPanel (needs a live backend; health-gated hidden per KEEPOUTS)
+
+## Renderer fork (2026-07-04)
+
+DECISION: the CI report renderer under `src/` is now a **fork**, no longer a
+verbatim copy of underscore-desktop. The logPhase visual identity (indigo/
+violet/cyan tokens in `src/index.css`, the zinc→token remap, and the
+"traced-route" journey-card signature in `src/pages/journeys.tsx`) lives HERE.
+Do NOT re-copy the desktop renderer over `src/` — it would wipe this. Port
+desktop logic changes selectively instead.

@@ -460,7 +460,7 @@ const JourneyPage = () => {
                     )}
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0 flex-1">
-                        <h2 className="journey-card-title flex items-center gap-2 text-base font-semibold transition-colors">
+                        <h2 className="journey-card-title flex items-center gap-2 font-mono text-[15px] font-semibold tracking-tight transition-colors">
                           <span
                             className="h-2 w-2 shrink-0 rounded-full"
                             style={{ backgroundColor: chapter.color }}
@@ -500,8 +500,30 @@ const JourneyPage = () => {
                       </div>
                       <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-zinc-600 transition group-hover:translate-x-0.5 group-hover:text-zinc-300" />
                     </div>
-                    <div className="mt-3">
-                      <span className="font-mono text-xs text-zinc-400">
+                    <div className="mt-3 space-y-2">
+                      {/* Signature: the journey as a traced route — one tick per
+                          step, changed steps light up in the journey's own hue.
+                          Reads as an execution path, not a generic card. */}
+                      <div className="flex h-3 items-end gap-[2px]" aria-hidden="true">
+                        {chapter.steps.slice(0, 60).map((s, si) => (
+                          <span
+                            key={si}
+                            className="w-[4px] shrink-0 rounded-[1px]"
+                            style={{
+                              height: s.prStatus ? "100%" : "38%",
+                              backgroundColor: s.prStatus
+                                ? chapter.color
+                                : "hsl(var(--border))",
+                            }}
+                          />
+                        ))}
+                        {chapter.steps.length > 60 && (
+                          <span className="ml-1 self-center font-mono text-[10px] text-muted-foreground">
+                            +{chapter.steps.length - 60}
+                          </span>
+                        )}
+                      </div>
+                      <span className="font-mono text-[11px] tracking-wide text-muted-foreground">
                         {chapter.phaseCount} phases · {chapter.functions.length}{" "}
                         methods · {chapter.services.length} services
                       </span>
@@ -643,8 +665,30 @@ const JourneyPage = () => {
                       <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-zinc-600 transition group-hover:translate-x-0.5 group-hover:text-zinc-300" />
                     </div>
 
-                    <div className="mt-3">
-                      <span className="font-mono text-xs text-zinc-400">
+                    <div className="mt-3 space-y-2">
+                      {/* Signature: the journey as a traced route — one tick per
+                          step, changed steps light up in the journey's own hue.
+                          Reads as an execution path, not a generic card. */}
+                      <div className="flex h-3 items-end gap-[2px]" aria-hidden="true">
+                        {chapter.steps.slice(0, 60).map((s, si) => (
+                          <span
+                            key={si}
+                            className="w-[4px] shrink-0 rounded-[1px]"
+                            style={{
+                              height: s.prStatus ? "100%" : "38%",
+                              backgroundColor: s.prStatus
+                                ? chapter.color
+                                : "hsl(var(--border))",
+                            }}
+                          />
+                        ))}
+                        {chapter.steps.length > 60 && (
+                          <span className="ml-1 self-center font-mono text-[10px] text-muted-foreground">
+                            +{chapter.steps.length - 60}
+                          </span>
+                        )}
+                      </div>
+                      <span className="font-mono text-[11px] tracking-wide text-muted-foreground">
                         {chapter.phaseCount} phases · {chapter.functions.length}{" "}
                         methods · {chapter.services.length} services
                       </span>

@@ -72,47 +72,54 @@
 /* 220 22% 8% */
 /* Base theme variables */
 :root {
-  --background: 220 22% 6%;
-  --foreground: 210 20% 88%;
+  /* logPhase — code-cartography instrument. Deep indigo canvas, phase-violet
+     accent, a reserved cyan "signal" for the live/primary path. Shared with the
+     branded viewer landing so report and product read as one thing. */
+  --background: 228 42% 8%;
+  --foreground: 224 45% 95%;
 
-  --card: 220 20% 9%;
-  --card-foreground: 210 20% 88%;
+  --card: 226 38% 13%;
+  --card-foreground: 224 45% 95%;
 
-  --popover: 220 20% 10%;
-  --popover-foreground: 210 20% 88%;
+  --popover: 226 38% 15%;
+  --popover-foreground: 224 45% 95%;
 
-  --primary: 180 55% 45%;
-  --primary-foreground: 220 22% 6%;
+  --primary: 247 100% 75%;
+  --primary-foreground: 228 42% 8%;
 
-  --secondary: 220 15% 16%;
-  --secondary-foreground: 210 20% 78%;
+  --secondary: 228 30% 18%;
+  --secondary-foreground: 224 30% 84%;
 
-  --muted: 220 15% 13%;
-  --muted-foreground: 215 12% 45%;
+  --muted: 226 32% 15%;
+  --muted-foreground: 224 16% 62%;
 
-  --accent: 35 80% 55%;
-  --accent-foreground: 220 22% 6%;
+  --accent: 230 30% 18%;
+  --accent-foreground: 224 45% 95%;
 
-  --destructive: 0 65% 50%;
-  --destructive-foreground: 210 40% 98%;
+  --destructive: 352 70% 60%;
+  --destructive-foreground: 224 45% 96%;
 
-  --border: 220 15% 18%;
-  --input: 220 15% 18%;
-  --ring: 180 55% 45%;
+  --border: 226 30% 21%;
+  --input: 226 30% 21%;
+  --ring: 247 100% 75%;
 
-  --radius: 0.75rem;
+  --radius: 0.625rem;
 
-  --sidebar-background: 220 20% 9%;
-  --sidebar-foreground: 210 20% 78%;
+  /* Custom, not shadcn: the reserved cyan signal + the ambient grid line. */
+  --signal: 169 74% 54%;
+  --grid-line: 226 30% 21%;
 
-  --sidebar-primary: 180 55% 45%;
-  --sidebar-primary-foreground: 220 22% 6%;
+  --sidebar-background: 228 40% 7%;
+  --sidebar-foreground: 224 20% 74%;
 
-  --sidebar-accent: 220 16% 13%;
-  --sidebar-accent-foreground: 210 20% 78%;
+  --sidebar-primary: 247 100% 75%;
+  --sidebar-primary-foreground: 228 42% 8%;
 
-  --sidebar-border: 220 15% 18%;
-  --sidebar-ring: 180 55% 45%;
+  --sidebar-accent: 228 32% 15%;
+  --sidebar-accent-foreground: 224 45% 96%;
+
+  --sidebar-border: 226 30% 18%;
+  --sidebar-ring: 247 100% 75%;
 }
 
 /* Optional container utility */
@@ -756,7 +763,7 @@ html.reading-paper,
    The theme class lives on <html>; custom properties cascade from
    there, so every token-driven surface flips at once. --page-bg is
    the page-chrome background (wrappers previously hardcoded #0a0e14). */
-:root { --page-bg: #0a0e14; }
+:root { --page-bg: #0C0F1D; }
 .reading-paper { --page-bg: #faf7f0; }
 html.reading-paper, html.reading-paper body { background: #faf7f0; }
 
@@ -798,23 +805,23 @@ html.reading-paper, html.reading-paper body { background: #faf7f0; }
 /* Dark islands (the canvas stage) keep the dark shadcn values inside
    paper, same as they keep the dark --bpmn-* tokens. */
 .reading-paper .theme-dark-island {
-  --background: 220 22% 6%;
-  --foreground: 210 20% 88%;
-  --card: 220 20% 9%;
-  --card-foreground: 210 20% 88%;
-  --popover: 220 20% 10%;
-  --popover-foreground: 210 20% 88%;
-  --primary: 180 55% 45%;
-  --primary-foreground: 220 22% 6%;
-  --secondary: 220 15% 16%;
-  --secondary-foreground: 210 20% 78%;
-  --muted: 220 15% 13%;
-  --muted-foreground: 215 12% 45%;
-  --accent: 35 80% 55%;
-  --accent-foreground: 220 22% 6%;
-  --border: 220 15% 18%;
-  --input: 220 15% 18%;
-  --ring: 180 55% 45%;
+  --background: 228 42% 8%;
+  --foreground: 224 45% 95%;
+  --card: 226 38% 13%;
+  --card-foreground: 224 45% 95%;
+  --popover: 226 38% 15%;
+  --popover-foreground: 224 45% 95%;
+  --primary: 247 100% 75%;
+  --primary-foreground: 228 42% 8%;
+  --secondary: 228 30% 18%;
+  --secondary-foreground: 224 30% 84%;
+  --muted: 226 32% 15%;
+  --muted-foreground: 224 16% 62%;
+  --accent: 230 30% 18%;
+  --accent-foreground: 224 45% 95%;
+  --border: 226 30% 21%;
+  --input: 226 30% 21%;
+  --ring: 247 100% 75%;
 }
 
 /* Tailwind-zinc chrome remap under paper — headers, index, banner use
@@ -1333,4 +1340,34 @@ html.reading-paper, html.reading-paper body { background: #faf7f0; }
 }
 .win-drag :is(button, a, input, select, textarea, label, [role="button"], [contenteditable], [data-no-drag]) {
   -webkit-app-region: no-drag;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Default-theme zinc→token remap. The journey/report components were built
+   with hardcoded Tailwind zinc/neutral utilities; remap the common ones onto
+   the logPhase indigo tokens so the WHOLE report follows the palette without
+   rewriting every component. (Mirrors the existing .reading-paper remap, but
+   for the default dark theme.) Placed after the Tailwind import so equal-
+   specificity utilities resolve to these by source order.
+   ════════════════════════════════════════════════════════════════════════ */
+:root:not(.reading-paper) {
+  /* text */
+  .text-zinc-100, .text-zinc-200, .text-white { color: hsl(var(--foreground)); }
+  .text-zinc-300, .text-zinc-400 { color: hsl(224 22% 74%); }
+  .text-zinc-500, .text-zinc-600, .text-zinc-700 { color: hsl(var(--muted-foreground)); }
+  .placeholder\:text-zinc-600::placeholder { color: hsl(var(--muted-foreground) / 0.7); }
+
+  /* surfaces */
+  .bg-zinc-950, .bg-zinc-900, .bg-zinc-900\/70, .bg-zinc-900\/60,
+  .bg-zinc-900\/50, .bg-zinc-900\/40 { background-color: hsl(var(--card)); }
+  .bg-zinc-800, .bg-zinc-800\/60, .bg-zinc-800\/50 { background-color: hsl(var(--secondary)); }
+
+  /* borders */
+  .border-zinc-800, .border-zinc-800\/60, .border-zinc-700, .border-zinc-900 { border-color: hsl(var(--border)); }
+
+  /* hover */
+  .hover\:bg-zinc-800:hover, .hover\:bg-zinc-800\/60:hover,
+  .hover\:bg-zinc-900:hover { background-color: hsl(var(--accent)); }
+  .hover\:border-zinc-700:hover, .hover\:border-zinc-600:hover { border-color: hsl(var(--primary) / 0.5); }
+  .hover\:text-zinc-100:hover, .hover\:text-zinc-200:hover, .hover\:text-zinc-300:hover { color: hsl(var(--foreground)); }
 }
