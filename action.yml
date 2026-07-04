@@ -41,6 +41,15 @@ inputs:
     description: "Orphan branch the 'branch' publish mode commits reports to."
     required: false
     default: 'underscore-reports'
+  workspace:
+    description: >-
+      Workspace/domain name that groups repos for shared cross-repo context
+      (memory stores + knowledge scope). Every repo run with the SAME workspace
+      name is auto-attached to it — no UI, no manual grouping. Defaults to the
+      GitHub org, so all repos in one org group together; override per repo to
+      curate domains (e.g. 'upcover').
+    required: false
+    default: ''
   viewer-url:
     description: >-
       Base URL of the hosted viewer (e.g. https://host/underscore). When set,
@@ -129,6 +138,7 @@ runs:
       env:
         UNDERSCORE_IMAGE: ${{ inputs.image }}
         MODE: ${{ inputs.mode }}
+        WORKSPACE: ${{ inputs.workspace }}
         DELIVERY: ${{ inputs.delivery }}
         SLN: ${{ inputs.sln }}
         UNDERSCORE_LANG: ${{ inputs.lang }}
@@ -153,6 +163,10 @@ runs:
         # override by setting INTENT_DRIFT_REPO_ID on the step env.
         export INTENT_DRIFT_REPO_ID="${INTENT_DRIFT_REPO_ID:-${GITHUB_REPOSITORY##*/}}"
         echo "Underscore analyzer repo_id: $INTENT_DRIFT_REPO_ID"
+        # Workspace/domain grouping: explicit input wins, else the GitHub org —
+        # so repos in one org share cross-repo memory + knowledge context.
+        export INTENT_DRIFT_WORKSPACE="${INTENT_DRIFT_WORKSPACE:-${WORKSPACE:-${GITHUB_REPOSITORY%%/*}}}"
+        echo "Underscore workspace: $INTENT_DRIFT_WORKSPACE"
         docker run --rm \
           --workdir /github/workspace \
           -v "$GITHUB_WORKSPACE:/github/workspace" \
@@ -172,6 +186,7 @@ runs:
           -e INTENT_DRIFT_URL \
           -e INTENT_DRIFT_TOKEN \
           -e INTENT_DRIFT_REPO_ID \
+          -e INTENT_DRIFT_WORKSPACE \
           -e BPMN_MAX_JOURNEYS \
           -e MODE \
           -e DELIVERY \

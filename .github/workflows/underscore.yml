@@ -39,6 +39,11 @@ on:
         type: string
         required: false
         default: 'underscore-reports'
+      workspace:
+        description: "Workspace/domain name grouping repos for cross-repo context (default: the GitHub org)."
+        type: string
+        required: false
+        default: ''
     secrets:
       INTENT_DRIFT_URL:
         required: false
@@ -65,6 +70,7 @@ jobs:
           publish: branch
           viewer-url: ${{ inputs.viewer-url }}
           reports-branch: ${{ inputs.reports-branch }}
+          workspace: ${{ inputs.workspace }}
           sln: ${{ inputs.sln }}
           lang: ${{ inputs.lang }}
         env:
