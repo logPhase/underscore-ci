@@ -77,7 +77,7 @@ inputs:
       Analysis image to run. Override for dev/dogfood builds
       (e.g. ghcr.io/logphase/underscore-ci:dev from scripts/build-image.sh).
     required: false
-    default: 'ghcr.io/logphase/underscore-ci:v1'
+    default: 'ghcr.io/logphase/underscore-ci:v2'
   ghcr-username:
     description: >-
       Username for ghcr.io pull auth (the private analysis image). Any
