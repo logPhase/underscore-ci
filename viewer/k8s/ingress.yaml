@@ -1,9 +1,14 @@
-# Exposes the viewer through the cluster's Azure Application Gateway ingress (AGIC).
-# Dev host: underscore-viewer-dev.apcoaflow.com (covered by the wildcard *.apcoaflow.com
-# cert in the `apcoaflow-tls` secret). NOTE: a DNS A record
-# underscore-viewer-dev.apcoaflow.com -> 20.16.69.225 (the app gateway public IP) must
-# be added by whoever manages the apcoaflow.com zone; until then reach it via
-#   curl --resolve underscore-viewer-dev.apcoaflow.com:443:20.16.69.225 https://underscore-viewer-dev.apcoaflow.com/
+# Exposes the viewer under an EXISTING, already-resolving host by PATH — the same
+# pattern the parking simulation uses (host iris-ingest-dev.apcoaflow.com, a path
+# prefix, backend-path-prefix "/" to strip it). This avoids needing a new DNS
+# record: iris-ingest-dev.apcoaflow.com already points at the app gateway
+# (20.16.69.225) and is covered by the wildcard apcoaflow-tls cert.
+#
+# Routing: the App Gateway sends /underscore/* here and everything else to the
+# existing iris-camera-ingestion ingress (host `/` catch-all) — additive, its
+# ingress is untouched. backend-path-prefix "/" strips /underscore so nginx sees
+# /, /latest/..., /reports/... Visit WITH the trailing slash: /underscore/
+# (per-run report links are absolute + self-contained, so they load regardless).
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -13,17 +18,18 @@ metadata:
   annotations:
     appgw.ingress.kubernetes.io/ssl-redirect: "true"
     appgw.ingress.kubernetes.io/backend-protocol: "http"
+    appgw.ingress.kubernetes.io/backend-path-prefix: "/"
 spec:
   ingressClassName: azure-application-gateway
   tls:
     - hosts:
-        - underscore-viewer-dev.apcoaflow.com
+        - iris-ingest-dev.apcoaflow.com
       secretName: apcoaflow-tls
   rules:
-    - host: underscore-viewer-dev.apcoaflow.com
+    - host: iris-ingest-dev.apcoaflow.com
       http:
         paths:
-          - path: /
+          - path: /underscore
             pathType: Prefix
             backend:
               service:
