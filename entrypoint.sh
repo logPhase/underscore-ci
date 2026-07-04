@@ -14,7 +14,12 @@
 # and a green no-op is misleading for a manually dispatched run.
 set -euo pipefail
 
-MODE="${MODE:-pr}"
+MODE="${MODE:-auto}"
+# 'auto' resolves from the event: a pull_request → pr, anything else → full.
+# Lets one workflow serve both without the caller branching on the trigger.
+if [[ "$MODE" == "auto" ]]; then
+  [[ "${GITHUB_EVENT_NAME:-}" == "pull_request" ]] && MODE=pr || MODE=full
+fi
 DELIVERY="${DELIVERY:-artifact}"
 SLN="${SLN:-}"
 UNDERSCORE_LANG="${UNDERSCORE_LANG:-csharp}"

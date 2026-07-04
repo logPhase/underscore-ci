@@ -146,7 +146,7 @@
       <a class="mark" href="./">log<b>Phase</b><span class="cursor" id="cur">_</span></a>
       <span class="tag">Underscore</span>
       <span class="spacer"></span>
-      <span class="repo" id="repo-label">apcoa-tech / <b>iris-vas</b></span>
+      <span class="repo" id="repo-label"></span>
     </div>
   </header>
 
@@ -160,7 +160,7 @@
         </g>
       </svg>
       <p class="eyebrow">Code analysis · hosted reports</p>
-      <h1>Code cartography for <span class="u">IRIS.VAS</span>.</h1>
+      <h1 id="hero-title">Code cartography.</h1>
       <p class="lede">Each session maps every execution journey, call graph, and business flow in the codebase into one interactive report. Pick a session to open it.</p>
       <div class="stats" id="stats"></div>
     </section>
@@ -189,8 +189,25 @@
 
 <script>
 (function(){
-  var REPO = "https://github.com/apcoa-tech/iris-vas";
-  document.getElementById("repo-link").href = REPO;
+  // Repo identity is DATA-DRIVEN (from runs.json), never hardcoded — the same
+  // page serves any repo. REPO is resolved from the latest session's `repo`
+  // ("owner/name"); until then commit/PR links degrade to plain text.
+  var REPO = null;
+
+  function applyMeta(runs){
+    var m = runs[0] || {};
+    if(m.repo){
+      REPO = "https://github.com/" + m.repo;
+      var p = String(m.repo).split("/");
+      document.getElementById("repo-label").innerHTML = esc(p[0]||"") + " / <b>" + esc(p.slice(1).join("/")) + "</b>";
+      var rl = document.getElementById("repo-link"); rl.href = REPO;
+    } else {
+      document.getElementById("repo-link").style.display = "none";
+    }
+    var h1 = document.getElementById("hero-title");
+    if(m.project){ h1.innerHTML = 'Code cartography for <span class="u">' + esc(m.project) + '</span>.'; }
+    else { h1.textContent = 'Code cartography.'; }
+  }
 
   // blinking cursor (respect reduced motion)
   if(!matchMedia("(prefers-reduced-motion: reduce)").matches){
@@ -214,15 +231,23 @@
     return '<div class="m'+(zero?' zero':'')+'"><div class="mv">'+(v==null?"—":v)+'</div><div class="ml">'+label+'</div></div>';
   }
   function source(s){
-    if(s.pr){ return '<a href="'+REPO+'/pull/'+encodeURIComponent(s.pr)+'" target="_blank" rel="noopener">PR #'+esc(s.pr)+'</a>'+(s.prTitle?' · '+esc(s.prTitle):''); }
+    if(s.pr){
+      var lbl = "PR #"+esc(s.pr);
+      var pr = REPO ? '<a href="'+REPO+'/pull/'+encodeURIComponent(s.pr)+'" target="_blank" rel="noopener">'+lbl+'</a>' : lbl;
+      return pr + (s.prTitle ? ' · '+esc(s.prTitle) : '');
+    }
     var ref = esc(s.ref||"main");
-    if(s.sha){ return ref+' @ <a href="'+REPO+'/commit/'+esc(s.sha)+'" target="_blank" rel="noopener">'+esc(s.shortSha||String(s.sha).slice(0,7))+'</a>'; }
+    if(s.sha){
+      var sh = esc(s.shortSha||String(s.sha).slice(0,7));
+      return REPO ? ref+' @ <a href="'+REPO+'/commit/'+esc(s.sha)+'" target="_blank" rel="noopener">'+sh+'</a>' : ref+' @ '+sh;
+    }
     return ref;
   }
 
   function render(runs){
     // newest first
     runs.sort(function(a,b){ return (b.date||b.stamp||"").localeCompare(a.date||a.stamp||""); });
+    applyMeta(runs);            // derive repo/project identity from the data
     var latest = runs[0];
 
     // hero stats

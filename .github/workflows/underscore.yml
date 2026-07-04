@@ -1,0 +1,73 @@
+# Reusable Underscore workflow — clients call THIS; they never copy the
+# analysis/publish plumbing.
+#
+# A client repo adds a ~10-line caller (see examples/underscore.yml):
+#
+#   name: Underscore
+#   on: [pull_request, workflow_dispatch]
+#   jobs:
+#     underscore:
+#       uses: logPhase/underscore-ci/.github/workflows/underscore.yml@v2
+#       secrets: inherit
+#       with:
+#         viewer-url: https://<their-host>/underscore
+#
+# On a PR it produces a PR-scoped report (+ PR comment); on workflow_dispatch a
+# whole-repo report. Either way it commits to the reports branch and refreshes
+# the hosted viewer. All logic lives here + in the action, versioned at @v2.
+name: Underscore
+
+on:
+  workflow_call:
+    inputs:
+      viewer-url:
+        description: "Base URL of the hosted viewer (optional)."
+        type: string
+        required: false
+        default: ''
+      sln:
+        description: "Repo-relative .sln/.slnx path (only if multiple solutions)."
+        type: string
+        required: false
+        default: ''
+      lang:
+        description: "csharp | java | python."
+        type: string
+        required: false
+        default: 'csharp'
+      reports-branch:
+        type: string
+        required: false
+        default: 'underscore-reports'
+    secrets:
+      INTENT_DRIFT_URL:
+        required: false
+      INTENT_DRIFT_TOKEN:
+        required: false
+
+jobs:
+  underscore:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # commit the report to the reports branch
+      pull-requests: write   # upsert the PR comment (pr mode)
+    concurrency:
+      # One run per PR; full-repo dispatches serialize on the branch.
+      group: underscore-${{ github.event.pull_request.number || github.ref_name }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history — analysis diffs base/head via git worktrees
+      - uses: logPhase/underscore-ci@v2
+        with:
+          mode: auto
+          publish: branch
+          viewer-url: ${{ inputs.viewer-url }}
+          reports-branch: ${{ inputs.reports-branch }}
+          sln: ${{ inputs.sln }}
+          lang: ${{ inputs.lang }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INTENT_DRIFT_URL: ${{ secrets.INTENT_DRIFT_URL }}
+          INTENT_DRIFT_TOKEN: ${{ secrets.INTENT_DRIFT_TOKEN }}

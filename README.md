@@ -7,47 +7,42 @@ execution journeys the PR touches, method-level impact overlays, business-flow
 inside your CI runner — your code never leaves it unless you opt into
 enrichment.
 
-## Quickstart (clients)
+## Quickstart (clients) — the whole integration is one file
 
-1. Add the repository secrets:
+Add **`.github/workflows/underscore.yml`** ([`examples/underscore.yml`](examples/underscore.yml)):
 
-   | Secret | Purpose |
-   |---|---|
-   | `INTENT_DRIFT_URL` | Hosted Underscore analyzer endpoint (we provide it) |
-   | `INTENT_DRIFT_TOKEN` | Your analyzer bearer token (we issue it; omit for structural-only) |
-   | `UNDERSCORE_GHCR_USER` / `UNDERSCORE_GHCR_TOKEN` | Pull auth for the private analysis image (the action logs in and pulls itself) |
+```yaml
+name: Underscore
+on: [pull_request, workflow_dispatch]
 
-2. Copy [`examples/underscore-pr.yml`](examples/underscore-pr.yml) to
-   `.github/workflows/underscore-pr.yml`. The essentials:
+jobs:
+  underscore:
+    uses: logPhase/underscore-ci/.github/workflows/underscore.yml@v2
+    secrets: inherit
+    with:
+      viewer-url: ${{ vars.UNDERSCORE_VIEWER_URL }}
+```
 
-   ```yaml
-   on: pull_request
-   permissions:
-     contents: read
-     pull-requests: write
-   steps:
-     - uses: actions/checkout@v4
-       with:
-         fetch-depth: 0        # required — analysis diffs base/head via git worktrees
-     - id: underscore
-       uses: logphase/underscore-ci@v1
-       with:
-         ghcr-username: ${{ secrets.UNDERSCORE_GHCR_USER }}
-         ghcr-token: ${{ secrets.UNDERSCORE_GHCR_TOKEN }}
-       env:
-         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-         INTENT_DRIFT_URL: ${{ secrets.INTENT_DRIFT_URL }}
-         INTENT_DRIFT_TOKEN: ${{ secrets.INTENT_DRIFT_TOKEN }}
-     - uses: actions/upload-artifact@v4
-       if: steps.underscore.outputs.report-file != ''
-       with:
-         name: underscore-report
-         path: ${{ steps.underscore.outputs.report-file }}
-   ```
+Then set two repository secrets and one variable:
 
-3. Open a PR. The action upserts one PR comment (edited on every push, never
-   spammed) with a summary — journeys touched, business flows, and where to
-   find the report.
+| Setting | Kind | Purpose |
+|---|---|---|
+| `INTENT_DRIFT_URL` | secret | Hosted analyzer endpoint (we provide it) |
+| `INTENT_DRIFT_TOKEN` | secret | Your analyzer token (we issue it; omit for structural-only) |
+| `UNDERSCORE_VIEWER_URL` | variable | Base URL of your hosted report viewer (optional) |
+
+That's it. On a **pull request** it posts a PR comment and publishes a
+**PR-scoped** report (only the journeys the diff touches). On **Run workflow**
+(workflow_dispatch) it publishes a **whole-repo** report. Both land on the
+`underscore-reports` branch and refresh the hosted viewer — no branch,
+worktree, or `runs.json` plumbing in your repo. Because you track `@v2`, every
+improvement we ship reaches you with no change on your side.
+
+The reusable workflow does the checkout and calls the action with
+`mode: auto` + `publish: branch`; see
+[`.github/workflows/underscore.yml`](.github/workflows/underscore.yml). To wire
+the analysis into your own steps instead of the reusable workflow, call the
+action (`logPhase/underscore-ci@v2`) directly — its inputs are documented below.
 
 ### Inputs
 

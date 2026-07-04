@@ -20,15 +20,33 @@ branding:
 inputs:
   mode:
     description: >-
-      Analysis mode. 'pr' (default) analyzes the pull request diff and needs
-      a pull_request event. 'full' produces a whole-repo report and works on
-      workflow_dispatch — no PR payload is read, no PR comment is posted, and
-      the pr-number output stays empty. Note: in 'full' mode an analysis
-      failure ALWAYS fails the step, regardless of fail-on-error — there is
-      no PR to post a failure comment on, so a green no-op would be
-      misleading.
+      Analysis mode. 'auto' (default) picks 'pr' on a pull_request event and
+      'full' otherwise (e.g. workflow_dispatch) — so one workflow serves both.
+      'pr' analyzes the PR diff (only the journeys it touches) and posts a PR
+      comment. 'full' produces a whole-repo report; an analysis failure always
+      fails the step in full mode (no PR to comment on, so a green no-op would
+      be misleading).
     required: false
-    default: 'pr'
+    default: 'auto'
+  publish:
+    description: >-
+      Where to publish the report. 'none' (default) just exposes the
+      report-file / publish-dir outputs for the caller to handle. 'branch'
+      commits the report to the reports-branch (per-run dir for full mode,
+      one dir per PR for pr mode), maintains runs.json for the hosted viewer,
+      and drops the branded landing page — no client-side plumbing needed.
+    required: false
+    default: 'none'
+  reports-branch:
+    description: "Orphan branch the 'branch' publish mode commits reports to."
+    required: false
+    default: 'underscore-reports'
+  viewer-url:
+    description: >-
+      Base URL of the hosted viewer (e.g. https://host/underscore). When set,
+      each run's summary links to its report there. Optional.
+    required: false
+    default: ''
   delivery:
     description: >-
       Report delivery mode. 'artifact' (default) emits a single-file HTML
@@ -122,6 +140,12 @@ runs:
       # inherited from the `env:` block on the calling workflow step and passed
       # through by name (BPMN_MAX_JOURNEYS is an optional full-mode cost cap).
       run: |
+        # Resolve 'auto' here so any image (incl. older ones) receives a
+        # concrete pr|full — the container never needs to know about 'auto'.
+        if [[ "$MODE" == "auto" ]]; then
+          if [[ "${GITHUB_EVENT_NAME:-}" == "pull_request" ]]; then MODE=pr; else MODE=full; fi
+        fi
+        echo "Underscore mode: $MODE (event: ${GITHUB_EVENT_NAME:-n/a})"
         docker run --rm \
           --workdir /github/workspace \
           -v "$GITHUB_WORKSPACE:/github/workspace" \
@@ -135,6 +159,7 @@ runs:
           -e GITHUB_REPOSITORY \
           -e GITHUB_SERVER_URL \
           -e GITHUB_RUN_ID \
+          -e GITHUB_EVENT_NAME \
           -e GITHUB_TOKEN \
           -e GH_TOKEN \
           -e INTENT_DRIFT_URL \
@@ -146,3 +171,31 @@ runs:
           -e UNDERSCORE_LANG \
           -e FAIL_ON_ERROR \
           "$UNDERSCORE_IMAGE"
+
+    # All the reports-branch plumbing lives HERE, in the action — so a client
+    # workflow never hand-rolls git worktrees or runs.json. Gated on
+    # publish=branch; runs on the runner (has git + the checkout's push creds).
+    - name: Publish report to reports branch
+      if: inputs.publish == 'branch' && steps.analyze.outputs.report-file != ''
+      shell: bash
+      env:
+        REPORTS_BRANCH: ${{ inputs.reports-branch }}
+        VIEWER_URL: ${{ inputs.viewer-url }}
+        MODE_INPUT: ${{ inputs.mode }}
+        REPORT_FILE: ${{ steps.analyze.outputs.report-file }}
+        PUBLISH_DIR: ${{ steps.analyze.outputs.publish-dir }}
+        REPO_SLUG: ${{ github.repository }}
+        RUN_NUMBER: ${{ github.run_number }}
+        ACTOR: ${{ github.actor }}
+        REF_NAME: ${{ github.ref_name }}
+        HEAD_SHA: ${{ github.sha }}
+        # PR context (empty off a pull_request) — via env so an attacker-set PR
+        # title can never inject shell.
+        EVENT_NAME: ${{ github.event_name }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        PR_TITLE: ${{ github.event.pull_request.title }}
+        PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        bash "$GITHUB_ACTION_PATH/scripts/publish-report.sh"

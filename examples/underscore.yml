@@ -1,0 +1,18 @@
+# Underscore — copy this to .github/workflows/underscore.yml in your repo.
+# This is the ENTIRE integration. It runs a PR-scoped report on every pull
+# request and a whole-repo report on manual dispatch, commits both to the
+# `underscore-reports` branch, and refreshes the hosted viewer.
+#
+# Setup (once):
+#   1. Copy this file to .github/workflows/underscore.yml
+#   2. Repo secrets:   INTENT_DRIFT_URL, INTENT_DRIFT_TOKEN   (omit for structural-only)
+#   3. Repo variable:  UNDERSCORE_VIEWER_URL = https://<your-viewer-host>/underscore  (optional)
+name: Underscore
+on: [pull_request, workflow_dispatch]
+
+jobs:
+  underscore:
+    uses: logPhase/underscore-ci/.github/workflows/underscore.yml@v2
+    secrets: inherit
+    with:
+      viewer-url: ${{ vars.UNDERSCORE_VIEWER_URL }}
