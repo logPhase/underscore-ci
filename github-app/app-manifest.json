@@ -1,0 +1,21 @@
+{
+  "name": "Underscore",
+  "url": "https://logphase.ai",
+  "hook_attributes": {
+    "url": "https://iris-ingest-dev.apcoaflow.com/underscore-app/webhook",
+    "active": true
+  },
+  "public": false,
+  "default_permissions": {
+    "contents": "write",
+    "pull_requests": "write",
+    "workflows": "write",
+    "secrets": "write",
+    "actions": "write",
+    "metadata": "read"
+  },
+  "default_events": [
+    "installation",
+    "installation_repositories"
+  ]
+}

@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: underscore-app
+  labels: { app: underscore-app }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: underscore-app }
+  template:
+    metadata:
+      labels: { app: underscore-app }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+      containers:
+        - name: app
+          image: irisacrdev001.azurecr.io/underscore-app:dev
+          imagePullPolicy: Always
+          ports:
+            - { name: http, containerPort: 8080 }
+          env:
+            # Non-secret config the app writes into onboarded repos.
+            - name: UNDERSCORE_VIEWER_URL
+              value: "https://iris-ingest-dev.apcoaflow.com/underscore"
+            - name: INTENT_DRIFT_URL
+              value: "https://intent-analyzer.logphase.ai"
+            - name: UNDERSCORE_ACTION_REF
+              value: "logPhase/underscore-ci@v2"
+            # App credentials (from the GitHub App you create) — see secret.example.yaml.
+            - name: GH_APP_ID
+              valueFrom: { secretKeyRef: { name: underscore-app-secrets, key: GH_APP_ID } }
+            - name: GH_WEBHOOK_SECRET
+              valueFrom: { secretKeyRef: { name: underscore-app-secrets, key: GH_WEBHOOK_SECRET } }
+            - name: GH_APP_PRIVATE_KEY
+              valueFrom: { secretKeyRef: { name: underscore-app-secrets, key: GH_APP_PRIVATE_KEY } }
+          livenessProbe:
+            httpGet: { path: /underscore-app/healthz, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          readinessProbe:
+            httpGet: { path: /underscore-app/healthz, port: http }
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          resources:
+            requests: { cpu: "25m", memory: "96Mi" }
+            limits: { cpu: "250m", memory: "256Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: underscore-app
+  labels: { app: underscore-app }
+spec:
+  type: ClusterIP
+  selector: { app: underscore-app }
+  ports:
+    - { name: http, port: 80, targetPort: http }
+---
+# Path-shares the existing iris-ingest-dev host (no new DNS), like the viewer.
+# GitHub posts webhooks to https://iris-ingest-dev.apcoaflow.com/underscore-app/webhook;
+# the app mounts itself under /underscore-app, so the path is forwarded as-is.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: underscore-app
+  labels: { app: underscore-app }
+  annotations:
+    appgw.ingress.kubernetes.io/ssl-redirect: "true"
+    appgw.ingress.kubernetes.io/backend-protocol: "http"
+    appgw.ingress.kubernetes.io/health-probe-path: "/underscore-app/healthz"
+spec:
+  ingressClassName: azure-application-gateway
+  tls:
+    - hosts: [ "iris-ingest-dev.apcoaflow.com" ]
+      secretName: apcoaflow-tls
+  rules:
+    - host: iris-ingest-dev.apcoaflow.com
+      http:
+        paths:
+          - path: /underscore-app
+            pathType: Prefix
+            backend:
+              service:
+                name: underscore-app
+                port: { number: 80 }
