@@ -6,7 +6,11 @@
 # Setup (once):
 #   1. Copy this file to .github/workflows/underscore.yml
 #   2. Repo secrets:   INTENT_DRIFT_URL, INTENT_DRIFT_TOKEN   (omit for structural-only)
-#   3. Repo variable:  UNDERSCORE_VIEWER_URL = https://<your-viewer-host>/underscore  (optional)
+#   3. Repo/org variables (optional):
+#        UNDERSCORE_VIEWER_URL = https://<your-viewer-host>/underscore
+#        UNDERSCORE_WORKSPACE  = <domain name>  (groups repos for cross-repo memory;
+#                                 empty -> defaults to the GitHub org. Set it once at
+#                                 the ORG level and every repo joins the same domain.)
 name: Underscore
 on: [pull_request, workflow_dispatch]
 
@@ -16,3 +20,4 @@ jobs:
     secrets: inherit
     with:
       viewer-url: ${{ vars.UNDERSCORE_VIEWER_URL }}
+      workspace: ${{ vars.UNDERSCORE_WORKSPACE }}
