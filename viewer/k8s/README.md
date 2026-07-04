@@ -84,3 +84,21 @@ real internal host, then set:
 - git-sync runs as uid/gid `65533`; the Pod `fsGroup: 65533` makes the shared volume
   writable for it. nginx mounts the same volume read-only.
 - No persistence: the volume is an `emptyDir`; on restart git-sync re-clones (depth 1).
+
+## Basic auth (access gate)
+
+The viewer is gated by nginx **basic auth** (parking-sim style) — an htpasswd from a
+K8s secret the ConfigMap references at `/etc/nginx/.htpasswd`. The `/healthz` and
+`/readyz` probe endpoints opt out (`auth_basic off`) so kube-probes and the App
+Gateway health probe never need credentials; `/readyz` returns 200 only once
+git-sync has landed `index.html`.
+
+Create (or rotate) the credential:
+
+```bash
+htpasswd -nb -m <user> '<password>' \
+  | kubectl create secret generic underscore-viewer-htpasswd -n iris \
+      --from-literal=.htpasswd=/dev/stdin --dry-run=client -o yaml \
+  | kubectl apply -f -
+kubectl rollout restart deployment/underscore-viewer -n iris   # pick up a new secret
+```
