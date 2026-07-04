@@ -44,6 +44,7 @@ data:
         default                 "public, max-age=300";
         ~^/reports/             "public, max-age=31536000, immutable";
         ~^/latest/              "no-cache";
+        "/runs.json"            "no-cache";
         "/index.html"           "no-cache";
         "/"                     "no-cache";
     }

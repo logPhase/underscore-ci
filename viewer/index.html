@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>logPhase · Underscore — analysis sessions</title>
+<style>
+  :root{
+    --ink:#0C0F1D; --panel:#141A2E; --panel-2:#1B2238; --line:#2A3350;
+    --mist:#7E88A3; --paper:#EAEEF9; --signal:#8B7DFF; --live:#34E2C4;
+    --mono:ui-monospace,"JetBrains Mono","SF Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --r:14px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--ink); color:var(--paper); font-family:var(--sans);
+    -webkit-font-smoothing:antialiased; line-height:1.55; overflow-x:hidden;
+    background-image:
+      linear-gradient(var(--line) 1px,transparent 1px),
+      linear-gradient(90deg,var(--line) 1px,transparent 1px);
+    background-size:64px 64px; background-position:center -1px;
+    background-attachment:fixed;
+  }
+  body::before{ /* fade the grid so it reads as ambient, not a table */
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background:radial-gradient(120% 90% at 50% 0%, transparent 0%, rgba(12,15,29,.72) 55%, var(--ink) 100%);
+  }
+  .wrap{position:relative; z-index:1; max-width:1080px; margin:0 auto; padding:0 24px}
+
+  /* ---- top bar ---- */
+  .bar{
+    position:sticky; top:0; z-index:20; backdrop-filter:blur(10px);
+    background:rgba(12,15,29,.66); border-bottom:1px solid var(--line);
+  }
+  .bar .wrap{display:flex; align-items:center; gap:16px; height:60px}
+  .mark{font-family:var(--mono); font-weight:700; font-size:18px; letter-spacing:-.02em; color:var(--paper); text-decoration:none}
+  .mark b{color:var(--signal); font-weight:700}
+  .cursor{color:var(--live); font-weight:400}
+  .bar .tag{font-family:var(--mono); font-size:11px; letter-spacing:.14em; color:var(--mist); text-transform:uppercase; padding:3px 8px; border:1px solid var(--line); border-radius:999px}
+  .bar .spacer{flex:1}
+  .bar .repo{font-family:var(--mono); font-size:12px; color:var(--mist)}
+  .bar .repo b{color:var(--paper); font-weight:600}
+
+  /* ---- hero ---- */
+  .hero{position:relative; padding:72px 0 40px}
+  .eyebrow{font-family:var(--mono); font-size:12px; letter-spacing:.28em; text-transform:uppercase; color:var(--signal); margin:0 0 18px}
+  .hero h1{
+    font-family:var(--mono); font-weight:700; letter-spacing:-.03em; line-height:1.02;
+    font-size:clamp(38px,7vw,68px); margin:0 0 20px; max-width:16ch;
+  }
+  .hero h1 .u{color:var(--signal)}
+  .lede{font-size:clamp(16px,2.1vw,19px); color:#B7BFD4; max-width:56ch; margin:0 0 30px}
+  .stats{display:flex; flex-wrap:wrap; gap:28px; font-family:var(--mono)}
+  .stat .n{font-size:26px; font-weight:700; letter-spacing:-.02em}
+  .stat .l{font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--mist)}
+  .stat .n .live-dot{display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--live); margin-left:6px; vertical-align:middle; box-shadow:0 0 0 0 rgba(52,226,196,.6)}
+
+  /* signature: phase waveform */
+  .wave{position:absolute; right:-40px; top:40px; width:min(560px,52vw); opacity:.9; pointer-events:none; z-index:0}
+  .wave path{fill:none; stroke-linecap:round}
+  .wave .sig{stroke:var(--signal); stroke-width:2.5;
+    stroke-dasharray:2600; stroke-dashoffset:2600; animation:draw 2.2s .2s cubic-bezier(.6,.02,.2,1) forwards}
+  .wave .echo{stroke:var(--signal); stroke-width:1.2; opacity:.25}
+  .wave .live{stroke:var(--live); stroke-width:2; stroke-dasharray:2600; stroke-dashoffset:2600; animation:draw 2.4s .5s cubic-bezier(.6,.02,.2,1) forwards}
+  .wavepulse{animation:bob 7s ease-in-out infinite; transform-origin:center}
+  @keyframes draw{to{stroke-dashoffset:0}}
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+
+  /* ---- sections ---- */
+  .sec-head{display:flex; align-items:baseline; gap:14px; margin:52px 0 20px; border-top:1px solid var(--line); padding-top:24px}
+  .sec-head h2{font-size:15px; font-family:var(--mono); font-weight:600; letter-spacing:.02em; margin:0}
+  .sec-head .count{font-family:var(--mono); font-size:12px; color:var(--mist)}
+  .sec-head .rule{flex:1; height:1px; background:linear-gradient(90deg,var(--line),transparent)}
+
+  /* featured latest */
+  .feat{
+    display:block; text-decoration:none; color:inherit; position:relative; overflow:hidden;
+    background:linear-gradient(180deg,var(--panel-2),var(--panel)); border:1px solid var(--line);
+    border-radius:var(--r); padding:26px 28px; margin-bottom:14px;
+    transition:border-color .25s, transform .25s;
+  }
+  .feat::before{content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--live)}
+  .feat:hover{border-color:#3c477099; transform:translateY(-2px)}
+  .feat .row1{display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px}
+  .pill{font-family:var(--mono); font-size:10.5px; letter-spacing:.16em; text-transform:uppercase; padding:4px 9px; border-radius:999px; border:1px solid var(--live); color:var(--live)}
+  .feat .id{font-family:var(--mono); font-size:20px; font-weight:700; letter-spacing:-.01em}
+  .feat .when{font-family:var(--mono); font-size:12px; color:var(--mist); margin-left:auto}
+  .open{font-family:var(--mono); font-size:13px; color:var(--signal); white-space:nowrap}
+  .feat:hover .open .arw{transform:translateX(4px)}
+  .arw{display:inline-block; transition:transform .25s}
+
+  /* session list */
+  .sessions{display:flex; flex-direction:column; gap:10px}
+  .s{
+    display:grid; grid-template-columns:1.2fr 1fr auto; align-items:center; gap:18px;
+    text-decoration:none; color:inherit; position:relative;
+    background:var(--panel); border:1px solid var(--line); border-radius:var(--r);
+    padding:18px 22px; transition:border-color .2s, transform .2s, background .2s;
+    opacity:0; transform:translateY(14px);
+  }
+  .s.in{opacity:1; transform:none; transition:border-color .2s, transform .55s cubic-bezier(.2,.7,.2,1), opacity .55s}
+  .s::before{content:""; position:absolute; left:0; top:14px; bottom:14px; width:2px; background:var(--signal); opacity:0; transition:opacity .2s}
+  .s:hover{border-color:#3c4770; background:var(--panel-2); transform:translateY(-2px)}
+  .s:hover::before{opacity:1}
+  .s .id{font-family:var(--mono); font-weight:600; font-size:15px}
+  .s .sub{font-family:var(--mono); font-size:12px; color:var(--mist); margin-top:3px}
+  .s .src a{color:var(--signal); text-decoration:none}
+  .s .src a:hover{text-decoration:underline}
+  .metrics{display:flex; gap:16px}
+  .m{font-family:var(--mono); text-align:right}
+  .m .mv{font-size:17px; font-weight:700; letter-spacing:-.01em}
+  .m .ml{font-size:9.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--mist)}
+  .m.zero .mv{color:var(--mist); font-weight:500}
+  .s .go{font-family:var(--mono); font-size:13px; color:var(--signal); white-space:nowrap}
+  .s:hover .go .arw{transform:translateX(4px)}
+
+  .msg{font-family:var(--mono); font-size:14px; color:var(--mist); padding:34px 22px; text-align:center; border:1px dashed var(--line); border-radius:var(--r)}
+  .msg b{color:var(--paper); font-weight:600}
+
+  footer{margin:60px 0 46px; padding-top:22px; border-top:1px solid var(--line); font-family:var(--mono); font-size:12px; color:var(--mist); display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+  footer .spacer{flex:1}
+  footer a{color:var(--mist); text-decoration:none}
+  footer a:hover{color:var(--paper)}
+
+  @media (max-width:720px){
+    .wave{display:none}
+    .s{grid-template-columns:1fr; gap:14px}
+    .metrics{gap:22px}
+    .feat .when{margin-left:0; width:100%}
+  }
+  @media (prefers-reduced-motion:reduce){
+    html{scroll-behavior:auto}
+    .wave .sig,.wave .live{animation:none; stroke-dashoffset:0}
+    .wavepulse{animation:none}
+    .s{opacity:1; transform:none}
+    .live-dot{box-shadow:none !important}
+  }
+  @keyframes ping{0%{box-shadow:0 0 0 0 rgba(52,226,196,.55)}70%,100%{box-shadow:0 0 0 7px rgba(52,226,196,0)}}
+</style>
+</head>
+<body>
+  <header class="bar">
+    <div class="wrap">
+      <a class="mark" href="./">log<b>Phase</b><span class="cursor" id="cur">_</span></a>
+      <span class="tag">Underscore</span>
+      <span class="spacer"></span>
+      <span class="repo" id="repo-label">apcoa-tech / <b>iris-vas</b></span>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="hero">
+      <svg class="wave" viewBox="0 0 600 240" aria-hidden="true">
+        <g class="wavepulse">
+          <path class="echo" d="M0,140 C60,60 100,60 150,130 C200,200 240,200 300,120 C360,40 400,40 450,130 C500,215 540,215 600,120"/>
+          <path class="sig"  d="M0,150 C55,70 105,70 150,140 C200,215 245,215 300,130 C358,45 402,45 450,140 C505,225 545,225 600,130"/>
+          <path class="live" d="M300,130 C358,45 402,45 450,140 C505,225 545,225 600,130"/>
+        </g>
+      </svg>
+      <p class="eyebrow">Code analysis · hosted reports</p>
+      <h1>Code cartography for <span class="u">IRIS.VAS</span>.</h1>
+      <p class="lede">Each session maps every execution journey, call graph, and business flow in the codebase into one interactive report. Pick a session to open it.</p>
+      <div class="stats" id="stats"></div>
+    </section>
+
+    <div class="sec-head">
+      <h2>Latest session</h2>
+      <span class="rule"></span>
+    </div>
+    <div id="feat"></div>
+
+    <div class="sec-head">
+      <h2>All sessions</h2>
+      <span class="count" id="allcount"></span>
+      <span class="rule"></span>
+    </div>
+    <div class="sessions" id="list">
+      <div class="msg">Loading sessions…</div>
+    </div>
+
+    <footer>
+      <span>logPhase · Underscore</span>
+      <span class="spacer"></span>
+      <a id="repo-link" href="#" target="_blank" rel="noopener">repository ↗</a>
+    </footer>
+  </main>
+
+<script>
+(function(){
+  var REPO = "https://github.com/apcoa-tech/iris-vas";
+  document.getElementById("repo-link").href = REPO;
+
+  // blinking cursor (respect reduced motion)
+  if(!matchMedia("(prefers-reduced-motion: reduce)").matches){
+    var cur=document.getElementById("cur"), on=true;
+    setInterval(function(){ on=!on; cur.style.opacity = on?1:0.15; }, 560);
+  }
+
+  function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
+  function rel(iso){
+    if(!iso) return "";
+    var t=Date.parse(iso); if(isNaN(t)) return iso;
+    var s=(Date.now()-t)/1000;
+    if(s<60) return "just now";
+    var m=s/60; if(m<60) return Math.round(m)+" min ago";
+    var h=m/60; if(h<24) return Math.round(h)+" h ago";
+    var d=h/24; if(d<30) return Math.round(d)+" d ago";
+    return new Date(t).toISOString().slice(0,10);
+  }
+  function metric(v,label){
+    var zero = (!v || v===0);
+    return '<div class="m'+(zero?' zero':'')+'"><div class="mv">'+(v==null?"—":v)+'</div><div class="ml">'+label+'</div></div>';
+  }
+  function source(s){
+    if(s.pr){ return '<a href="'+REPO+'/pull/'+encodeURIComponent(s.pr)+'" target="_blank" rel="noopener">PR #'+esc(s.pr)+'</a>'+(s.prTitle?' · '+esc(s.prTitle):''); }
+    var ref = esc(s.ref||"main");
+    if(s.sha){ return ref+' @ <a href="'+REPO+'/commit/'+esc(s.sha)+'" target="_blank" rel="noopener">'+esc(s.shortSha||String(s.sha).slice(0,7))+'</a>'; }
+    return ref;
+  }
+
+  function render(runs){
+    // newest first
+    runs.sort(function(a,b){ return (b.date||b.stamp||"").localeCompare(a.date||a.stamp||""); });
+    var latest = runs[0];
+
+    // hero stats
+    var totalJ = latest ? latest.journeys : null;
+    document.getElementById("stats").innerHTML =
+      '<div class="stat"><div class="n">'+runs.length+'</div><div class="l">Sessions</div></div>'+
+      '<div class="stat"><div class="n">'+(totalJ==null?"—":totalJ)+'</div><div class="l">Journeys mapped</div></div>'+
+      '<div class="stat"><div class="n">'+(latest?rel(latest.date||isoFromStamp(latest.stamp)):"—")+'<span class="live-dot" style="animation:ping 2s ease-out infinite"></span></div><div class="l">Last run</div></div>';
+
+    // featured latest
+    var feat=document.getElementById("feat");
+    if(latest){
+      var href = esc(latest.dir)+"/underscore-report.html";
+      feat.innerHTML =
+        '<a class="feat" href="'+href+'">'+
+          '<div class="row1"><span class="pill">Live · latest</span>'+
+            '<span class="id">'+esc(latest.id||("run-"+latest.run))+'</span>'+
+            '<span class="when">'+esc(latest.stamp||"")+' UTC</span></div>'+
+          '<div class="s" style="opacity:1;transform:none;border:0;background:transparent;padding:0;grid-template-columns:1.2fr 1fr auto">'+
+            '<div><div class="sub" style="margin:0">source</div><div class="src" style="font-family:var(--mono);font-size:14px;margin-top:3px">'+source(latest)+'</div></div>'+
+            '<div class="metrics">'+metric(latest.journeys,"journeys")+metric(latest.bpmn,"flows")+metric(latest.summaries,"summaries")+'</div>'+
+            '<div class="open">Open report <span class="arw">→</span></div>'+
+          '</div>'+
+        '</a>';
+    }
+
+    // all sessions
+    document.getElementById("allcount").textContent = runs.length+" total";
+    var list=document.getElementById("list");
+    if(!runs.length){ list.innerHTML='<div class="msg"><b>No sessions yet.</b> Trigger the Underscore Full Report workflow to map the codebase.</div>'; return; }
+    list.innerHTML = runs.map(function(s){
+      var href=esc(s.dir)+"/underscore-report.html";
+      return '<a class="s" href="'+href+'">'+
+        '<div><div class="id">'+esc(s.id||("run-"+s.run))+'</div>'+
+          '<div class="sub">'+esc(s.stamp||"")+' UTC · '+source(s)+'</div></div>'+
+        '<div class="metrics">'+metric(s.journeys,"journeys")+metric(s.bpmn,"flows")+metric(s.summaries,"summaries")+'</div>'+
+        '<div class="go">Open <span class="arw">→</span></div>'+
+      '</a>';
+    }).join("");
+
+    // scroll reveal
+    var items=[].slice.call(list.querySelectorAll(".s"));
+    if(matchMedia("(prefers-reduced-motion: reduce)").matches){ items.forEach(function(el){el.classList.add("in");}); return; }
+    var io=new IntersectionObserver(function(es){es.forEach(function(e){ if(e.isIntersecting){ var el=e.target; setTimeout(function(){el.classList.add("in");}, items.indexOf(el)%8*55); io.unobserve(el);} });},{threshold:.12});
+    items.forEach(function(el){io.observe(el);});
+    // Failsafe: never leave a row stuck invisible if the observer doesn't fire
+    // (background tabs, headless capture, odd viewports).
+    setTimeout(function(){ items.forEach(function(el){el.classList.add("in");}); }, 1400);
+  }
+
+  function isoFromStamp(st){ // "yyyymmdd-HHMMSS" -> ISO
+    if(!st||st.length<15) return null;
+    return st.slice(0,4)+"-"+st.slice(4,6)+"-"+st.slice(6,8)+"T"+st.slice(9,11)+":"+st.slice(11,13)+":"+st.slice(13,15)+"Z";
+  }
+
+  fetch("./runs.json",{cache:"no-store"}).then(function(r){ if(!r.ok) throw 0; return r.json(); })
+    .then(function(runs){ runs.forEach(function(s){ if(!s.date) s.date=isoFromStamp(s.stamp); }); render(runs); })
+    .catch(function(){
+      document.getElementById("list").innerHTML='<div class="msg"><b>Session list unavailable.</b> No <code>runs.json</code> yet — it is written on the next Underscore Full Report run. Meanwhile, open <a class="open" href="latest/underscore-report.html">the latest report →</a></div>';
+      document.getElementById("stats").innerHTML='';
+    });
+})();
+</script>
+</body>
+</html>
