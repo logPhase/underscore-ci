@@ -146,6 +146,13 @@ runs:
           if [[ "${GITHUB_EVENT_NAME:-}" == "pull_request" ]]; then MODE=pr; else MODE=full; fi
         fi
         echo "Underscore mode: $MODE (event: ${GITHUB_EVENT_NAME:-n/a})"
+        # Stable per-repo analyzer id — scopes the analyzer graph, BPMN cache, and
+        # per-repo memory store. WITHOUT this it derives from the checkout dir name
+        # ("workspace"), so every repo in one analyzer workspace would collide into
+        # a single "workspace" scope. Default to the repo name; a caller may
+        # override by setting INTENT_DRIFT_REPO_ID on the step env.
+        export INTENT_DRIFT_REPO_ID="${INTENT_DRIFT_REPO_ID:-${GITHUB_REPOSITORY##*/}}"
+        echo "Underscore analyzer repo_id: $INTENT_DRIFT_REPO_ID"
         docker run --rm \
           --workdir /github/workspace \
           -v "$GITHUB_WORKSPACE:/github/workspace" \
@@ -164,6 +171,7 @@ runs:
           -e GH_TOKEN \
           -e INTENT_DRIFT_URL \
           -e INTENT_DRIFT_TOKEN \
+          -e INTENT_DRIFT_REPO_ID \
           -e BPMN_MAX_JOURNEYS \
           -e MODE \
           -e DELIVERY \
