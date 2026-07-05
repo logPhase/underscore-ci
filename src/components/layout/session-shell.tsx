@@ -1,6 +1,18 @@
 import { useAnalysis } from "@/store/use-analysis-store";
-import { Map as MapIcon, Route } from "lucide-react";
+import { ArrowLeft, Map as MapIcon, Route, ScrollText } from "lucide-react";
+import { useEffect } from "react";
 import { Navigate, NavLink, Outlet } from "react-router-dom";
+
+/** URL of the hosted sessions index, derived from where THIS report is
+ *  served: reports live at <index>/reports/<dir>/underscore-report.html (or
+ *  <index>/latest/…), so the index is everything before that segment. A
+ *  file:// artifact or an unrecognized path has no index — return null and
+ *  the back link stays hidden. */
+function sessionsIndexHref(): string | null {
+  if (!/^https?:$/.test(window.location.protocol)) return null;
+  const m = window.location.pathname.match(/^(.*\/)(reports|latest)\/[^/]*/);
+  return m ? m[1] : null;
+}
 
 /**
  * SessionShell — layout route for the report workspace. A persistent
@@ -15,9 +27,32 @@ import { Navigate, NavLink, Outlet } from "react-router-dom";
 
 export const SessionShell = () => {
   const transformedData = useAnalysis((s) => s.transformedData);
+  const status = useAnalysis((s) => s.status);
+  const loadReport = useAnalysis((s) => s.loadReport);
 
-  // No loaded analysis → no session to show. The loader owns that state.
-  if (!transformedData) return <Navigate to="/" replace />;
+  // Deep links (#/canvas, #/specs, #/journeys/<slug>) land here BEFORE any
+  // report is loaded — self-load instead of bouncing to the loader route,
+  // so the requested view survives the boot. Only a failed load falls back
+  // to the loader (which owns the error state).
+  useEffect(() => {
+    if (!transformedData && status === "idle") void loadReport();
+  }, [transformedData, status, loadReport]);
+
+  if (!transformedData) {
+    if (status === "error") return <Navigate to="/" replace />;
+    return (
+      <div
+        className="flex h-screen w-screen items-center justify-center text-[12px]"
+        style={{
+          background: "var(--bpmn-bg)",
+          color: "var(--bpmn-text-muted)",
+          fontFamily: "var(--bpmn-font-mono)",
+        }}
+      >
+        loading report…
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen w-screen overflow-hidden">
@@ -34,6 +69,9 @@ const SessionRail = () => {
 
   const title = transformedData?.prOverlay?.title ?? "Underscore report";
   const journeyCount = transformedData?.chapters.length ?? 0;
+  const specCount = transformedData?.specs?.specs.length ?? 0;
+  const hasSpecs = transformedData?.specs != null;
+  const indexHref = sessionsIndexHref();
 
   return (
     <aside
@@ -43,8 +81,25 @@ const SessionRail = () => {
         borderColor: "var(--bpmn-border-soft)",
       }}
     >
+      {/* Back to the hosted sessions index — a plain <a> because the index
+          is a different document, not a route of this report. Hidden for
+          file:// artifacts, which have nothing above them. */}
+      {indexHref && (
+        <a
+          href={indexHref}
+          className="rail-nav-item mx-2 mt-2.5 flex min-h-9 items-center gap-2 rounded-md px-3 text-[12px]"
+          style={{
+            fontFamily: "var(--bpmn-font-mono)",
+            color: "var(--bpmn-text-muted)",
+          }}
+        >
+          <ArrowLeft className="h-3.5 w-3.5 shrink-0" />
+          <span>All sessions</span>
+        </a>
+      )}
+
       {/* Session identity — static in report mode (one report per build) */}
-      <div className="mx-2 mt-2.5 flex items-start gap-2 rounded-md px-2 py-2.5">
+      <div className="mx-2 mt-1 flex items-start gap-2 rounded-md px-2 py-2.5">
         <span className="min-w-0 flex-1">
           <span
             className="line-clamp-2 text-[13px]"
@@ -74,6 +129,15 @@ const SessionRail = () => {
           badge={journeyCount > 0 ? String(journeyCount) : null}
           badgeColor="var(--bpmn-text-dim)"
         />
+        {hasSpecs && (
+          <RailNavItem
+            to="/specs"
+            icon={ScrollText}
+            label="Specs"
+            badge={specCount > 0 ? String(specCount) : null}
+            badgeColor="var(--bpmn-text-dim)"
+          />
+        )}
       </nav>
     </aside>
   );

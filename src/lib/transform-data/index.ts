@@ -19,6 +19,7 @@ import {
   transformSharedLibs,
 } from "./services";
 import { deriveAnomalies, derivePackageRoles } from "./derive-data";
+import { applyGroupLayout } from "../canvas/group-layout";
 import { getPackagePositions } from "../canvas/get-positions";
 
 // ── Main loader ────────────────────────────────────────────────────
@@ -26,7 +27,16 @@ import { getPackagePositions } from "../canvas/get-positions";
 export function transformToFrontendFormat(
   raw: RawAnalysisJSON
 ): TransformedData {
-  const services = transformServices(raw.services || []);
+  let services = transformServices(raw.services || []);
+  // Module groups (grouping agent, baked into the payload by the CLI):
+  // position hulls + reposition member services BEFORE anything downstream
+  // derives from service positions (packages, canvas layout).
+  let serviceGroups: TransformedData["serviceGroups"] = null;
+  if (raw.groups?.length) {
+    const laid = applyGroupLayout(services, raw.groups);
+    services = laid.services;
+    serviceGroups = laid.groupRegions;
+  }
   const methods = raw.methods || {};
   const calls = raw.calls || {};
   const files = raw.files || {};
@@ -67,6 +77,7 @@ export function transformToFrontendFormat(
     prData: prOverlayToPRData(prOverlayData),
     prOverview: null,
     journeyKnowledge: null,
+    serviceGroups,
   };
 
   // ── AI-enrichment overlays (parity with the webapp dataLoader) ──────
@@ -87,6 +98,10 @@ export function transformToFrontendFormat(
   // Staged analyzer session id — lets interactive /bpmn/ask resolve the same
   // journey + sources server-side.
   transformedData.sessionId = raw.session_id ?? null;
+
+  // Analyzer repo key + baked-in analyzer bundles (specs, module groups).
+  transformedData.analyzerRepoId = raw.analyzerRepoId ?? null;
+  transformedData.specs = raw.specs ?? null;
 
   if (journeys.length > 0) {
     const {

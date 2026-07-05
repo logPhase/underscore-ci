@@ -6,6 +6,7 @@ import { ReactFlowProvider } from "@xyflow/react";
 import { Compass } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import "./canvas-world.css";
+import { GroupModulesControl } from "@/components/canvas/group-modules-control";
 import { HelpMessage } from "@/components/canvas/help-message";
 import { MethodDetailPanel } from "@/components/canvas/MethodDetailPanel";
 import { CanvasTooltip } from "@/components/canvas/CanvasTooltip";
@@ -35,6 +36,7 @@ export function CanvasWorldPage() {
         <CodebaseStats />
         <BiologicalWorld />
         <HelpMessage />
+        <GroupModulesControl />
         <MethodDetailPanel />
         <CanvasTooltip />
         <HoverTip

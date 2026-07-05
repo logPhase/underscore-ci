@@ -29,6 +29,7 @@ import {
   useRef,
   useState,
 } from "react";
+import type { PositionedGroupRegion } from "@/types/grouping";
 import CallChain from "./sub-components/call-chain";
 import { MemoizedCallChainEdges } from "./sub-components/call-chain-edges";
 import {
@@ -37,6 +38,7 @@ import {
   paperStatusFill,
   useIsPaper,
 } from "./sub-components/canvas-theme";
+import GroupRegions from "./sub-components/group-regions";
 import JourneyCanvas from "./sub-components/journey";
 import ServiceRegion from "./sub-components/service-regions";
 
@@ -512,6 +514,26 @@ export function CanvasWorld({ containerRef, didDragRef }: Props) {
     ]
   );
 
+  // Group hull click — zoom to the group's neighborhood and drop a
+  // breadcrumb, mirroring handleRegionClick (level 0: above services).
+  const handleGroupClick = useCallback(
+    (group: PositionedGroupRegion) => {
+      if (didDragRef.current) return;
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      pushNavigation({
+        label: group.name,
+        level: 0,
+        targetId: group.id,
+        cx: group.cx,
+        cy: group.cy,
+        zoom: 1.4,
+      });
+      zoomTo(group.cx, group.cy, 1.4, rect.width, rect.height);
+    },
+    [didDragRef, containerRef, pushNavigation, zoomTo]
+  );
+
   // Clear focus isolation when the user zooms back to overview (P20: Focus+Context).
   // Without this, focusedServiceId stays stale after panning/escaping, keeping
   // other service regions at 0.03 opacity (effectively invisible).
@@ -541,6 +563,14 @@ export function CanvasWorld({ containerRef, didDragRef }: Props) {
           <feGaussianBlur stdDeviation="2" />
         </filter>
       </defs>
+      {/* Group hulls — under everything else (visual ground, #5); present
+          only while the agent grouping is applied and toggled visible.
+          Renders nothing when the run has no grouping. */}
+      <GroupRegions
+        onGroupClick={handleGroupClick}
+        prMode={prMode}
+        prRelevantServiceIds={allRelevant}
+      />
       {/* Dependency lines */}
       {loadPhase >= 3 &&
         depPaths.map((dp, i) => {

@@ -13,6 +13,10 @@ interface UISlice {
   timelineMonth: number;
   loadPhase: number;
   helpOpen: boolean;
+  // Show/hide the agent-derived group hulls. Default on — grouping is the
+  // overview-first reading (#23). Pure render toggle in the static report:
+  // the layout is always applied, this only controls whether the hulls draw.
+  groupingVisible: boolean;
 
   setActiveView: (v: ViewType) => void;
   setHealthSubStain: (s: HealthSubStain) => void;
@@ -21,6 +25,7 @@ interface UISlice {
   setTimelineMonth: (m: number) => void;
   setLoadPhase: (p: number) => void;
   setHelpOpen: (helpOpen: boolean) => void;
+  setGroupingVisible: (groupingVisible: boolean) => void;
 }
 
 export const useUIStore = create<UISlice>()((set) => ({
@@ -31,6 +36,7 @@ export const useUIStore = create<UISlice>()((set) => ({
   timelineMonth: 11,
   loadPhase: 0,
   helpOpen: false,
+  groupingVisible: true,
 
   setActiveView: (activeView) => set({ activeView }),
   setHealthSubStain: (healthSubStain) => set({ healthSubStain }),
@@ -39,4 +45,5 @@ export const useUIStore = create<UISlice>()((set) => ({
   setTimelineMonth: (timelineMonth) => set({ timelineMonth }),
   setLoadPhase: (loadPhase) => set({ loadPhase }),
   setHelpOpen: (helpOpen) => set({ helpOpen }),
+  setGroupingVisible: (groupingVisible) => set({ groupingVisible }),
 }));

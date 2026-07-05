@@ -16,8 +16,11 @@ import 'prismjs/components/prism-clike';
 import 'prismjs/components/prism-csharp';
 import 'prismjs/components/prism-java';
 import 'prismjs/components/prism-python';
+import 'prismjs/components/prism-markdown';
 
-export type CodeLang = 'csharp' | 'java' | 'python';
+// 'markdown' backs the specs version-diff (EARS spec content is markdown);
+// the analyzed source languages are C#/Java/Python.
+export type CodeLang = 'csharp' | 'java' | 'python' | 'markdown';
 
 export function langFromFile(file?: string | null): CodeLang {
   if (file?.endsWith('.java')) return 'java';

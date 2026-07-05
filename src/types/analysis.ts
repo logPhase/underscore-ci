@@ -243,6 +243,12 @@ export interface RawAnalysisJSON {
   journeyKnowledge?: unknown;
   /** Staged analyzer session id (PR flow) — what interactive /bpmn/ask sends. */
   session_id?: string;
+  /** Analyzer repo key — what specs/grouping were fetched under. */
+  analyzerRepoId?: string;
+  /** Module groups from the analyzer's grouping agent, baked in by the CLI. */
+  groups?: import("./grouping").ServiceGroup[];
+  /** Living-specs bundle (list + history + version contents), baked in. */
+  specs?: import("./specs").SpecsPayload;
 }
 // ── Global method index ───────────────────────────────────────────
 // Provides cross-file method lookup by FQN (the method's `id` field).
@@ -289,6 +295,12 @@ export interface TransformedData extends AnalysisData {
   journeyKnowledge: JourneyKnowledgeResponse | null;
   /** Staged analyzer session id — what the Ask AI panel sends to /bpmn/ask. */
   sessionId?: string | null;
+  /** Analyzer repo key the specs/grouping bundle was fetched under. */
+  analyzerRepoId?: string | null;
+  /** Positioned group hulls (grouping agent × client layout); null = none. */
+  serviceGroups?: import("./grouping").PositionedGroupRegion[] | null;
+  /** Living-specs bundle embedded in the payload; null = not exported. */
+  specs?: import("./specs").SpecsPayload | null;
 
   packages?: Map<string, PackageData[]>; //serviceId:packageData
   anomalies: Anomaly[];

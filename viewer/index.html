@@ -172,11 +172,20 @@
     <div id="feat"></div>
 
     <div class="sec-head">
-      <h2>All sessions</h2>
-      <span class="count" id="allcount"></span>
+      <h2>Pull requests</h2>
+      <span class="count" id="prcount"></span>
       <span class="rule"></span>
     </div>
-    <div class="sessions" id="list">
+    <div class="sessions" id="prlist">
+      <div class="msg">Loading sessions…</div>
+    </div>
+
+    <div class="sec-head">
+      <h2>Full codebase runs</h2>
+      <span class="count" id="fullcount"></span>
+      <span class="rule"></span>
+    </div>
+    <div class="sessions" id="fulllist">
       <div class="msg">Loading sessions…</div>
     </div>
 
@@ -274,11 +283,8 @@
         '</a>';
     }
 
-    // all sessions
-    document.getElementById("allcount").textContent = runs.length+" total";
-    var list=document.getElementById("list");
-    if(!runs.length){ list.innerHTML='<div class="msg"><b>No sessions yet.</b> Trigger the Underscore Full Report workflow to map the codebase.</div>'; return; }
-    list.innerHTML = runs.map(function(s){
+    // sessions, sectioned by kind: PR analyses vs full codebase runs
+    function row(s){
       var href=esc(s.dir)+"/underscore-report.html";
       return '<a class="s" href="'+href+'">'+
         '<div><div class="id">'+esc(s.id||("run-"+s.run))+'</div>'+
@@ -286,10 +292,18 @@
         '<div class="metrics">'+metric(s.journeys,"journeys")+metric(s.bpmn,"flows")+metric(s.summaries,"summaries")+'</div>'+
         '<div class="go">Open <span class="arw">→</span></div>'+
       '</a>';
-    }).join("");
+    }
+    var prs   = runs.filter(function(s){ return s.pr; });
+    var fulls = runs.filter(function(s){ return !s.pr; });
+    document.getElementById("prcount").textContent   = prs.length+" total";
+    document.getElementById("fullcount").textContent = fulls.length+" total";
+    document.getElementById("prlist").innerHTML = prs.length ? prs.map(row).join("")
+      : '<div class="msg"><b>No PR sessions yet.</b> Open a pull request — Underscore analyzes it automatically.</div>';
+    document.getElementById("fulllist").innerHTML = fulls.length ? fulls.map(row).join("")
+      : '<div class="msg"><b>No full runs yet.</b> Trigger the Underscore workflow from the Actions tab to map the codebase.</div>';
 
     // scroll reveal
-    var items=[].slice.call(list.querySelectorAll(".s"));
+    var items=[].slice.call(document.querySelectorAll(".sessions .s"));
     if(matchMedia("(prefers-reduced-motion: reduce)").matches){ items.forEach(function(el){el.classList.add("in");}); return; }
     var io=new IntersectionObserver(function(es){es.forEach(function(e){ if(e.isIntersecting){ var el=e.target; setTimeout(function(){el.classList.add("in");}, items.indexOf(el)%8*55); io.unobserve(el);} });},{threshold:.12});
     items.forEach(function(el){io.observe(el);});

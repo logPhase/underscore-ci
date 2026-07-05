@@ -1372,3 +1372,25 @@ html.reading-paper, html.reading-paper body { background: #faf7f0; }
   .hover\:border-zinc-700:hover, .hover\:border-zinc-600:hover { border-color: hsl(var(--primary) / 0.5); }
   .hover\:text-zinc-100:hover, .hover\:text-zinc-200:hover, .hover\:text-zinc-300:hover { color: hsl(var(--foreground)); }
 }
+
+/* ── Specs tab — controlled-document freshness ───────────────────────
+   Revision dots pulse one soft ring while their event is <48h old;
+   --pulse-color is set inline per dot so created/updated/superseded each
+   pulse in their own hue. Ported from the desktop specs page. */
+@keyframes spec-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 var(--pulse-color, transparent);
+  }
+  60% {
+    box-shadow: 0 0 0 5px transparent;
+  }
+}
+.spec-fresh {
+  animation: spec-pulse 2.6s ease-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .spec-fresh {
+    animation: none;
+  }
+}
