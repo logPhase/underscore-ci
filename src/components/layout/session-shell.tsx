@@ -89,28 +89,54 @@ const SessionRail = () => {
       style={{
         width: collapsed ? 56 : 232,
         background: "var(--bpmn-surface-soft)",
-        borderColor: "var(--bpmn-border-soft)",
+        // Stronger border + a soft drop shadow give the rail a physical edge
+        // so the dark rail doesn't bleed into the dark canvas / BPMN beside it.
+        borderColor: "var(--bpmn-border-em)",
+        boxShadow: "2px 0 10px hsla(220, 22%, 4%, 0.30)",
       }}
     >
-      {/* Back to the hosted sessions index — a plain <a> because the index
-          is a different document, not a route of this report. Hidden for
-          file:// artifacts, which have nothing above them. Collapsed → the
-          arrow alone, tooltip carries the label. */}
-      {indexHref && (
-        <a
-          href={indexHref}
-          title="All sessions"
-          className={`rail-nav-item mx-2 mt-2.5 flex min-h-9 items-center gap-2 rounded-md text-[12px] ${
-            collapsed ? "justify-center px-0" : "px-3"
-          }`}
-          style={{
-            fontFamily: "var(--bpmn-font-mono)",
-            color: "var(--bpmn-text-muted)",
-          }}
-        >
-          <ArrowLeft className="h-3.5 w-3.5 shrink-0" />
-          {!collapsed && <span>All sessions</span>}
-        </a>
+      {/* Rail header — collapse toggle pinned to the TOP (standard sidebar
+          convention), sitting with the back-to-sessions link. */}
+      {collapsed ? (
+        <div className="flex flex-col items-center gap-1 px-1.5 pt-2.5">
+          <CollapseToggle collapsed onToggle={toggleRail} />
+          {indexHref && (
+            <a
+              href={indexHref}
+              title="All sessions"
+              className="rail-nav-item flex min-h-9 w-full items-center justify-center rounded-md"
+              style={{
+                fontFamily: "var(--bpmn-font-mono)",
+                color: "var(--bpmn-text-muted)",
+              }}
+            >
+              <ArrowLeft className="h-3.5 w-3.5 shrink-0" />
+            </a>
+          )}
+        </div>
+      ) : (
+        <div className="flex items-center gap-1 px-2 pt-2.5">
+          {/* Back to the hosted sessions index — a plain <a> because the index
+              is a different document, not a route of this report. Hidden for
+              file:// artifacts, which have nothing above them. */}
+          {indexHref ? (
+            <a
+              href={indexHref}
+              title="All sessions"
+              className="rail-nav-item flex min-h-9 flex-1 items-center gap-2 rounded-md px-3 text-[12px]"
+              style={{
+                fontFamily: "var(--bpmn-font-mono)",
+                color: "var(--bpmn-text-muted)",
+              }}
+            >
+              <ArrowLeft className="h-3.5 w-3.5 shrink-0" />
+              <span>All sessions</span>
+            </a>
+          ) : (
+            <div className="flex-1" />
+          )}
+          <CollapseToggle collapsed={false} onToggle={toggleRail} />
+        </div>
       )}
 
       {/* Session identity — static in report mode (one report per build).
@@ -162,28 +188,35 @@ const SessionRail = () => {
           />
         )}
       </nav>
-
-      {/* Collapse / expand toggle — pinned to the rail's bottom (mt-auto). */}
-      <button
-        onClick={toggleRail}
-        title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        aria-expanded={!collapsed}
-        className={`rail-nav-item mx-2 mb-2.5 mt-auto flex min-h-9 cursor-pointer items-center gap-2 rounded-md text-[12px] ${
-          collapsed ? "justify-center px-0" : "px-3"
-        }`}
-        style={{ fontFamily: "var(--bpmn-font-mono)" }}
-      >
-        {collapsed ? (
-          <PanelLeftOpen className="h-4 w-4 shrink-0" />
-        ) : (
-          <PanelLeftClose className="h-4 w-4 shrink-0" />
-        )}
-        {!collapsed && <span>Collapse</span>}
-      </button>
     </aside>
   );
 };
+
+/** Collapse / expand control. Lives at the top of the rail header. Expanded →
+ *  a compact icon button aligned to the header's right; collapsed → the same
+ *  icon centred in the 56px rail. */
+const CollapseToggle = ({
+  collapsed,
+  onToggle,
+}: {
+  collapsed: boolean;
+  onToggle: () => void;
+}) => (
+  <button
+    onClick={onToggle}
+    title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+    aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+    aria-expanded={!collapsed}
+    className="rail-nav-item flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md"
+    style={{ fontFamily: "var(--bpmn-font-mono)" }}
+  >
+    {collapsed ? (
+      <PanelLeftOpen className="h-4 w-4 shrink-0" />
+    ) : (
+      <PanelLeftClose className="h-4 w-4 shrink-0" />
+    )}
+  </button>
+);
 
 interface RailNavItemProps {
   to: string;

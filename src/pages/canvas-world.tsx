@@ -7,6 +7,7 @@ import { GroupModulesControl } from "@/components/canvas/group-modules-control";
 import { HelpMessage } from "@/components/canvas/help-message";
 import { MethodDetailPanel } from "@/components/canvas/MethodDetailPanel";
 import { FileCodePanel } from "@/components/canvas/FileCodePanel";
+import { FileCodeChip } from "@/components/canvas/FileCodeChip";
 import { CanvasTooltip } from "@/components/canvas/CanvasTooltip";
 import { JourneyLinesPanel } from "@/components/canvas/journey-lines-panel";
 import { useAnalysis } from "@/store/use-analysis-store";
@@ -37,6 +38,7 @@ export function CanvasWorldPage() {
         <GroupModulesControl />
         <MethodDetailPanel />
         <FileCodePanel />
+        <FileCodeChip />
         <CanvasTooltip />
         <JourneyLinesPanel />
       </div>

@@ -47,6 +47,7 @@ const LINE_OFFSET = 7; // parallel-line separation
 const STOP_R = 13;
 const STROKE = 3.5;
 const HALO = 6;
+const HIT = 16; // invisible hover-target width over each leg
 const BOW_FRACTION = 0.13; // perpendicular bow as a fraction of leg length
 
 interface Vec {
@@ -191,6 +192,14 @@ const JourneyLines = ({ servicePosRef, containerRef }: Props) => {
     lineIndex: number;
     stopKey: string;
   } | null>(null);
+  // Hovering a LINE (a leg between stops) surfaces the journey's summary —
+  // "what it does" — anchored at the hovered leg's midpoint. Distinct from the
+  // per-stop hover above, which describes a single stop.
+  const [hoveredLeg, setHoveredLeg] = useState<{
+    lineIndex: number;
+    x: number;
+    y: number;
+  } | null>(null);
 
   const serviceNameById = useMemo(() => {
     const m = new Map<string, string>();
@@ -295,7 +304,11 @@ const JourneyLines = ({ servicePosRef, containerRef }: Props) => {
     <g className="pointer-events-none" data-testid="journey-lines">
       {lineGeoms.map((geom, li) => {
         const journey = activeLines[li];
-        const slug = chapterById?.get(geom.journeyId)?.slug;
+        const chapter = chapterById?.get(geom.journeyId);
+        const slug = chapter?.slug;
+        // Canvas JourneyData rarely carries a summary; the derived chapter
+        // always does. Prefer the chapter's, fall back to the journey's.
+        const journeySummary = chapter?.summary || journey?.summary;
         const goToChapter = () => {
           if (slug) navigate(`/journeys/${encodeURIComponent(slug)}`);
         };
@@ -304,6 +317,30 @@ const JourneyLines = ({ servicePosRef, containerRef }: Props) => {
             {/* Legs — halo under-stroke, then the coloured line + arrow. */}
             {geom.legs.map((leg, i) => (
               <g key={`leg-${i}`}>
+                {/* Invisible wide hit-stroke over the leg — hovering the line
+                    (not a stop) reveals the journey's summary card. Sits under
+                    the visible line; the stop circles draw later and stay on
+                    top so per-stop hover still wins. */}
+                <path
+                  d={leg.d}
+                  fill="none"
+                  stroke="transparent"
+                  strokeWidth={HIT * k}
+                  strokeLinecap="round"
+                  style={{ pointerEvents: "stroke", cursor: "pointer" }}
+                  onMouseEnter={() =>
+                    setHoveredLeg({
+                      lineIndex: li,
+                      x: leg.arrow.x,
+                      y: leg.arrow.y,
+                    })
+                  }
+                  onMouseLeave={() => setHoveredLeg(null)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    goToChapter();
+                  }}
+                />
                 <path
                   d={leg.d}
                   fill="none"
@@ -522,6 +559,91 @@ const JourneyLines = ({ servicePosRef, containerRef }: Props) => {
                 </g>
               );
             })}
+
+            {/* Journey summary card — shown when a LEG (the line itself, not a
+                stop) is hovered. Surfaces "what this journey does". */}
+            {hoveredLeg?.lineIndex === li && (
+              <g
+                transform={`translate(${hoveredLeg.x + (STOP_R + 8) * k} ${hoveredLeg.y}) scale(${k})`}
+              >
+                <foreignObject x={0} y={-20} width={300} height={360}>
+                  <div
+                    style={{
+                      background: "var(--cw-panel-bg-solid)",
+                      border: "1px solid var(--cw-panel-border)",
+                      borderLeft: `3px solid ${geom.color}`,
+                      borderRadius: "8px",
+                      padding: "9px 11px",
+                      backdropFilter: "blur(12px)",
+                      fontFamily: "'JetBrains Mono', monospace",
+                      width: "fit-content",
+                      maxWidth: "280px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        color: "var(--bpmn-text)",
+                        lineHeight: 1.35,
+                      }}
+                    >
+                      {journey?.title}
+                    </div>
+                    {/* Line-colour key */}
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        marginTop: "5px",
+                      }}
+                    >
+                      <span
+                        style={{
+                          display: "inline-block",
+                          width: "16px",
+                          height: "3px",
+                          borderRadius: "2px",
+                          background: geom.color,
+                        }}
+                      />
+                      <span
+                        style={{
+                          fontSize: "9px",
+                          color: "var(--bpmn-text-dim)",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.04em",
+                        }}
+                      >
+                        this journey&apos;s line
+                      </span>
+                    </div>
+                    <div
+                      style={{
+                        fontSize: "10.5px",
+                        color: "var(--bpmn-text-muted)",
+                        marginTop: "7px",
+                        lineHeight: 1.5,
+                        whiteSpace: "normal",
+                      }}
+                    >
+                      {journeySummary || "No summary available."}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: "9px",
+                        color: "var(--bpmn-text-dim)",
+                        marginTop: "7px",
+                        opacity: 0.8,
+                      }}
+                    >
+                      → open chapter
+                    </div>
+                  </div>
+                </foreignObject>
+              </g>
+            )}
           </g>
         );
       })}

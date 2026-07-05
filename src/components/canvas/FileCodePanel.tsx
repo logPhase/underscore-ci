@@ -1,4 +1,8 @@
 import CodeBlock from "@/components/journeys/CodeBlock";
+import {
+  PanelResizeHandle,
+  PanelWidthButtons,
+} from "@/components/canvas/code-panel-resizer";
 import { langFromFile } from "@/components/ui/CodeHighlight";
 import { getComponentFunctions } from "@/lib/canvas/get-data";
 import { getAllFiles } from "@/lib/canvas/get-files";
@@ -6,6 +10,7 @@ import { cn } from "@/lib/misc-utils";
 import { useAnalysis } from "@/store/use-analysis-store";
 import { useFocusStore } from "@/store/use-focus-store";
 import { useSelectionStore } from "@/store/use-selection-store";
+import { useUIStore } from "@/store/use-ui-store";
 import { X } from "lucide-react";
 
 /**
@@ -24,6 +29,7 @@ import { X } from "lucide-react";
 export function FileCodePanel() {
   const codePanelFileId = useFocusStore((s) => s.codePanelFileId);
   const setCodePanelFileId = useFocusStore((s) => s.setCodePanelFileId);
+  const width = useUIStore((s) => s.codePanelWidth);
   const selectedFunctionCtx = useSelectionStore((s) => s.selectedFunctionCtx);
   const prData = useAnalysis((s) => s.transformedData?.prData);
   // Subscribe to payload presence so the file/method lookup re-runs once the
@@ -47,11 +53,13 @@ export function FileCodePanel() {
 
   return (
     <div
+      style={{ width }}
       className={cn(
-        "absolute top-4 right-4 bottom-4 z-50 flex w-xl flex-col rounded-md border bg-card/70 shadow-[0_8px_32px_hsla(220,22%,4%,0.6)] backdrop-blur-lg",
+        "absolute top-4 right-4 bottom-4 z-50 flex flex-col rounded-md border bg-card/70 shadow-[0_8px_32px_hsla(220,22%,4%,0.6)] backdrop-blur-lg",
         prData ? "mt-13" : "top-17"
       )}
     >
+      <PanelResizeHandle />
       {/* Header — file identity + counts */}
       <div
         className="flex shrink-0 items-start justify-between gap-3 border-b px-4 py-2.5"
@@ -69,12 +77,17 @@ export function FileCodePanel() {
             {totalLines} lines
           </div>
         </div>
-        <button
-          onClick={() => setCodePanelFileId(null)}
-          className="mt-0.5 shrink-0 rounded p-1 text-foreground transition-colors hover:bg-white/5"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
+        <div className="mt-0.5 flex shrink-0 items-center gap-0.5">
+          <PanelWidthButtons />
+          <button
+            onClick={() => setCodePanelFileId(null)}
+            title="Close"
+            aria-label="Close code panel"
+            className="rounded p-1 text-foreground transition-colors hover:bg-white/5"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
 
       {/* File body — every method in order, highlighted */}

@@ -112,6 +112,18 @@ it("renders each method of the focused file, in order, syntax-highlighted", () =
   ).toBeGreaterThan(0);
 });
 
+it("renders the resize affordances (drag handle + width steppers) when open", () => {
+  useFocusStore.setState({ codePanelFileId: "F1" });
+
+  const { container } = render(<FileCodePanel />);
+  // Drag handle + both width steppers are reachable by their aria-labels.
+  expect(container.querySelector('[aria-label="Resize panel"]')).not.toBeNull();
+  expect(container.querySelector('[aria-label="Make panel wider"]')).not.toBeNull();
+  expect(
+    container.querySelector('[aria-label="Make panel narrower"]')
+  ).not.toBeNull();
+});
+
 it("yields the slot when a method is selected (panels never fight)", () => {
   useFocusStore.setState({ codePanelFileId: "F1" });
   useSelectionStore.setState({

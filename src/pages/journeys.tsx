@@ -25,6 +25,129 @@ import { FilterPill } from "@/components/journeys/filter-pill";
 import { Button } from "@/components/ui/button";
 import { impactRank } from "@/lib/transform-data/utils";
 import PRSummaryBanner from "@/components/canvas/PRSummaryBanner";
+import {
+  deriveJourneyRoute,
+  type JourneyRoute,
+} from "@/lib/canvas/journey-route";
+
+// ── Departures board (founder-approved Concept A) ──────────────────────
+// Each journey renders as a transit LINE on a service board: a lettered
+// line badge in the journey's colour, the title + summary, and the
+// signature — the ROUTE STRING: the journey's component stops as mono
+// chips joined by dotted coloured segments (the same stops the canvas
+// transit lines draw, via deriveJourneyRoute). Amber Δ chips mark stops
+// the PR touched.
+
+/** Stable line label: A…Z then numbers, by position in the full list —
+ *  the same journey keeps its letter no matter how the board is filtered. */
+const lineLabel = (idx: number): string =>
+  idx < 26 ? String.fromCharCode(65 + idx) : String(idx + 1);
+
+const MAX_ROUTE_STOPS = 6;
+
+/** The route string — component stops joined by dotted flow segments. */
+const RouteString = ({
+  route,
+  color,
+  showDelta,
+}: {
+  route: JourneyRoute | undefined;
+  color: string;
+  showDelta: boolean;
+}) => {
+  if (!route || route.stops.length === 0) return null;
+  const stops = route.stops.slice(0, MAX_ROUTE_STOPS);
+  const extra = route.stops.length - stops.length;
+  return (
+    <div className="mt-2.5 flex flex-wrap items-center gap-y-1.5" aria-hidden="true">
+      {stops.map((stop, i) => {
+        const changed = showDelta && stop.changedSteps > 0;
+        return (
+          <span key={stop.key} className="flex items-center">
+            {i > 0 && <span className="route-seg" style={{ color }} />}
+            <span
+              className={`rounded-md border px-2 py-[3px] font-mono text-[10px] tracking-wide whitespace-nowrap ${
+                changed
+                  ? "border-amber-500/55 bg-amber-500/[0.07] text-amber-300"
+                  : "border-zinc-700/70 bg-zinc-800/50 text-zinc-300"
+              }`}
+            >
+              {changed && <span className="mr-1">Δ</span>}
+              {stop.name}
+            </span>
+          </span>
+        );
+      })}
+      {extra > 0 && (
+        <span className="flex items-center">
+          <span className="route-seg" style={{ color }} />
+          <span className="rounded-md border border-zinc-700/50 px-2 py-[3px] font-mono text-[10px] text-zinc-500">
+            +{extra} more
+          </span>
+        </span>
+      )}
+    </div>
+  );
+};
+
+/** The circled line badge — journey colour, dashed amber halo when the PR
+ *  touches the line. */
+const LineBadge = ({
+  label,
+  color,
+  affected,
+}: {
+  label: string;
+  color: string;
+  affected: boolean;
+}) => (
+  <span className="relative flex h-11 w-11 shrink-0 items-center justify-center">
+    {affected && (
+      <span
+        className="absolute inset-[-5px] rounded-full border-[1.5px] border-dashed border-amber-500/55"
+        aria-hidden="true"
+      />
+    )}
+    <span
+      className="flex h-11 w-11 items-center justify-center rounded-full border-[2.5px] font-mono text-[16px] font-bold"
+      style={{ borderColor: color, color }}
+    >
+      {label}
+    </span>
+  </span>
+);
+
+/** Right rail of a board row: component count large, steps/elements small,
+ *  Δ-affected pill when the PR touches the line. */
+const RowStats = ({
+  route,
+  chapter,
+  affected,
+}: {
+  route: JourneyRoute | undefined;
+  chapter: Chapter;
+  affected: boolean;
+}) => (
+  <div className="hidden shrink-0 text-right font-mono sm:block">
+    <div className="text-[22px] leading-none font-bold tracking-tight text-zinc-100">
+      {route?.stops.length ?? chapter.services.length}
+      <span className="ml-1 text-[11px] font-medium text-zinc-500">
+        components
+      </span>
+    </div>
+    <div className="mt-1.5 text-[10.5px] text-zinc-500">
+      {chapter.steps.length} steps
+      {chapter.bpmn?.elements?.length
+        ? ` · ${chapter.bpmn.elements.length} flow elements`
+        : ""}
+    </div>
+    {affected && (
+      <span className="mt-2 inline-flex items-center rounded-full border border-amber-500/45 bg-amber-500/[0.08] px-2 py-[2px] text-[9.5px] tracking-wider text-amber-300">
+        <span className="mr-1">Δ</span>affected
+      </span>
+    )}
+  </div>
+);
 
 const IMPACTED_SET = new Set<StatusKey>([
   "affected",
@@ -45,6 +168,70 @@ const RECLASS_LABEL: Record<NonNullable<Chapter["intentReclass"]>, string> = {
   "behaviour-change": "behaviour change",
   "true-removal": "true removal",
   "true-addition": "true addition",
+};
+
+/** Same auto-title heuristic the PR banner uses: the analyzer emits a
+ *  "<branch> → <sha7>" placeholder when no real PR title was available. */
+const isAutoPrTitle = (t?: string): boolean =>
+  !t || /^[\w/-]+\s*[→→]\s*[a-f0-9]{6,}$/.test(t);
+
+/**
+ * PR intro — the "what this PR does" block at the top of the journeys index.
+ * PR title (real one only) + the connection-agent narrative, in reading type.
+ * Long narratives collapse to a few lines with a show-more toggle. Only shown
+ * in PR mode with a narrative present; full-repo reports render nothing.
+ */
+const PRIntro = () => {
+  const prMode = useUIStore((s) => s.prMode);
+  const prOverview = useAnalysis((s) => s.transformedData?.prOverview);
+  const prOverlay = useAnalysis((s) => s.transformedData?.prOverlay);
+  const [expanded, setExpanded] = useState(false);
+
+  const narrative = prOverview?.prNarrative?.trim();
+  if (!prMode || !narrative) return null;
+
+  const rawTitle = prOverlay?.title;
+  const title = isAutoPrTitle(rawTitle) ? null : rawTitle;
+  const long = narrative.length > 320;
+
+  return (
+    <motion.div
+      className="mt-5 rounded-lg border border-amber-500/25 bg-amber-500/[0.04] px-4 py-3.5"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.1 }}
+    >
+      <div className="mb-1.5 flex items-center gap-2 font-mono text-[10px] tracking-wider text-amber-400/90 uppercase">
+        <GitPullRequest className="h-3 w-3" />
+        What this PR does
+      </div>
+      {title && (
+        <h2
+          className="mb-1.5 text-[15px] font-semibold text-zinc-100"
+          style={{ fontFamily: "var(--reading-font)" }}
+        >
+          {title}
+        </h2>
+      )}
+      <p
+        className={`text-[13.5px] leading-relaxed text-zinc-300 ${
+          long && !expanded ? "line-clamp-3" : ""
+        }`}
+        style={{ fontFamily: "var(--reading-font)" }}
+      >
+        {narrative}
+      </p>
+      {long && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-1.5 font-mono text-[11px] text-amber-400/80 transition-colors hover:text-amber-300"
+        >
+          {expanded ? "Show less" : "Show more"}
+        </button>
+      )}
+    </motion.div>
+  );
 };
 
 interface JourneyHeaderProps {
@@ -121,6 +308,9 @@ const JourneyHeader = ({
           )}
         </p>
       </motion.div>
+
+      {/* PR narrative — "what this PR does", at the top of the listing */}
+      <PRIntro />
 
       {/* Search */}
       <motion.div
@@ -213,8 +403,39 @@ const JourneyHeader = ({
 
 const JourneyPage = () => {
   const allChapters = useAnalysis((state) => state.transformedData?.chapters);
+  const transformedData = useAnalysis((state) => state.transformedData);
 
   const prMode = useUIStore((state) => state.prMode);
+
+  // Component routes for every journey, derived ONCE — the same
+  // deriveJourneyRoute the canvas transit lines use, so the board's route
+  // strings are the map's stops, not decoration. Keyed by journey/chapter id.
+  const routesById = useMemo(() => {
+    const m = new Map<string, JourneyRoute>();
+    if (!transformedData) return m;
+    const nameById = new Map(
+      transformedData.services.map((s) => [s.id, s.name])
+    );
+    for (const j of transformedData.journeys) {
+      m.set(
+        j.id,
+        deriveJourneyRoute(
+          j,
+          transformedData.serviceGroups,
+          nameById,
+          transformedData.fileToComponent
+        )
+      );
+    }
+    return m;
+  }, [transformedData]);
+
+  // Stable line labels by position in the FULL chapter list.
+  const labelById = useMemo(() => {
+    const m = new Map<string, string>();
+    (allChapters ?? []).forEach((ch, i) => m.set(ch.id, lineLabel(i)));
+    return m;
+  }, [allChapters]);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [activeStatuses, setActiveStatuses] = useState<Set<StatusKey>>(
@@ -365,8 +586,27 @@ const JourneyPage = () => {
           setSearchQuery={setSearchQuery}
           setActiveStatuses={setActiveStatuses}
         />
-        {/* Chapter list */}
-        <div className="mx-auto max-w-3xl px-6 pb-16">
+        {/* The board — wider than the old card column: each line carries a
+            route string + right-rail stats. */}
+        <div className="mx-auto max-w-5xl px-6 pb-16">
+          {/* Board strip — the departures-board caption over the lists. */}
+          {chapters.length > 0 && (
+            <div className="mb-4 flex items-baseline gap-3 border-b border-zinc-800 pb-2">
+              <span className="font-mono text-[10.5px] tracking-[0.22em] text-zinc-500 uppercase">
+                In service
+              </span>
+              <span className="ml-auto font-mono text-[10.5px] text-zinc-600">
+                {chapters.length} lines ·{" "}
+                {chapters.reduce((n, c) => n + c.steps.length, 0)} steps ·{" "}
+                {new Set(
+                  chapters.flatMap(
+                    (c) => routesById.get(c.id)?.stops.map((s) => s.key) ?? []
+                  )
+                ).size}{" "}
+                components
+              </span>
+            </div>
+          )}
           {hasPR && impacted.length === 0 && unimpacted.length === 0 && (
             <div className="py-16 text-center text-zinc-600">
               {searchQuery
@@ -458,16 +698,17 @@ const JourneyPage = () => {
                         primary
                       </span>
                     )}
-                    <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-5">
+                      <LineBadge
+                        label={labelById.get(chapter.id) ?? "•"}
+                        color={chapter.color}
+                        affected={!isRemoved}
+                      />
                       <div className="min-w-0 flex-1">
-                        <h2 className="journey-card-title flex items-center gap-2 font-mono text-[15px] font-semibold tracking-tight transition-colors">
-                          <span
-                            className="h-2 w-2 shrink-0 rounded-full"
-                            style={{ backgroundColor: chapter.color }}
-                          />
+                        <h2 className="journey-card-title flex flex-wrap items-center gap-2 text-[17px] font-bold tracking-tight transition-colors">
                           {chapter.title}
                           <span
-                            className={`ml-1 inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 font-mono text-[10px] ${badgeClass}`}
+                            className={`inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 font-mono text-[10px] ${badgeClass}`}
                           >
                             <GitPullRequest className="h-2.5 w-2.5" />
                             {status}
@@ -487,46 +728,34 @@ const JourneyPage = () => {
                         </h2>
                         {chapter.entryFqn && <FqnRow fqn={chapter.entryFqn} />}
                         {chapter.intentWhy ? (
-                          <p className="mt-1.5 text-sm leading-snug text-cyan-100/85">
+                          <p
+                            className="mt-1 line-clamp-2 text-[13px] leading-snug text-cyan-100/85"
+                            style={{ fontFamily: "var(--reading-font)" }}
+                          >
                             {chapter.intentWhy}
                           </p>
                         ) : (
                           chapter.summary && (
-                            <p className="mt-1 line-clamp-2 text-sm text-zinc-300">
+                            <p
+                              className="mt-1 line-clamp-2 text-[13px] text-zinc-400"
+                              style={{ fontFamily: "var(--reading-font)" }}
+                            >
                               {chapter.summary}
                             </p>
                           )
                         )}
+                        <RouteString
+                          route={routesById.get(chapter.id)}
+                          color={chapter.color}
+                          showDelta
+                        />
                       </div>
-                      <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-zinc-600 transition group-hover:translate-x-0.5 group-hover:text-zinc-300" />
-                    </div>
-                    <div className="mt-3 space-y-2">
-                      {/* Signature: the journey as a traced route — one tick per
-                          step, changed steps light up in the journey's own hue.
-                          Reads as an execution path, not a generic card. */}
-                      <div className="flex h-3 items-end gap-[2px]" aria-hidden="true">
-                        {chapter.steps.slice(0, 60).map((s, si) => (
-                          <span
-                            key={si}
-                            className="w-[4px] shrink-0 rounded-[1px]"
-                            style={{
-                              height: s.prStatus ? "100%" : "38%",
-                              backgroundColor: s.prStatus
-                                ? chapter.color
-                                : "hsl(var(--border))",
-                            }}
-                          />
-                        ))}
-                        {chapter.steps.length > 60 && (
-                          <span className="ml-1 self-center font-mono text-[10px] text-muted-foreground">
-                            +{chapter.steps.length - 60}
-                          </span>
-                        )}
-                      </div>
-                      <span className="font-mono text-[11px] tracking-wide text-muted-foreground">
-                        {chapter.phaseCount} phases · {chapter.functions.length}{" "}
-                        methods · {chapter.services.length} services
-                      </span>
+                      <RowStats
+                        route={routesById.get(chapter.id)}
+                        chapter={chapter}
+                        affected={!isRemoved}
+                      />
+                      <ChevronRight className="h-4 w-4 shrink-0 text-zinc-600 transition group-hover:translate-x-0.5 group-hover:text-zinc-300" />
                     </div>
                   </motion.div>
                 );
@@ -644,54 +873,39 @@ const JourneyPage = () => {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.08 + i * 0.05 }}
                     onClick={() => onSelectChapter(chapter.slug)}
-                    className="group cursor-pointer rounded-lg border border-zinc-800/60 bg-zinc-900/30 p-4 transition-all duration-200 hover:border-zinc-700 hover:bg-zinc-900/60"
+                    className="group cursor-pointer rounded-lg border border-zinc-800/60 bg-zinc-900/30 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-700 hover:bg-zinc-900/60"
                   >
-                    <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-5">
+                      <LineBadge
+                        label={labelById.get(chapter.id) ?? "•"}
+                        color={chapter.color}
+                        affected={false}
+                      />
                       <div className="min-w-0 flex-1">
-                        <h2 className="flex items-center gap-2 text-base font-medium text-zinc-300 transition-colors group-hover:text-zinc-100">
-                          <span
-                            className="h-2 w-2 shrink-0 rounded-full"
-                            style={{ backgroundColor: chapter.color }}
-                          />
+                        <h2 className="text-[17px] font-bold tracking-tight text-zinc-300 transition-colors group-hover:text-zinc-100">
                           {chapter.title}
                         </h2>
                         {chapter.entryFqn && <FqnRow fqn={chapter.entryFqn} />}
                         {chapter.summary && (
-                          <p className="mt-1 line-clamp-2 text-sm text-zinc-300">
+                          <p
+                            className="mt-1 line-clamp-2 text-[13px] text-zinc-400"
+                            style={{ fontFamily: "var(--reading-font)" }}
+                          >
                             {chapter.summary}
                           </p>
                         )}
+                        <RouteString
+                          route={routesById.get(chapter.id)}
+                          color={chapter.color}
+                          showDelta={false}
+                        />
                       </div>
-                      <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-zinc-600 transition group-hover:translate-x-0.5 group-hover:text-zinc-300" />
-                    </div>
-
-                    <div className="mt-3 space-y-2">
-                      {/* Signature: the journey as a traced route — one tick per
-                          step, changed steps light up in the journey's own hue.
-                          Reads as an execution path, not a generic card. */}
-                      <div className="flex h-3 items-end gap-[2px]" aria-hidden="true">
-                        {chapter.steps.slice(0, 60).map((s, si) => (
-                          <span
-                            key={si}
-                            className="w-[4px] shrink-0 rounded-[1px]"
-                            style={{
-                              height: s.prStatus ? "100%" : "38%",
-                              backgroundColor: s.prStatus
-                                ? chapter.color
-                                : "hsl(var(--border))",
-                            }}
-                          />
-                        ))}
-                        {chapter.steps.length > 60 && (
-                          <span className="ml-1 self-center font-mono text-[10px] text-muted-foreground">
-                            +{chapter.steps.length - 60}
-                          </span>
-                        )}
-                      </div>
-                      <span className="font-mono text-[11px] tracking-wide text-muted-foreground">
-                        {chapter.phaseCount} phases · {chapter.functions.length}{" "}
-                        methods · {chapter.services.length} services
-                      </span>
+                      <RowStats
+                        route={routesById.get(chapter.id)}
+                        chapter={chapter}
+                        affected={false}
+                      />
+                      <ChevronRight className="h-4 w-4 shrink-0 text-zinc-600 transition group-hover:translate-x-0.5 group-hover:text-zinc-300" />
                     </div>
                   </motion.div>
                 ))}

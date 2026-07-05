@@ -292,7 +292,8 @@ const PRSummaryBanner: React.FC = () => {
           htmlFor="pr-mode-toggle"
           className="text-[12px]"
           style={{
-            color: prMode ? "hsl(35, 70%, 70%)" : "var(--bpmn-text-dim)",
+            color: prMode ? "hsl(35, 92%, 64%)" : "var(--bpmn-text-dim)",
+            fontWeight: prMode ? 600 : 400,
           }}
         >
           {prMode ? "Comparing PR changes" : "Showing HEAD only"}
@@ -302,9 +303,16 @@ const PRSummaryBanner: React.FC = () => {
             prMode ? "Hide PR comparison overlay" : "Show PR comparison overlay"
           }
         >
+          {/* ON = saturated amber fill (important beats the base
+              data-[state=checked]:bg-primary); OFF = muted grey. Grey must
+              read only as OFF — a greyed-out ON toggle looks disabled. */}
           <Switch
             id="pr-mode-toggle"
-            className={cn(prMode ? "bg-accent" : "bg-zinc-300/40")}
+            className={cn(
+              prMode
+                ? "!bg-[hsl(35,92%,55%)] border-[hsl(35,80%,42%)]"
+                : "!bg-zinc-600/50"
+            )}
             checked={prMode}
             onClick={onTogglePRMode}
           />

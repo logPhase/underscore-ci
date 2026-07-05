@@ -16,6 +16,7 @@
 import { useState } from 'react';
 import { Maximize2, Minimize2, X } from 'lucide-react';
 import DiffBlock from './DiffBlock';
+import { LeftResizeHandle, WidthNudgeButtons } from './code-resize';
 // Desktop adaptation: journeyTypes is split — Chapter from types/journey,
 // BpmnElement from the renderer's types module; data getters come from
 // the parity-loader (store-backed, same signatures as the webapp).
@@ -62,8 +63,11 @@ function functionRefs(element: BpmnElement): FnRef[] {
   return out;
 }
 
-function FunctionStrip({ fn, chapter, onOpenCallGraph }: {
+function FunctionStrip({ fn, chapter, onOpenCallGraph, defaultOpen }: {
   fn: FnRef; chapter: Chapter; onOpenCallGraph?: (fqn: string) => void;
+  /** Start expanded regardless of PR status — used by the docked CODE
+   *  panel, whose whole job is to show the code the moment it opens. */
+  defaultOpen?: boolean;
 }) {
   // PR-head body from the journey's own steps beats the global index
   // (it is what the analysis actually fetched); evidence snippet last.
@@ -78,7 +82,7 @@ function FunctionStrip({ fn, chapter, onOpenCallGraph }: {
   // unified diff first (the head source is one toggle away). Unchanged
   // functions stay collapsed/skimmable. This is a PR review — the change is
   // the content.
-  const [open, setOpen] = useState(canDiff);
+  const [open, setOpen] = useState(canDiff || !!defaultOpen);
   // Expanded = no height cap; the popup body scrolls instead. The cap
   // keeps multiple open strips skimmable, the toggle gives full reads.
   const [tall, setTall] = useState(false);
@@ -194,7 +198,7 @@ const TYPE_LABEL: Record<string, string> = {
 };
 
 /** Floating glass card over the diagram (parent positions it). */
-export function BpmnStepFunctions({ element, chapter, onClose, onOpenCallGraph }: {
+export function BpmnStepFunctions({ element, chapter, onClose, onOpenCallGraph, hideHeader, defaultOpen, bare }: {
   element: BpmnElement | null;
   chapter: Chapter;
   onClose?: () => void;
@@ -202,6 +206,15 @@ export function BpmnStepFunctions({ element, chapter, onClose, onOpenCallGraph }
    *  functions — popup-on-popup is solved by REPLACING the context,
    *  not stacking it (the code panel's "step:" chip is the way back). */
   onOpenCallGraph?: (fqn: string) => void;
+  /** Drop the internal step-identity header + close button. The docked
+   *  CODE panel wraps this and supplies its own chrome (label, width
+   *  controls, minimize), so the embedded list stays header-less. */
+  hideHeader?: boolean;
+  /** Expand every function strip on mount (code shown immediately). */
+  defaultOpen?: boolean;
+  /** Strip the glass-card chrome (background / border / shadow / radius)
+   *  so the list blends into a host panel instead of reading as a card. */
+  bare?: boolean;
 }) {
   if (!element) return null;
   const fns = functionRefs(element);
@@ -213,17 +226,24 @@ export function BpmnStepFunctions({ element, chapter, onClose, onOpenCallGraph }
   fns.sort((a, b) => rank(a) - rank(b));
   return (
     <div
-      className="flex-1 min-w-0 flex flex-col rounded-xl overflow-hidden"
-      style={{
-        background: 'color-mix(in srgb, var(--bpmn-bg-deep) 82%, transparent)',
-        backdropFilter: 'blur(14px) saturate(1.15)',
-        WebkitBackdropFilter: 'blur(14px) saturate(1.15)',
-        border: '1px solid color-mix(in srgb, var(--bpmn-cyan) 16%, var(--bpmn-border-soft))',
-        boxShadow: '0 14px 40px rgb(0 0 0 / 0.45), 0 2px 8px rgb(0 0 0 / 0.3)',
-      }}
+      className={`relative flex-1 min-w-0 flex flex-col overflow-hidden ${bare ? '' : 'rounded-xl'}`}
+      style={
+        bare
+          ? { background: 'transparent' }
+          : {
+              background: 'color-mix(in srgb, var(--bpmn-bg-deep) 82%, transparent)',
+              backdropFilter: 'blur(14px) saturate(1.15)',
+              WebkitBackdropFilter: 'blur(14px) saturate(1.15)',
+              border: '1px solid color-mix(in srgb, var(--bpmn-cyan) 16%, var(--bpmn-border-soft))',
+              boxShadow: '0 14px 40px rgb(0 0 0 / 0.45), 0 2px 8px rgb(0 0 0 / 0.3)',
+            }
+      }
     >
-      {/* header — step identity + dismiss */}
-      <div
+      {/* Drag-to-resize the dialog (centred → factor 2). The docked CODE
+          panel hides this header and supplies its own handle instead. */}
+      {!hideHeader && <LeftResizeHandle factor={2} />}
+      {/* header — step identity + width controls + dismiss */}
+      {!hideHeader && <div
         className="flex items-start gap-2.5 px-3.5 pt-3 pb-2.5"
         style={{ borderBottom: '1px solid var(--bpmn-border-soft)' }}
       >
@@ -247,6 +267,11 @@ export function BpmnStepFunctions({ element, chapter, onClose, onOpenCallGraph }
             {element.label}
           </div>
         </div>
+        {/* Width control — nudge the shared code width (drag the left edge
+            for finer control). Persists across steps. */}
+        <div className="shrink-0 self-center">
+          <WidthNudgeButtons />
+        </div>
         {onClose && (
           <button
             onClick={onClose}
@@ -260,7 +285,7 @@ export function BpmnStepFunctions({ element, chapter, onClose, onOpenCallGraph }
             <X className="w-3.5 h-3.5" />
           </button>
         )}
-      </div>
+      </div>}
       {/* body — the lens strips, code on demand */}
       <div className="overflow-auto px-3 pb-3">
         {fns.length === 0 && (
@@ -268,7 +293,7 @@ export function BpmnStepFunctions({ element, chapter, onClose, onOpenCallGraph }
             No functions cited on this element — start/end events carry none.
           </div>
         )}
-        {fns.map(fn => <FunctionStrip key={fn.fqn} fn={fn} chapter={chapter} onOpenCallGraph={onOpenCallGraph} />)}
+        {fns.map(fn => <FunctionStrip key={fn.fqn} fn={fn} chapter={chapter} onOpenCallGraph={onOpenCallGraph} defaultOpen={defaultOpen} />)}
       </div>
     </div>
   );

@@ -33,6 +33,8 @@ import { JourneyOverview } from "./JourneyOverview";
 import { useUIStore } from "@/store/use-ui-store";
 import { useAnalysis } from "@/store/use-analysis-store";
 import { AskPanel } from "@/components/journeys/AskPanel";
+import { CodePanel } from "@/components/journeys/CodePanel";
+import { useCodeView } from "@/components/journeys/code-view-store";
 
 /** Maps the classifier's `intentReclass` enum to a short human label.
  *  Kept in sync with the journey index. `true-addition`/`true-removal`
@@ -164,6 +166,42 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
   // only when asked. Declared up here for the Esc handler.
   const [bpmnElement, setBpmnElement] = useState<BpmnElement | null>(null);
   const [stepFnsOpen, setStepFnsOpen] = useState(false);
+  // Whether the journey description (chapter.summary) in the hero band is
+  // expanded past its 2-line clamp.
+  const [descExpanded, setDescExpanded] = useState(false);
+
+  // Right-edge code dock — shared with AskPanel via the code-view store
+  // (only one of the two right panels open at a time). `codeWidth` also
+  // drives the centered step-functions dialog so the chosen width sticks.
+  const rightDock = useCodeView((s) => s.rightDock);
+  const setRightDock = useCodeView((s) => s.setRightDock);
+  const codeWidth = useCodeView((s) => s.width);
+
+  // Deselecting a step tears down the code dock — the panel is
+  // selection-gated, so a lingering "code" dock state would auto-open on
+  // the next selection instead of waiting for a click. (Also fires on
+  // mount when arriving at a fresh journey with the store left on "code".)
+  useEffect(() => {
+    if (!bpmnElement && rightDock === "code") setRightDock(null);
+  }, [bpmnElement, rightDock, setRightDock]);
+
+  // Double-clicking a step opens its code directly (founder ask). Resolve
+  // the element straight from the diagram so we don't race the selection
+  // callback; skip codeless steps (start/end events cite no functions).
+  const openCodeForElement = useCallback(
+    (elementId: string) => {
+      const el =
+        chapter.bpmn?.elements?.find((e) => e.id === elementId) ?? null;
+      const hasCode =
+        !!el &&
+        (((el.code_evidence?.length ?? 0) > 0) ||
+          ((el.code_fqns?.length ?? 0) > 0));
+      if (!el || !hasCode) return;
+      setBpmnElement(el);
+      setRightDock("code");
+    },
+    [chapter.bpmn, setRightDock]
+  );
 
   // Ask AI grounding — session/repo keys baked into the payload, plus the
   // journey's steps with their source (same shape the desktop sends). The
@@ -213,6 +251,11 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
       if (stepFnsOpen) {
         setStepFnsOpen(false); // innermost dialog first — keep selection
         e.preventDefault();
+      } else if (rightDock) {
+        // Minimize an open right dock (Ask AI / Code) — keep selection, and
+        // don't let Esc fall through to onBack while a panel is open.
+        setRightDock(null);
+        e.preventDefault();
       } else if (view === "flow") {
         setView("detail"); // close call-graph popup — keep selection
         e.preventDefault();
@@ -226,7 +269,7 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
     };
     window.addEventListener("keydown", handler, true);
     return () => window.removeEventListener("keydown", handler, true);
-  }, [stepFnsOpen, bpmnElement, view, isFullscreen, onBack]);
+  }, [stepFnsOpen, bpmnElement, view, isFullscreen, onBack, rightDock, setRightDock]);
 
   // Expanded nodes — lifted here so the set survives fullscreen transitions.
   // Seeds with the root PLUS the ancestor chain of every PR-changed step:
@@ -469,12 +512,13 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
   const onOpenCallGraphAt = useCallback(
     (fqn: string) => {
       setStepFnsOpen(false);
+      setRightDock(null); // close the docked code panel — call graph takes over
       expandPath(fqn);
       scrollRequestRef.current = fqn;
       selectFunction(fqn);
       setView("flow");
     },
-    [expandPath, selectFunction]
+    [expandPath, selectFunction, setRightDock]
   );
 
   // Adapter for the JourneyOverview's drill-in buttons. The diagram is the
@@ -523,6 +567,8 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
           chapter={chapter}
           height="100%"
           onSelectedElementChange={setBpmnElement}
+          // Double-click a step → open its code in the docked CODE panel.
+          onElementDoubleClick={openCodeForElement}
           // Fullscreen (compact) → the exit control lives INSIDE the canvas
           // toolbar (its right end). Nothing stacks over it in the top-right
           // corner. Not fullscreen → no exit affordance needed here.
@@ -541,6 +587,15 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
           sessionId={askSessionId}
           repoId={askRepoId}
         />
+        {/* CODE — the Ask AI sibling. Docked to the same right edge, but
+            selection-gated: appears only while a code-bearing step is
+            selected, shows that step's source. Shares the dock state so
+            only one of the two is open at a time. */}
+        <CodePanel
+          element={bpmnElement}
+          chapter={chapter}
+          onOpenCallGraph={onOpenCallGraphAt}
+        />
         {bpmnElement && stepFnsOpen ? (
           <div
             className="absolute inset-0 z-30 flex items-center justify-center p-6"
@@ -555,7 +610,7 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
           >
             <div
               className="code-drawer-enter flex"
-              style={{ width: "min(760px, 92%)", maxHeight: "84%" }}
+              style={{ width: `min(${codeWidth}px, 92%)`, maxHeight: "84%" }}
               onClick={(e) => e.stopPropagation()}
             >
               <BpmnStepFunctions
@@ -669,6 +724,31 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
         >
           {chapter.title}
         </h2>
+        {/* Journey description — what this journey does, right at the top of
+            the chapter (founder ask). Clamped to two muted reading lines so
+            the diagram stays the hero; click to expand the full text. */}
+        {chapter.summary && (
+          <p
+            onClick={() => setDescExpanded((v) => !v)}
+            title={
+              descExpanded ? "Click to collapse" : "Click to read the full description"
+            }
+            className="mt-1.5 max-w-[70ch] cursor-pointer text-[12px] leading-relaxed"
+            style={{
+              color: "var(--bpmn-text-muted)",
+              ...(descExpanded
+                ? {}
+                : {
+                    display: "-webkit-box",
+                    WebkitBoxOrient: "vertical",
+                    WebkitLineClamp: 2,
+                    overflow: "hidden",
+                  }),
+            }}
+          >
+            {chapter.summary}
+          </p>
+        )}
       </div>
       <div className="flex shrink-0 items-center gap-2 pt-0.5">
         {chapter.bpmnValidation && (

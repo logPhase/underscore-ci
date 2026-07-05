@@ -48,6 +48,10 @@ interface Props {
    *  toolbar grows an exit-fullscreen button — the exit affordance lives
    *  in the one top-right control cluster instead of a separate overlay. */
   onExitFullscreen?: () => void;
+  /** Double-clicking a node fires this with the element id. When set, the
+   *  canvas routes dblclick here (open the code) instead of its default
+   *  inline label edit. */
+  onElementDoubleClick?: (elementId: string) => void;
 }
 
 // Walk the chapter looking for a method matching `fqn`. Match strategies
@@ -64,7 +68,7 @@ const REFINE_API =
     : 'http://localhost:9100');
 
 export const BpmnEditor = forwardRef<BpmnCanvasHandle, Props>(function BpmnEditor(
-  { diagram, chapter, height = '100%', onSelectedFqnsChange, onSelectedElementChange, onExitFullscreen },
+  { diagram, chapter, height = '100%', onSelectedFqnsChange, onSelectedElementChange, onExitFullscreen, onElementDoubleClick },
   canvasRef,
 ) {
   const fillParent = height === '100%';
@@ -210,6 +214,7 @@ export const BpmnEditor = forwardRef<BpmnCanvasHandle, Props>(function BpmnEdito
         elementPrStatus={elementPrStatus}
         elementKnowledge={elementKnowledge}
         onExitFullscreen={onExitFullscreen}
+        onElementDoubleClick={onElementDoubleClick}
       />
 
       {/* PR-change legend removed per user feedback (visually noisy

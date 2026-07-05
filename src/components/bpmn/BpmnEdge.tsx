@@ -61,7 +61,6 @@ export function BpmnEdge({
   const width = selected ? 7 : lit ? 6.5 : dimmed ? 5 : 5.5;
   const flowing = !dimmed;
 
-  const mid = chipAnchor(edge.points);
   const conditionPositive =
     edge.condition && /^(yes|true|grant|entry|success)$/i.test(edge.condition);
   const conditionNegative =
@@ -100,11 +99,30 @@ export function BpmnEdge({
           markerEnd={`url(#bpmn-arrow-${selected ? "sel" : lit ? "hov" : "def"})`}
           style={{ transition: "stroke 160ms, stroke-width 160ms" }}
         />
-        {edge.condition && (
-          <g pointerEvents="none">
-            <ConditionChip x={mid.x} y={mid.y} text={edge.condition} color={labelColor} />
-          </g>
-        )}
+        {edge.condition &&
+          (() => {
+            // Size the chip first (it word-wraps to a height we can't know up
+            // front), THEN place it: sit its NEAR edge a fixed gap off the
+            // wire along the open-side normal. Offsetting by (gap + h/2) keeps
+            // that clearance constant no matter how many lines the condition
+            // wraps to — a tall chip never creeps back onto the wire.
+            const geo = chipGeometry(edge.condition);
+            const anchor = chipAnchor(edge.points);
+            const GAP = 9;
+            const cx = anchor.x + anchor.nx * (GAP + geo.h / 2);
+            const cy = anchor.y + anchor.ny * (GAP + geo.h / 2);
+            return (
+              <g pointerEvents="none">
+                <ConditionChip
+                  cx={cx}
+                  cy={cy}
+                  geo={geo}
+                  text={edge.condition}
+                  color={labelColor}
+                />
+              </g>
+            );
+          })()}
       </g>
     </g>
   );
@@ -122,8 +140,12 @@ export function BpmnEdge({
  *     hug the SOURCE end (30% along), just past the diamond's top corner.
  *  The point is then nudged perpendicular (up, or aside on a vertical run)
  *  to the open side of the wire. */
-function chipAnchor(pts: { x: number; y: number }[]): { x: number; y: number } {
-  const OFFSET = 12;
+function chipAnchor(pts: { x: number; y: number }[]): {
+  x: number;
+  y: number;
+  nx: number;
+  ny: number;
+} {
   const drift = pts[pts.length - 1].y - pts[0].y;
   const t = drift < -40 ? 0.3 : 0.76;
   const a = pointAlongPath(pts, Math.max(0, t - 0.04));
@@ -133,63 +155,116 @@ function chipAnchor(pts: { x: number; y: number }[]): { x: number; y: number } {
   const dy = b.y - a.y;
   const len = Math.hypot(dx, dy) || 1;
   // Two unit normals; pick the one pointing up (negative y), breaking ties
-  // (vertical runs) toward the left.
+  // (vertical runs) toward the left. The caller offsets along this normal by
+  // the chip's own half-height, so the wire point + normal are returned raw.
   let nx = -dy / len;
   let ny = dx / len;
   if (ny > 0 || (Math.abs(ny) < 1e-6 && nx > 0)) {
     nx = -nx;
     ny = -ny;
   }
-  return { x: mid.x + nx * OFFSET, y: mid.y + ny * OFFSET };
+  return { x: mid.x, y: mid.y, nx, ny };
+}
+
+const CHIP_MAX_W = 190; // user-space cap on chip width (~a task node's width)
+const CHIP_PAD_X = 8;
+const CHIP_PAD_Y = 4.5;
+
+interface ChipGeo {
+  lines: string[];
+  w: number;
+  h: number;
+  fs: number;
+  lineH: number;
+}
+
+/** Lay a condition clause out as a bounded, word-wrapped block. NEVER
+ *  truncates — the font eases down a touch for longer clauses so more fits
+ *  per line, and anything left wraps onto further lines. The full text is
+ *  always rendered (and also mirrored into the hover <title>). */
+function chipGeometry(raw: string): ChipGeo {
+  const text = raw.toUpperCase().trim();
+  // Ease the font for longer clauses (never below 7.5u — still legible at
+  // read zoom). Short "YES"/"NO" pills keep the original 8.5u.
+  const fs = text.length <= 40 ? 8.5 : text.length <= 80 ? 8 : 7.5;
+  const charW = fs * 0.62; // monospace advance
+  const perLine = Math.max(6, Math.floor((CHIP_MAX_W - CHIP_PAD_X * 2) / charW));
+
+  // Greedy word wrap; a single token longer than the budget is hard-split so
+  // nothing is ever dropped.
+  const lines: string[] = [];
+  let cur = "";
+  for (let word of text.split(/\s+/).filter(Boolean)) {
+    while (word.length > perLine) {
+      if (cur) {
+        lines.push(cur);
+        cur = "";
+      }
+      lines.push(word.slice(0, perLine));
+      word = word.slice(perLine);
+    }
+    if (!cur) cur = word;
+    else if (cur.length + 1 + word.length <= perLine) cur += " " + word;
+    else {
+      lines.push(cur);
+      cur = word;
+    }
+  }
+  if (cur) lines.push(cur);
+  if (!lines.length) lines.push(text);
+
+  const longest = lines.reduce((m, l) => Math.max(m, l.length), 1);
+  const lineH = fs + 3.5;
+  const w = Math.max(24, Math.min(CHIP_MAX_W, longest * charW + CHIP_PAD_X * 2));
+  const h = CHIP_PAD_Y * 2 + lines.length * lineH;
+  return { lines, w, h, fs, lineH };
 }
 
 function ConditionChip({
-  x,
-  y,
+  cx,
+  cy,
+  geo,
   text,
   color,
 }: {
-  x: number;
-  y: number;
+  cx: number;
+  cy: number;
+  geo: ChipGeo;
   text: string;
   color: string;
 }) {
-  // Small rounded chip sitting on the wire ("Yes" / "No"). Fully opaque
-  // canvas fill so the thick flowing dashes don't read through it, a
-  // hairline in the condition colour, label in that colour. Verbose
-  // analyzer conditions ellipsise hard at a low cap; the full clause lives
-  // in the hover <title>.
-  const padX = 7;
-  const charW = 5.6;
-  const MAX_CHARS = 20;
-  const upper = text.toUpperCase();
-  const label =
-    upper.length > MAX_CHARS ? upper.slice(0, MAX_CHARS - 1).trimEnd() + "…" : upper;
-  const w = Math.max(24, label.length * charW + padX * 2);
-  const h = 16;
+  // Rounded chip sitting beside the wire ("YES" / "NO", or a full clause).
+  // Fully opaque canvas fill so the thick flowing dashes don't read through
+  // it, a hairline in the condition colour, label in that colour. Multi-line
+  // clauses grow the chip's height (rendered as centred tspans); a single
+  // short line keeps the pill shape.
+  const { lines, w, h, fs, lineH } = geo;
+  const single = lines.length === 1;
   return (
-    <g transform={`translate(${x - w / 2}, ${y - h / 2})`}>
+    <g transform={`translate(${cx - w / 2}, ${cy - h / 2})`}>
       <rect
         x={0}
         y={0}
         width={w}
         height={h}
-        rx={h / 2}
+        rx={single ? h / 2 : 8}
         fill={VAR_CANVAS}
         stroke={color}
         strokeWidth={1}
       />
       <text
-        x={w / 2}
-        y={h / 2 + 3}
         textAnchor="middle"
         fill={color}
         fontFamily={VAR_FONT_MONO}
-        fontSize={8.5}
+        fontSize={fs}
         fontWeight={600}
-        style={{ letterSpacing: 0.6 }}
+        style={{ letterSpacing: 0.5 }}
       >
-        {label}
+        {lines.map((line, i) => (
+          <tspan key={i} x={w / 2} y={CHIP_PAD_Y + i * lineH + lineH / 2 + fs * 0.34}>
+            {line}
+          </tspan>
+        ))}
       </text>
       <title>{text}</title>
     </g>

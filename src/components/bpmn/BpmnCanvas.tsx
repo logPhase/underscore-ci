@@ -43,6 +43,10 @@ interface Props {
    *  owns the exit affordance — no separate floating button stacking in the
    *  same corner and occluding it. */
   onExitFullscreen?: () => void;
+  /** When set, double-clicking a node fires this with the element id
+   *  instead of starting the default inline label edit. The read/review
+   *  surfaces (ChapterView) wire this to open the step's code. */
+  onElementDoubleClick?: (elementId: string) => void;
 }
 
 type Selection =
@@ -289,7 +293,7 @@ function KnowledgePanel({
 }
 
 export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanvas(
-  { journey: initial, onChange, getSource: _getSource, onSelectionChange, elementPrStatus, elementKnowledge, onExitFullscreen },
+  { journey: initial, onChange, getSource: _getSource, onSelectionChange, elementPrStatus, elementKnowledge, onExitFullscreen, onElementDoubleClick },
   ref,
 ) {
   const [journey, setJourney] = useState(initial);
@@ -1190,7 +1194,14 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
                   onPointerLeave={() =>
                     setHoverNode((h) => (h === node.id ? null : h))
                   }
-                  onDoubleClick={() => setEditingId(node.id)}
+                  onDoubleClick={() => {
+                    // On a read/review surface, dblclick opens the code
+                    // (parent-provided). Selection already happened on the
+                    // preceding pointerdown, so this never fights click or
+                    // drag. Falls back to inline label editing otherwise.
+                    if (onElementDoubleClick) onElementDoubleClick(node.id);
+                    else setEditingId(node.id);
+                  }}
                 />
                 </g>
               );

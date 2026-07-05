@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { MessageCircleQuestion, SendHorizontal, PanelRightClose } from "lucide-react";
 import { Markdown } from "@/components/ui/Markdown";
+import { useCodeView } from "@/components/journeys/code-view-store";
 import { askEndpointHref, bpmnAsk } from "@/lib/ask-endpoint";
 import {
   buildAskRequest,
@@ -64,7 +65,14 @@ export function AskPanel({
   // primacy) and an open 380px panel would cover the canvas toolbar,
   // including the fullscreen exit button (the exact occlusion bug the
   // toolbar integration just fixed). The edge tab invites; it never imposes.
-  const [open, setOpen] = useState(false);
+  //
+  // Open state is shared with the CODE panel via the code-view store so the
+  // two right-edge docks never open at once (opening one collapses the
+  // other). Ask AI is `rightDock === "ask"`.
+  const rightDock = useCodeView((s) => s.rightDock);
+  const setRightDock = useCodeView((s) => s.setRightDock);
+  const open = rightDock === "ask";
+  const setOpen = (next: boolean) => setRightDock(next ? "ask" : null);
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState<Msg[]>([]);
   const [busy, setBusy] = useState(false);
