@@ -2,6 +2,10 @@ import { useRef, useState } from "react";
 import { MessageCircleQuestion, SendHorizontal, PanelRightClose } from "lucide-react";
 import { Markdown } from "@/components/ui/Markdown";
 import { useCodeView } from "@/components/journeys/code-view-store";
+import {
+  LeftResizeHandle,
+  WidthNudgeButtons,
+} from "@/components/journeys/code-resize";
 import { askEndpointHref, bpmnAsk } from "@/lib/ask-endpoint";
 import {
   buildAskRequest,
@@ -71,6 +75,9 @@ export function AskPanel({
   // other). Ask AI is `rightDock === "ask"`.
   const rightDock = useCodeView((s) => s.rightDock);
   const setRightDock = useCodeView((s) => s.setRightDock);
+  // Shared right-dock width (same store the CODE panel resizes) — switching
+  // between ASK and CODE keeps the reading surface at the width you chose.
+  const dockWidth = useCodeView((s) => s.width);
   const open = rightDock === "ask";
   const setOpen = (next: boolean) => setRightDock(next ? "ask" : null);
   const [question, setQuestion] = useState("");
@@ -152,13 +159,16 @@ export function AskPanel({
 
   return (
     <div
-      className="absolute inset-y-0 right-0 z-40 flex w-[380px] flex-col border-l shadow-2xl"
+      className="absolute inset-y-0 right-0 z-40 flex flex-col border-l shadow-2xl"
       style={{
+        width: dockWidth,
         background: "var(--bpmn-surface)",
         borderColor: "var(--bpmn-border)",
         fontFamily: "var(--bpmn-font-mono)",
       }}
     >
+      {/* Drag the left edge to grow/shrink — same shared width as CODE. */}
+      <LeftResizeHandle />
       {/* Header */}
       <div
         className="flex shrink-0 items-center gap-2 border-b px-3 py-2"
@@ -176,6 +186,7 @@ export function AskPanel({
             about {context}
           </div>
         </div>
+        <WidthNudgeButtons />
         <button
           onClick={() => setOpen(false)}
           title="Minimize"

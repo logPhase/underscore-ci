@@ -91,8 +91,11 @@ const SessionRail = () => {
         background: "var(--bpmn-surface-soft)",
         // Stronger border + a soft drop shadow give the rail a physical edge
         // so the dark rail doesn't bleed into the dark canvas / BPMN beside it.
-        borderColor: "var(--bpmn-border-em)",
-        boxShadow: "2px 0 10px hsla(220, 22%, 4%, 0.30)",
+        // The divider must survive the DARKEST neighbour (the chapter
+        // page's near-black BPMN plate) — the border tokens vanish against
+        // it at 1px, so the rule is drawn in mist at fixed alpha.
+        borderColor: "rgba(126, 136, 163, 0.34)",
+        boxShadow: "2px 0 12px hsla(220, 22%, 4%, 0.45)",
       }}
     >
       {/* Rail header — collapse toggle pinned to the TOP (standard sidebar
