@@ -32,7 +32,7 @@ spec:
     - host: iris-ingest-dev.apcoaflow.com
       http:
         paths:
-          - path: /underscore-iris
+          - path: /iris-underscore
             pathType: Prefix
             backend:
               service:
