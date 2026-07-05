@@ -1,0 +1,300 @@
+# GENERATED from deployment.yaml for the apcoa-tech/iris repo's reports
+# (host path /underscore-iris). Regenerate rather than hand-edit:
+# see the transform in the repo history.
+# Underscore report viewer — static web server for the pre-rendered reports.
+#
+# Two containers share ONE emptyDir mounted at /usr/share/nginx/html in BOTH:
+#   - git-sync  : clones/pulls the `underscore-reports` branch of apcoa-tech/iris
+#                 into the shared volume every 60s. git-sync (v4) writes worktrees
+#                 under <root>/.worktrees/<sha> and maintains a symlink <root>/<link>
+#                 that always points at the current checkout.
+#   - nginx     : serves the LINK path (never a worktree dir directly), so it always
+#                 sees the newest synced content atomically.
+#
+# EXACT PATH LAYOUT (this is the crux — see README):
+#   GITSYNC_ROOT = /usr/share/nginx/html         (the shared emptyDir, same in both containers)
+#   GITSYNC_LINK = current                        -> /usr/share/nginx/html/current  (symlink)
+#   git-sync worktree checkout                    -> /usr/share/nginx/html/.worktrees/<sha>
+#   nginx document root (via ConfigMap conf)      -> /usr/share/nginx/html/current
+#   So the branch's index.html / reports/ / latest/ resolve at
+#       /usr/share/nginx/html/current/index.html
+#       /usr/share/nginx/html/current/reports/<stamp>/underscore-report.html
+#       /usr/share/nginx/html/current/latest/...
+#
+# The nginx server config is supplied by the ConfigMap below and overrides whatever
+# default the image ships, so the docroot is pinned to the git-sync link regardless
+# of the ghcr.io/logphase/underscore-viewer-iris base config.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: underscore-viewer-iris-nginx
+  labels:
+    app: underscore-viewer-iris
+data:
+  # This ConfigMap fully REPLACES the image's baked /etc/nginx/conf.d/default.conf,
+  # so every bit of hardening from viewer/nginx.conf must be reproduced here or it
+  # simply doesn't run in K8s. It therefore mirrors that file's security headers,
+  # path-derived Cache-Control map, autoindex off, gzip, and friendly 404 — the
+  # only deltas from the image config are K8s-specific: listen on 80 (matches the
+  # containerPort/Service targetPort), docroot pinned to the git-sync `current`
+  # symlink, and a dedicated /healthz liveness endpoint. Keep this in sync with
+  # viewer/nginx.conf when either changes.
+  default.conf: |
+    # GOTCHA 2 (see viewer/nginx.conf): pick Cache-Control by path. Immutable
+    # per-run reports cache hard; the mutable entrypoints (index.html, latest/)
+    # must always revalidate, or a client keeps serving a stale report.
+    map $uri $underscore_cache_control {
+        default                 "public, max-age=300";
+        ~^/reports/             "public, max-age=31536000, immutable";
+        ~^/latest/              "no-cache";
+        "/runs.json"            "no-cache";
+        "/index.html"           "no-cache";
+        "/"                     "no-cache";
+    }
+
+    server {
+        listen       80;
+        listen       [::]:80;
+        server_name  _;
+
+        # Serve the git-sync LINK (symlink to the newest worktree), not a fixed dir.
+        root  /usr/share/nginx/html/current;
+        index index.html;
+
+        # Basic auth (parking-sim-style gate) — htpasswd from the
+        # underscore-viewer-htpasswd K8s secret. /healthz and /readyz opt OUT
+        # below so kube probes never need credentials.
+        auth_basic           "Underscore reports — IRIS VAS";
+        auth_basic_user_file /etc/nginx/.htpasswd;
+
+        # git-sync uses a symlink for the link path — nginx must follow it.
+        # (Left off: caching the resolved symlink would pin nginx to the old rev.)
+        disable_symlinks off;
+
+        # No directory listings — reports are addressed by exact path only.
+        autoindex off;
+
+        # Reports are ~6-8 MB of inline HTML; gzip pays for itself on the wire.
+        gzip            on;
+        gzip_types      text/css application/javascript application/json image/svg+xml;
+        gzip_min_length 1024;
+        gzip_comp_level 5;
+        gzip_vary       on;
+
+        sendfile    on;
+        tcp_nopush  on;
+
+        # GOTCHA 3 (see viewer/nginx.conf): add_header does NOT merge across
+        # levels — a child add_header wipes all inherited ones. So security +
+        # cache headers are emitted from this SINGLE server-level block, `always`
+        # so they also apply to error responses. No location below adds its own
+        # header, so none of these is ever silently dropped.
+        add_header X-Content-Type-Options nosniff                    always;
+        add_header X-Frame-Options        SAMEORIGIN                 always;
+        add_header Referrer-Policy        no-referrer                always;
+        add_header Cache-Control          $underscore_cache_control  always;
+
+        # Liveness endpoint: always 200 even before the first sync completes,
+        # so a slow/failed initial clone never crash-loops the nginx container.
+        # default_type (not add_header) sets the type so the server-level headers
+        # above are not dropped for this response (GOTCHA 3).
+        location = /healthz {
+            access_log off;
+            default_type text/plain;
+            auth_basic off;
+            return 200 "ok\n";
+        }
+
+        # Readiness: unauthenticated, but 200 only once git-sync has landed
+        # index.html — so a Pod joins the Service only when it has content,
+        # without exposing that content or making kube-probe send credentials.
+        location = /readyz {
+            access_log off;
+            auth_basic off;
+            default_type text/plain;
+            if (-f $document_root/index.html) { return 200 "ready\n"; }
+            return 503 "syncing\n";
+        }
+
+        # Ask AI relay — the ONLY dynamic route in the viewer. Reports are
+        # static and carry NO credential; their Ask panel POSTs here
+        # (same-origin) and the analyzer token is injected SERVER-side from
+        # the underscore-viewer-ask Secret (mounted as an nginx include —
+        # the token never appears in this ConfigMap or in git). Locked to
+        # exactly one upstream endpoint (/bpmn/ask) and POST only; the
+        # server-level basic auth above still gates who can call it, and
+        # the analyzer's own rate/spend caps bound the blast radius.
+        location = /ask {
+            limit_except POST { deny all; }
+            client_max_body_size 1m;
+            include /etc/nginx/ask-secret/ask-token.conf;
+            proxy_pass https://intent-analyzer.logphase.ai/bpmn/ask;
+            proxy_ssl_server_name on;
+            proxy_ssl_protocols TLSv1.2 TLSv1.3;
+            proxy_http_version 1.1;
+            proxy_set_header Host intent-analyzer.logphase.ai;
+            # Agent-backed answer — allow the analyzer its full think time.
+            proxy_read_timeout 180s;
+            proxy_send_timeout 30s;
+        }
+
+        # Readiness/traffic path: 404s (folded into the friendly 404 below) until
+        # the first sync lands index.html, which correctly keeps the Pod out of
+        # the Service until reports exist. A directory without index.html would
+        # otherwise 403; fold that into the 404 so no forbidden/listing leaks.
+        location / {
+            try_files $uri $uri/ =404;
+        }
+
+        error_page 403 = @notfound;
+        error_page 404     @notfound;
+
+        location @notfound {
+            internal;
+            default_type text/html;   # not add_header — see GOTCHA 3
+            return 404 '<!doctype html><meta charset="utf-8"><title>Not found - Underscore</title><style>body{font:16px/1.6 system-ui,sans-serif;max-width:34rem;margin:15vh auto;padding:0 1.5rem;color:#1c1c28}code{background:#f2f2f7;padding:.1em .35em;border-radius:4px}</style><h1>404 - report not found</h1><p>No report at this path. Start at <a href="/">the report index</a>, or open the newest run at <a href="/latest/underscore-report.html"><code>/latest/underscore-report.html</code></a>.</p>';
+        }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: underscore-viewer-iris
+  labels:
+    app: underscore-viewer-iris
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: underscore-viewer-iris
+  template:
+    metadata:
+      labels:
+        app: underscore-viewer-iris
+    spec:
+      securityContext:
+        # git-sync v4 runs as uid/gid 65533; fsGroup makes the shared emptyDir
+        # group-owned + writable so it can create worktrees and the symlink.
+        fsGroup: 65533
+      volumes:
+        - name: reports
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        - name: nginx-conf
+          configMap:
+            name: underscore-viewer-iris-nginx
+        - name: htpasswd
+          secret:
+            secretName: underscore-viewer-htpasswd
+        # Ask relay credential — a one-line nginx include snippet
+        # (proxy_set_header Authorization "Bearer <token>";) so the token
+        # stays out of the ConfigMap. See secret.example.yaml.
+        - name: ask-secret
+          secret:
+            secretName: underscore-viewer-ask
+      containers:
+        # ---------------------------------------------------------------
+        # Sidecar: git-sync — keeps the shared volume in sync with the branch.
+        # ---------------------------------------------------------------
+        - name: git-sync
+          image: registry.k8s.io/git-sync/git-sync:v4.4.0
+          securityContext:
+            runAsUser: 65533
+            runAsGroup: 65533
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: GITSYNC_REPO
+              value: "https://github.com/apcoa-tech/iris"
+            - name: GITSYNC_REF
+              value: "underscore-reports"
+            - name: GITSYNC_ROOT
+              value: "/usr/share/nginx/html"
+            - name: GITSYNC_LINK
+              value: "current"
+            - name: GITSYNC_PERIOD
+              value: "60s"
+            - name: GITSYNC_DEPTH
+              value: "1"
+            - name: GITSYNC_ONE_TIME
+              value: "false"
+            - name: GITSYNC_MAX_FAILURES
+              value: "-1"          # keep retrying forever on transient pull errors
+            - name: GITSYNC_SYNC_TIMEOUT
+              value: "120s"
+            # HTTP basic auth for the private repo — sourced from the Secret.
+            - name: GITSYNC_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: underscore-reports-git
+                  key: GITSYNC_USERNAME
+            - name: GITSYNC_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: underscore-reports-git
+                  key: GITSYNC_PASSWORD
+          volumeMounts:
+            - name: reports
+              mountPath: /usr/share/nginx/html
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "32Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+        # ---------------------------------------------------------------
+        # nginx — serves the synced link path.
+        # ---------------------------------------------------------------
+        - name: nginx
+          image: irisacrdev001.azurecr.io/underscore-viewer-iris:dev
+          ports:
+            - name: http
+              containerPort: 80
+          volumeMounts:
+            - name: reports
+              mountPath: /usr/share/nginx/html
+              readOnly: true
+            - name: nginx-conf
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: default.conf
+              readOnly: true
+            - name: htpasswd
+              mountPath: /etc/nginx/.htpasswd
+              subPath: .htpasswd
+              readOnly: true
+            - name: ask-secret
+              mountPath: /etc/nginx/ask-secret
+              readOnly: true
+          # Liveness on the always-up /healthz so an empty/slow volume can't
+          # crash-loop nginx before git-sync's first pull.
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 3
+          # Readiness on / so the Pod only joins the Service once reports are synced.
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "25m"
+              memory: "32Mi"
+            limits:
+              cpu: "250m"
+              memory: "128Mi"

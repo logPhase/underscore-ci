@@ -1,0 +1,18 @@
+# GENERATED from service.yaml for the apcoa-tech/iris repo's reports
+# (host path /underscore-iris). Regenerate rather than hand-edit:
+# see the transform in the repo history.
+apiVersion: v1
+kind: Service
+metadata:
+  name: underscore-viewer-iris
+  labels:
+    app: underscore-viewer-iris
+spec:
+  type: ClusterIP
+  selector:
+    app: underscore-viewer-iris
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
