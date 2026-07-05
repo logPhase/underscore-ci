@@ -111,6 +111,10 @@ export interface MonoFile {
   confidence: "high" | "medium";
   importance?: number;
   layoutTier?: "focal" | "ambient" | "suppressed";
+  /** Original namespace-derived package, preserved when `pkg` has been
+   *  overridden with the file's functional-component name (fileGroups mode).
+   *  Absent when no component override applied. */
+  namespacePkg?: string;
 }
 
 export interface ParamLineageStep {
@@ -247,6 +251,10 @@ export interface RawAnalysisJSON {
   analyzerRepoId?: string;
   /** Module groups from the analyzer's grouping agent, baked in by the CLI. */
   groups?: import("./grouping").ServiceGroup[];
+  /** Per-service functional-component partition from the file-grouping agent.
+   *  When present, the canvas clusters files by component (not namespace
+   *  package) and journey transit lines get component-granular stops. */
+  fileGroups?: import("./grouping").ServiceFileGroups[];
   /** Living-specs bundle (list + history + version contents), baked in. */
   specs?: import("./specs").SpecsPayload;
 }
@@ -299,6 +307,13 @@ export interface TransformedData extends AnalysisData {
   analyzerRepoId?: string | null;
   /** Positioned group hulls (grouping agent × client layout); null = none. */
   serviceGroups?: import("./grouping").PositionedGroupRegion[] | null;
+  /** Per-service functional-component partition (verbatim from the payload);
+   *  null = the run has no fileGroups. */
+  fileGroups?: import("./grouping").ServiceFileGroups[] | null;
+  /** filePath → the functional component it belongs to. Built from
+   *  `fileGroups`; empty when the run has none. Consumers: the file→component
+   *  cluster override and component-granular journey stops. */
+  fileToComponent?: Map<string, import("./grouping").FileComponentRef>;
   /** Living-specs bundle embedded in the payload; null = not exported. */
   specs?: import("./specs").SpecsPayload | null;
 

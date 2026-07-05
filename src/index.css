@@ -318,6 +318,19 @@ input[type="range"]::-webkit-slider-thumb {
      by design. */
   --bpmn-font-mono:    'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   --bpmn-font-display: 'Fraunces', ui-serif, Georgia, serif;
+  /* Node titles — the ONE focal text on the diagram. A humanist sans
+     (Space Grotesk is already loaded app-wide) reads far cleaner than
+     mono or serif at the small on-screen sizes the auto-fit produces,
+     which is the whole game: the step title must stay legible at ~0.4×.
+     The mono stays the "data/metadata" voice (eyebrows, pills, labels);
+     this is the "name of the thing" voice. */
+  --bpmn-font-title:   'Space Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  /* Canvas plate — the near-black indigo the cards sit on. Deeper than
+     --bpmn-bg so the surface-level cards visibly lift off it (the
+     reference's high figure/ground contrast). Painted as a full-bleed
+     rect at the back of the SVG (the popup-canvas rule forces the root
+     transparent, so a token on the root wouldn't show). */
+  --bpmn-canvas:       #070912;
 
   /* Paper export — slightly warm cream, not pure white. Lifted from the
      paper colour of engineering vellum so PNGs pasted into Slack / docs
@@ -692,6 +705,7 @@ html.reading-paper,
   --bpmn-amber-soft:   #b98a4a;
   --bpmn-rose:         #b04a52;
   --bpmn-cyan:         #1d6f8f;   /* slate blue */
+  --bpmn-canvas:       #f7f2e6;   /* warm vellum plate under the cards */
   background: var(--bpmn-bg);
   -webkit-font-smoothing: antialiased;
 }

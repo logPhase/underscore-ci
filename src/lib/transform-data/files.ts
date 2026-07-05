@@ -1,4 +1,5 @@
 import { ComponentFunction, MonoFile } from "@/types/analysis";
+import { FileComponentRef } from "@/types/grouping";
 import { RawFile, RawMethod } from "@/types/journey";
 import {
   clampConfidence,
@@ -6,18 +7,29 @@ import {
   clampSemanticRole,
 } from "./sanitize";
 
-/** Build the in-memory MonoFile[] from the on-disk Record<path, RawFile>. */
+/** Build the in-memory MonoFile[] from the on-disk Record<path, RawFile>.
+ *
+ *  When `fileToComponent` is supplied (fileGroups mode), each file's cluster
+ *  key (`pkg`) is overridden with the NAME of the functional component that
+ *  owns it — but only when a component in the file's OWN service claims it.
+ *  The original namespace package is preserved in `namespacePkg`. Files no
+ *  component claims keep their namespace package unchanged. */
 export function transformFiles(
-  raw: Record<string, RawFile>
+  raw: Record<string, RawFile>,
+  fileToComponent?: Map<string, FileComponentRef>
 ): Record<string, MonoFile> {
   return Object.fromEntries(
-    Object.entries(raw || {}).map(([path, f]) => [
+    Object.entries(raw || {}).map(([path, f]) => {
+      const ref = fileToComponent?.get(path);
+      const claimed = !!ref && ref.service === f.service;
+      return [
       path,
       {
         id: path,
         path,
         service: f.service,
-        pkg: f.package,
+        pkg: claimed ? ref!.componentName : f.package,
+        ...(claimed ? { namespacePkg: f.package } : {}),
         name: path.split("/").pop() || path,
         sizeLines: f.sizeLines ?? 0,
         testCoverage: 0,
@@ -32,7 +44,8 @@ export function transformFiles(
         confidence: clampConfidence(f.confidence),
         importance: f.importance,
       },
-    ])
+      ];
+    })
   );
 }
 

@@ -27,3 +27,38 @@ export interface PositionedGroupRegion {
   seed: number;
   serviceIds: string[];
 }
+
+// ── Functional components (sub-service file grouping) ──────────────────
+// One level finer than service groups: within a single service, the
+// file-grouping agent partitions the service's files into business-named
+// functional components ("Plate Matching", "Kafka Consumers"). The canvas
+// clusters files by COMPONENT instead of namespace package, and journey
+// transit lines get component-granular stops. Arrives pre-computed as the
+// top-level `fileGroups` key of the payload.
+
+/** One functional component — a business-named partition of a service's
+ *  files (a sub-service cluster). */
+export interface FunctionalComponent {
+  /** Stable slug, e.g. "plate-matching". */
+  id: string;
+  name: string;
+  description: string;
+  /** Member file paths — a partition of the owning service's files. */
+  files: string[];
+}
+
+/** Per-service functional-component partition. The `fileGroups` payload key
+ *  is an array of these, one entry per service. */
+export interface ServiceFileGroups {
+  service: string;
+  groups: FunctionalComponent[];
+}
+
+/** The component a file resolves to (service + path → component). Value type
+ *  of the `fileToComponent` map exposed on TransformedData. The `service`
+ *  lets consumers honour the file's own service when a path is mis-scoped. */
+export interface FileComponentRef {
+  componentId: string;
+  componentName: string;
+  service: string;
+}

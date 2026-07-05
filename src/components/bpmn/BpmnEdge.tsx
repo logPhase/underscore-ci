@@ -1,5 +1,5 @@
 import type { LaidOutEdge } from "./layout";
-import { pointAlongPath, pointsToPath } from "./layout";
+import { pointAlongPath, roundedPath } from "./layout";
 
 interface Props {
   edge: LaidOutEdge;
@@ -10,14 +10,13 @@ interface Props {
   onPointerLeave: () => void;
 }
 
-const VAR_BORDER     = "var(--bpmn-border)";
 const VAR_BORDER_EM  = "var(--bpmn-border-em)";
+const VAR_TEXT_DIM   = "var(--bpmn-text-dim)";
 const VAR_CYAN       = "var(--bpmn-cyan)";
 const VAR_MINT       = "var(--bpmn-mint)";
 const VAR_ROSE       = "var(--bpmn-rose)";
 const VAR_TEXT       = "var(--bpmn-text)";
-const VAR_TEXT_MUTED = "var(--bpmn-text-muted)";
-const VAR_SURFACE    = "var(--bpmn-surface)";
+const VAR_CANVAS     = "var(--bpmn-canvas)";
 const VAR_FONT_MONO  = "var(--bpmn-font-mono)";
 
 export function BpmnEdge({
@@ -28,16 +27,17 @@ export function BpmnEdge({
   onPointerEnter,
   onPointerLeave,
 }: Props) {
-  const d = pointsToPath(edge.points);
-  // Default lines stay subtle (this is a wiring diagram — paths shouldn't
-  // compete with the boxes for attention). Selection escalates to cyan,
-  // matching the gateway accent so the highlight feels intentional.
-  const stroke = selected ? VAR_CYAN : hovered ? VAR_BORDER_EM : VAR_BORDER;
-  // Bias the label position toward the source (35% along the polyline)
-  // so condition pills sit in clear air rather than on top of the target
-  // node — the most common cause of the "WAITING PRESENCE FOUND — PAIR
-  // MATCHED pill is welded to the gateway diamond" complaint.
-  const mid = pointAlongPath(edge.points, 0.35);
+  // Rounded orthogonal wire — soft elbows, per the reference. The wire is
+  // ambient: a quiet mid-grey that never competes with the cards/gateways.
+  // Selection escalates to cyan (the selection colour), hover lifts it
+  // toward text-dim so it's clearly the picked path without shouting.
+  const d = roundedPath(edge.points, 12);
+  const stroke = selected ? VAR_CYAN : hovered ? VAR_TEXT_DIM : VAR_BORDER_EM;
+  // Chip at the polyline midpoint — the clearest air on a rank-to-rank
+  // edge. It sits past the source gateway's below-label (which hugs the
+  // diamond) and short of the target's below-caption (events carry one),
+  // so it collides with neither.
+  const mid = pointAlongPath(edge.points, 0.5);
 
   const conditionPositive =
     edge.condition && /^(yes|true|grant|entry|success)$/i.test(edge.condition);
@@ -66,20 +66,22 @@ export function BpmnEdge({
         d={d}
         fill="none"
         stroke={stroke}
-        strokeWidth={selected ? 1.8 : 1.1}
+        strokeWidth={selected ? 2 : 1.6}
+        strokeLinejoin="round"
+        strokeLinecap="round"
         markerEnd={`url(#bpmn-arrow-${selected ? "sel" : hovered ? "hov" : "def"})`}
         style={{ transition: "stroke 140ms" }}
       />
       {edge.condition && (
         <g pointerEvents="none">
-          <ConditionLabel x={mid.x} y={mid.y} text={edge.condition} color={labelColor} />
+          <ConditionChip x={mid.x} y={mid.y} text={edge.condition} color={labelColor} />
         </g>
       )}
     </g>
   );
 }
 
-function ConditionLabel({
+function ConditionChip({
   x,
   y,
   text,
@@ -90,22 +92,20 @@ function ConditionLabel({
   text: string;
   color: string;
 }) {
-  // Pill is slightly larger + uses uppercase + letter-spacing for a
-  // "stamped on the wire" feel rather than a generic chat-bubble.
-  const padX = 8;
-  const charW = 6.5;
-  // Cap the pill width. Most conditions are short (yes / no / grant /
-  // deny), but synthetic flows occasionally carry a full clause
-  // ("PLATE KNOWN AND ENTITLEMENT MATCHED (ACTIVE STP OR SESSION)") whose
-  // pill grew to ~390px and welded itself across the neighbouring task
-  // node and sibling pills. Ellipsise past the cap; the full text stays in
-  // the hover <title> below.
-  const MAX_CHARS = 34;
+  // Small rounded chip sitting on the wire ("Yes" / "No"). Filled with the
+  // canvas colour so the wire doesn't show through, a hairline in the
+  // condition colour, and the label in that same colour. The reference's
+  // chips are tiny tags — so verbose analyzer conditions ("field missing or
+  // direction unspecified") ellipsise hard at a low cap to stay compact and
+  // out of neighbours' way; the full clause lives in the hover <title>.
+  const padX = 7;
+  const charW = 5.6;
+  const MAX_CHARS = 20;
   const upper = text.toUpperCase();
   const label =
     upper.length > MAX_CHARS ? upper.slice(0, MAX_CHARS - 1).trimEnd() + "…" : upper;
-  const w = Math.max(28, label.length * charW + padX * 2);
-  const h = 18;
+  const w = Math.max(24, label.length * charW + padX * 2);
+  const h = 16;
   return (
     <g transform={`translate(${x - w / 2}, ${y - h / 2})`}>
       <rect
@@ -113,26 +113,25 @@ function ConditionLabel({
         y={0}
         width={w}
         height={h}
-        rx={2}
-        fill={VAR_SURFACE}
+        rx={h / 2}
+        fill={VAR_CANVAS}
         stroke={color}
         strokeWidth={1}
-        opacity={0.95}
+        opacity={0.96}
       />
       <text
         x={w / 2}
-        y={h / 2 + 3.5}
+        y={h / 2 + 3}
         textAnchor="middle"
         fill={color}
         fontFamily={VAR_FONT_MONO}
-        fontSize={9.5}
-        fontWeight={500}
-        style={{ letterSpacing: 0.8 }}
+        fontSize={8.5}
+        fontWeight={600}
+        style={{ letterSpacing: 0.6 }}
       >
         {label}
       </text>
       <title>{text}</title>
-      <desc style={{ display: "none" }}>{VAR_TEXT_MUTED}</desc>
     </g>
   );
 }

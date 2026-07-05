@@ -33,27 +33,30 @@ const snap = (n: number) => Math.round(n / GRID) * GRID;
 export function sizeFor(type: BpmnElement["type"]): NodeSize {
   switch (type) {
     case "start-event":
-      return { w: 48, h: 48 };
-    case "end-event":
       return { w: 52, h: 52 };
+    case "end-event":
+    case "error-end-event":
+      return { w: 56, h: 56 };
     case "exclusive-gateway":
     case "parallel-gateway":
-      return { w: 60, h: 60 };
+      // Bumped 60 → 66 so the amber glyph has air and the diamond reads as
+      // a deliberate decision marker rather than a dot at auto-fit scale.
+      return { w: 66, h: 66 };
     case "call-activity":
     case "missing-call-activity":
       // Slightly larger than service-task so the `+` marker / "no journey
       // yet" label have breathing room without truncating the title.
-      return { w: 260, h: 120 };
+      return { w: 288, h: 112 };
     case "service-task":
     case "user-task":
     default:
-      // Bumped 200×88 → 240×112 after labels like "Evaluate barrier-
-      // open guards (plate authorization, dedup, capacity, output)"
-      // were ellipsising at 3 lines. The new height comfortably fits
-      // 4 lines of 11.5px mono at lineHeight 1.4, and the extra width
-      // gives ~5 more chars per line so most real-world business task
-      // labels fit without any truncation at all.
-      return { w: 240, h: 112 };
+      // Premium card: an uppercase kind eyebrow + a BOLD Space-Grotesk
+      // title (~16px). Wide enough that most real business-step titles
+      // fit in 2 lines; height leaves generous padding so the card reads
+      // as a card, not a cramped label box. The title never shrinks below
+      // 16px — legibility at auto-fit is bought with card size + weight,
+      // per the design brief.
+      return { w: 284, h: 100 };
   }
 }
 
@@ -72,14 +75,18 @@ export function layoutGraph(
     // the boxes around to create some space"). Spacing must scale with
     // node size — these values restore the same visual air the 104/200
     // tuning had at the old node dimensions.
-    // 150/260 was still "so collapsed — I want more space in between"
-    // in practice: labels + condition pills eat the rank gap. 190/330
-    // trades fit-zoom for legible air; pan beats squint.
-    nodesep: 190,
-    ranksep: 330,
-    edgesep: 80,
-    marginx: 48,
-    marginy: 48,
+    // 150/260 was still "so collapsed"; 190/330 traded away fit-zoom.
+    // The hero redesign moves gateway labels BELOW the diamond (no more
+    // above-overhang) and caps condition pills, which frees the rank gap
+    // — so we can pull the spread back in to 110/220. Tighter spread ⇒ a
+    // smaller bounding box ⇒ a HIGHER auto-fit scale ⇒ the bold titles
+    // stay readable at fit (the whole point of the redesign), while still
+    // leaving air for a 2-line gateway label between rows.
+    nodesep: 150,
+    ranksep: 175,
+    edgesep: 44,
+    marginx: 56,
+    marginy: 56,
     ranker: "tight-tree",
   });
   g.setDefaultEdgeLabel(() => ({}));
@@ -254,6 +261,43 @@ export function pointsToPath(pts: { x: number; y: number }[]): string {
   return pts
     .map((p, i) => (i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`))
     .join(" ");
+}
+
+/**
+ * Orthogonal polyline → SVG path with rounded elbows. At every interior
+ * vertex we stop `r` short of the corner, then round it with a quadratic
+ * curve through the vertex. `r` is clamped per-corner to half the shorter
+ * adjacent segment so short jogs don't produce overlapping curves. Matches
+ * the reference's soft-cornered wiring; falls back to a straight line for
+ * 2-point paths.
+ */
+export function roundedPath(
+  pts: { x: number; y: number }[],
+  r = 10,
+): string {
+  if (pts.length < 2) return "";
+  if (pts.length === 2) {
+    return `M ${pts[0].x} ${pts[0].y} L ${pts[1].x} ${pts[1].y}`;
+  }
+  let d = `M ${pts[0].x} ${pts[0].y}`;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const prev = pts[i - 1];
+    const cur = pts[i];
+    const next = pts[i + 1];
+    const inLen = Math.hypot(cur.x - prev.x, cur.y - prev.y);
+    const outLen = Math.hypot(next.x - cur.x, next.y - cur.y);
+    const rr = Math.max(0, Math.min(r, inLen / 2, outLen / 2));
+    // Point `rr` back along the incoming segment, and `rr` forward along
+    // the outgoing one.
+    const ix = cur.x - ((cur.x - prev.x) / (inLen || 1)) * rr;
+    const iy = cur.y - ((cur.y - prev.y) / (inLen || 1)) * rr;
+    const ox = cur.x + ((next.x - cur.x) / (outLen || 1)) * rr;
+    const oy = cur.y + ((next.y - cur.y) / (outLen || 1)) * rr;
+    d += ` L ${ix} ${iy} Q ${cur.x} ${cur.y} ${ox} ${oy}`;
+  }
+  const last = pts[pts.length - 1];
+  d += ` L ${last.x} ${last.y}`;
+  return d;
 }
 
 /** Position along a polyline at fraction `t` of total length (t∈[0,1]).

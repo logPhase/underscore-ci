@@ -658,10 +658,13 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
       maxX = -Infinity,
       maxY = -Infinity;
     for (const n of layout.nodes) {
+      // Gateway + event captions now sit BELOW the shape (up to ~3 lines),
+      // and nothing sits above any node, so the box reserves a little at the
+      // top and a generous band below for those captions.
       minX = Math.min(minX, n.x - n.w / 2);
-      minY = Math.min(minY, n.y - n.h / 2 - 24); // include label above
+      minY = Math.min(minY, n.y - n.h / 2 - 12);
       maxX = Math.max(maxX, n.x + n.w / 2);
-      maxY = Math.max(maxY, n.y + n.h / 2 + 36); // include label below
+      maxY = Math.max(maxY, n.y + n.h / 2 + 52);
     }
     const bw = maxX - minX;
     const bh = maxY - minY;
@@ -682,7 +685,14 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
     const fit = Math.min((cw - padX * 2) / bw, (ch - padTop - padBottom) / bh);
     const k = Math.min(1, Math.max(0.35, fit));
     const x = (cw - bw * k) / 2 - minX * k;
-    const y = padTop + (ch - padTop - padBottom - bh * k) / 2 - minY * k;
+    // Place the diagram slightly ABOVE centre (42% of the free vertical
+    // space above, 58% below). Wide/linear flows fit width-first and leave a
+    // tall void; centring makes the flow look like it's floating in the
+    // middle of nowhere. Tucking it up under the header reads as intentional
+    // — flow on top, breathing room below — while balanced diagrams (little
+    // free space) are unaffected.
+    const freeV = ch - padTop - padBottom - bh * k;
+    const y = padTop + freeV * 0.42 - minY * k;
     setView({ x, y, k });
     // Fitted = back in auto mode; subsequent container resizes may re-fit
     // until the user takes the camera again.
@@ -951,31 +961,21 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
           onPointerCancel={onBgPointerUp}
         >
           <defs>
-            {/* Background — fine horizontal rules every 48px instead of
-                the previous dot grid. Reads like the faint baseline rules
-                on an engineering vellum, not "Figma fresh document". The
-                offset second rule (every 8px) is a hair lighter and gives
-                the canvas a real material texture at low zoom. */}
+            {/* Background — a subtle dot grid on a near-black indigo plate
+                (the reference's canvas). The dots are ambient texture: low
+                opacity, quiet, they never compete with the cards. The plate
+                is deliberately deeper than the surface colour so the cards
+                visibly lift off it (high figure/ground contrast). */}
             <pattern
-              id="bpmn-rule-grid"
-              width={240}
-              height={48}
+              id="bpmn-dot-grid"
+              width={26}
+              height={26}
               patternUnits="userSpaceOnUse"
             >
-              <line x1={0} y1={47.5} x2={240} y2={47.5}
-                stroke="var(--bpmn-border-soft)" strokeWidth={0.5} opacity={0.6} />
+              <circle cx={1} cy={1} r={1} fill="var(--bpmn-border)" opacity={0.55} />
             </pattern>
-            <pattern
-              id="bpmn-rule-grid-fine"
-              width={240}
-              height={8}
-              patternUnits="userSpaceOnUse"
-            >
-              <line x1={0} y1={7.5} x2={240} y2={7.5}
-                stroke="var(--bpmn-border-soft)" strokeWidth={0.25} opacity={0.18} />
-            </pattern>
-            <Arrow id="bpmn-arrow-def" color="var(--bpmn-border)" />
-            <Arrow id="bpmn-arrow-hov" color="var(--bpmn-border-em)" />
+            <Arrow id="bpmn-arrow-def" color="var(--bpmn-border-em)" />
+            <Arrow id="bpmn-arrow-hov" color="var(--bpmn-text-dim)" />
             <Arrow id="bpmn-arrow-sel" color="var(--bpmn-cyan)" />
           </defs>
 
@@ -984,7 +984,7 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
             y={0}
             width="100%"
             height="100%"
-            fill="url(#bpmn-rule-grid-fine)"
+            fill="var(--bpmn-canvas)"
             pointerEvents="none"
           />
           <rect
@@ -992,7 +992,7 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
             y={0}
             width="100%"
             height="100%"
-            fill="url(#bpmn-rule-grid)"
+            fill="url(#bpmn-dot-grid)"
             pointerEvents="none"
           />
 

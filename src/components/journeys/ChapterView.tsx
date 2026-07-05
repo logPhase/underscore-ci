@@ -490,98 +490,14 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
   // through prose; the step-functions dialog overlays it (code on
   // demand). `compact` drops the inline header chrome + narrative in
   // fullscreen so the diagram fills the screen.
+  // The diagram surface itself — header-less. The journey identity + the
+  // fullscreen/export controls now live in the compact hero band above
+  // (see heroHeader), so the diagram fills its container edge to edge and
+  // reads as the page's centerpiece. `compact` is fullscreen: it wires the
+  // exit-fullscreen control into the canvas toolbar (nothing stacks over
+  // it in the top-right corner).
   const inlineBpmn = (compact: boolean) => (
     <div className="flex h-full flex-col" style={{ background: "var(--bpmn-bg)" }}>
-      {!compact && (
-        <>
-          {/* eyebrow + display title + stats, export on the right */}
-          <div className="flex shrink-0 items-center gap-4 pt-3 pb-2.5 pl-6 pr-3">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <Workflow
-                  className="h-3 w-3"
-                  style={{ color: "var(--bpmn-mint)" }}
-                />
-                <span
-                  className="font-mono text-[9px] uppercase"
-                  style={{ color: "var(--bpmn-mint)", letterSpacing: 3 }}
-                >
-                  business flow
-                </span>
-                <span
-                  className="font-mono text-[9.5px]"
-                  style={{ color: "var(--bpmn-text-dim)" }}
-                >
-                  {chapter.bpmn?.elements?.length ?? 0} steps ·{" "}
-                  {chapter.bpmn?.flows?.length ?? 0} paths
-                </span>
-              </div>
-            </div>
-            {chapter.bpmnValidation && (
-              <span
-                className={`flex shrink-0 items-center gap-1 rounded-full border px-2 py-1 font-mono text-[10px] ${
-                  chapter.bpmnValidation.verdict === "errors"
-                    ? "border-red-700/30 bg-red-500/10 text-red-700"
-                    : chapter.bpmnValidation.verdict === "warnings"
-                      ? "border-amber-700/30 bg-amber-500/10 text-amber-700"
-                      : "border-emerald-700/30 bg-emerald-500/10 text-emerald-700"
-                }`}
-                title={
-                  chapter.bpmnValidation.issues.length === 0
-                    ? "BPMN verified — every claim cross-checked against source."
-                    : chapter.bpmnValidation.issues
-                        .map((i) => `${i.severity}: ${i.claim}`)
-                        .join("\n")
-                }
-              >
-                {chapter.bpmnValidation.verdict === "ok"
-                  ? "✓ verified"
-                  : `${chapter.bpmnValidation.issues.length} ${chapter.bpmnValidation.verdict}`}
-              </span>
-            )}
-            <button
-              onClick={() => setIsFullscreen(true)}
-              title="Fullscreen the business flow (Esc to exit)"
-              aria-label="Fullscreen the business flow"
-              className="shrink-0 rounded-lg p-2 transition-colors"
-              style={{ color: "var(--bpmn-text-dim)" }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = "var(--bpmn-text)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = "var(--bpmn-text-dim)";
-              }}
-            >
-              <Maximize2 className="h-3.5 w-3.5" />
-            </button>
-            <button
-              onClick={onExportBpmn}
-              disabled={exporting}
-              title="Download as PNG (engineering-paper export)"
-              className="shrink-0 rounded-lg p-2 transition-colors disabled:cursor-wait disabled:opacity-50"
-              style={{ color: "var(--bpmn-text-dim)" }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = "var(--bpmn-text)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = "var(--bpmn-text-dim)";
-              }}
-            >
-              <Download className="h-3.5 w-3.5" />
-            </button>
-          </div>
-          {/* gradient hairline under the header */}
-          <div
-            aria-hidden
-            className="mx-6 shrink-0"
-            style={{
-              height: 1,
-              background:
-                "linear-gradient(90deg, rgba(46,125,91,0.5), rgba(46,125,91,0.08) 35%, rgba(29,111,143,0.08) 65%, rgba(29,111,143,0.45))",
-            }}
-          />
-        </>
-      )}
       {/* Honest-uncertainty banner (#9). `synthetic` is set only on the
           deterministic call-trace fallback (synthBpmnFromTrace) — never on
           the AI diagram. When the analyzer /bpmn call failed/timed-out the
@@ -708,39 +624,154 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
     </div>
   );
 
+  // Compact hero band — the diagram's own header, sitting on the same dark
+  // plate directly above it. Eyebrow + journey title (the display serif, the
+  // one human-voiced headline on the page) + a tight stats/badges/controls
+  // cluster on the right. Kept to two lines, no fat: the diagram below is the
+  // star, this just names it and hosts its verify badge + fullscreen/export.
+  const heroHeader = () => (
+    <div
+      className="flex shrink-0 items-start gap-4 px-6 pt-4 pb-3.5"
+      style={{ background: "var(--bpmn-bg)" }}
+    >
+      <div className="min-w-0 flex-1">
+        <div className="mb-1.5 flex items-center gap-2">
+          <Workflow className="h-3 w-3" style={{ color: "var(--bpmn-mint)" }} />
+          <span
+            className="font-mono text-[9.5px] uppercase"
+            style={{ color: "var(--bpmn-mint)", letterSpacing: 3 }}
+          >
+            business flow
+          </span>
+          <span style={{ color: "var(--bpmn-border-em)" }}>·</span>
+          <span
+            className="font-mono text-[9.5px] tabular-nums"
+            style={{ color: "var(--bpmn-text-dim)" }}
+          >
+            {chapter.bpmn?.elements?.length ?? 0} steps ·{" "}
+            {chapter.bpmn?.flows?.length ?? 0} paths
+          </span>
+        </div>
+        <h2
+          className="m-0"
+          style={{
+            fontFamily: "var(--bpmn-font-display)",
+            fontStyle: "italic",
+            fontSize: 20,
+            lineHeight: 1.28,
+            letterSpacing: 0.2,
+            color: "var(--bpmn-text)",
+            display: "-webkit-box",
+            WebkitBoxOrient: "vertical",
+            WebkitLineClamp: 2,
+            overflow: "hidden",
+          }}
+        >
+          {chapter.title}
+        </h2>
+      </div>
+      <div className="flex shrink-0 items-center gap-2 pt-0.5">
+        {chapter.bpmnValidation && (
+          <span
+            className={`flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 font-mono text-[10px] ${
+              chapter.bpmnValidation.verdict === "errors"
+                ? "border-red-500/30 bg-red-500/10 text-red-400"
+                : chapter.bpmnValidation.verdict === "warnings"
+                  ? "border-amber-500/30 bg-amber-500/10 text-amber-400"
+                  : "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+            }`}
+            title={
+              chapter.bpmnValidation.issues.length === 0
+                ? "BPMN verified — every claim cross-checked against source."
+                : chapter.bpmnValidation.issues
+                    .map((i) => `${i.severity}: ${i.claim}`)
+                    .join("\n")
+            }
+          >
+            {chapter.bpmnValidation.verdict === "ok"
+              ? "✓ verified"
+              : `${chapter.bpmnValidation.issues.length} ${chapter.bpmnValidation.verdict}`}
+          </span>
+        )}
+        {prBadge && (
+          <span
+            className={`flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[10px] ${prBadge.cls}`}
+            title="PR status — per-step details shown inline in the flow"
+          >
+            <GitPullRequest className="h-3 w-3" />
+            {prBadge.label}
+            {changedStepCount > 0 && (
+              <span className="opacity-70">· {changedStepCount}</span>
+            )}
+          </span>
+        )}
+        <button
+          onClick={() => setIsFullscreen(true)}
+          title="Fullscreen the business flow (Esc to exit)"
+          aria-label="Fullscreen the business flow"
+          className="shrink-0 rounded-lg p-2 transition-colors"
+          style={{ color: "var(--bpmn-text-dim)" }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = "var(--bpmn-text)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = "var(--bpmn-text-dim)";
+          }}
+        >
+          <Maximize2 className="h-4 w-4" />
+        </button>
+        <button
+          onClick={onExportBpmn}
+          disabled={exporting}
+          title="Download as PNG (engineering-paper export)"
+          className="shrink-0 rounded-lg p-2 transition-colors disabled:cursor-wait disabled:opacity-50"
+          style={{ color: "var(--bpmn-text-dim)" }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = "var(--bpmn-text)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = "var(--bpmn-text-dim)";
+          }}
+        >
+          <Download className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+
   const makeCanvas = (compact: boolean) => (
     <div
       className="relative h-full overflow-hidden"
       style={{ background: "var(--bpmn-bg)" }}
     >
-      {/* OVERVIEW-FIRST — selecting a journey LANDS on the overview (PR
-          narrative + hub + neighbors), prominent at the top of the
-          viewport. The interactive business-flow diagram lives in a
-          bounded section BELOW it on one scrollable page; it keeps full
-          interaction (select a step → BpmnStepFunctions / code on demand,
-          and the "call graph" affordance opens the call/code graph via
-          flowPopup). No diagram → overview only. */}
+      {/* HERO-FIRST — the business-flow diagram IS the journey page. The
+          reading order is: a compact header band naming the journey, then
+          the diagram as a full-width, tall hero (the eye lands here — entry
+          point), then everything else (the overview: PR narrative, hub,
+          neighbors, steps) as a subordinate section below the fold. The
+          diagram keeps full interaction (select a step → BpmnStepFunctions /
+          code on demand; the "call graph" affordance opens flowPopup). No
+          diagram → overview only. */}
       <div className="h-full overflow-y-auto">
         {chapter.bpmn ? (
           <>
-            {/* 1 — the overview is the landing, at natural height */}
-            <JourneyOverview chapter={chapter} onOpenView={onOpenView} embedded />
+            {/* 1 — the compact hero band */}
+            {heroHeader()}
 
-            {/* 2 — the interactive business flow, a bounded section below */}
+            {/* 2 — the diagram hero: full-width, tall, the page's anchor */}
             <div
-              className="border-t"
-              style={{ borderColor: "var(--bpmn-border-soft)" }}
+              className="w-full min-h-0 border-y"
+              style={{
+                height: "68vh",
+                minHeight: 440,
+                borderColor: "var(--bpmn-border-soft)",
+              }}
             >
-              {/* The header (eyebrow + stats + verify badge + fullscreen +
-                  export) lives inside inlineBpmn() — a separate header here is
-                  what produced the duplicate "business flow" heading. */}
-              <div
-                className="mx-6 mb-4 h-[560px] min-h-0 overflow-hidden rounded-lg border"
-                style={{ borderColor: "var(--bpmn-border-soft)" }}
-              >
-                {inlineBpmn(compact)}
-              </div>
+              {inlineBpmn(compact)}
             </div>
+
+            {/* 3 — everything else, visually subordinate, below the fold */}
+            <JourneyOverview chapter={chapter} onOpenView={onOpenView} embedded />
           </>
         ) : (
           <>
@@ -988,22 +1019,10 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
           </div>
         )}
         {/* spacer — the "N phases · M methods" counter was noise
-            ("20 phases is not good; I don't need it") */}
+            ("20 phases is not good; I don't need it"). The PR status badge
+            now lives in the hero header band beside the journey title, so it
+            isn't duplicated up here. */}
         <span className="ml-auto" />
-        {prBadge && (
-          <span
-            className={`flex items-center gap-1.5 rounded border px-2 py-1 font-mono text-xs ${prBadge.cls}`}
-            title="PR status — per-step details shown inline in the flow"
-          >
-            <GitPullRequest className="h-3 w-3" />
-            {prBadge.label}
-            {changedStepCount > 0 && (
-              <span className="text-[10px] opacity-70">
-                · {changedStepCount}
-              </span>
-            )}
-          </span>
-        )}
         {chapter.reviewSummary && (
           <span
             className={`flex items-center gap-1.5 rounded border px-2 py-1 font-mono text-xs ${

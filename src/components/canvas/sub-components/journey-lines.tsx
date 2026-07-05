@@ -178,6 +178,11 @@ const JourneyLines = ({ servicePosRef, containerRef }: Props) => {
   const services = useAnalysis((s) => s.transformedData?.services);
   const sharedLibs = useAnalysis((s) => s.transformedData?.sharedLibs);
   const chapterById = useAnalysis((s) => s.transformedData?.chapterById);
+  // Component-granular stops: fileToComponent selects the finest mode in
+  // deriveJourneyRoute; packages holds the per-service package positions
+  // (built AFTER the pkg override, so a component name matches a PackageData).
+  const fileToComponent = useAnalysis((s) => s.transformedData?.fileToComponent);
+  const packages = useAnalysis((s) => s.transformedData?.packages);
   const zoom = useViewportStore((s) => s.zoom);
   const zoomTo = useViewportStore((s) => s.zoomTo);
   const navigate = useNavigate();
@@ -203,9 +208,9 @@ const JourneyLines = ({ servicePosRef, containerRef }: Props) => {
   const routes = useMemo<JourneyRoute[]>(
     () =>
       activeLines.map((j) =>
-        deriveJourneyRoute(j, serviceGroups, serviceNameById)
+        deriveJourneyRoute(j, serviceGroups, serviceNameById, fileToComponent)
       ),
-    [activeLines, serviceGroups, serviceNameById]
+    [activeLines, serviceGroups, serviceNameById, fileToComponent]
   );
 
   // Anchor resolution reads the LIVE service positions (a ref), so it can't be
@@ -214,6 +219,16 @@ const JourneyLines = ({ servicePosRef, containerRef }: Props) => {
     if (stop.kind === "group") {
       const g = groupById.get(stop.key);
       return g ? { x: g.cx, y: g.cy } : null;
+    }
+    if (stop.kind === "component") {
+      // A component renders as a pseudo-package inside its service: match its
+      // name against that service's PackageData ring positions (world coords,
+      // same as the canvas draws them). Fall back to the service centre.
+      const sid = stop.serviceIds[0];
+      const pkg = packages?.get(sid)?.find((p) => p.name === stop.name);
+      if (pkg) return { x: pkg.cx, y: pkg.cy };
+      const svc = sid ? servicePosRef.current.get(sid) : undefined;
+      return svc ? { x: svc.cx, y: svc.cy } : null;
     }
     const p = servicePosRef.current.get(stop.key);
     return p ? { x: p.cx, y: p.cy } : null;

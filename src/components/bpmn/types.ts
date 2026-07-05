@@ -1,6 +1,11 @@
 export type BpmnElementType =
   | "start-event"
   | "end-event"
+  // A terminal error boundary — the analyzer emits this for rejection /
+  // failure ends (rose ring with an ×). Distinct from a plain end-event so
+  // the layout sizes it as an event and the node renders the error styling
+  // without depending on the `outcome` field being present.
+  | "error-end-event"
   | "service-task"
   | "user-task"
   | "exclusive-gateway"

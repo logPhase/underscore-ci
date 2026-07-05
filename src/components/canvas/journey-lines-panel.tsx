@@ -64,6 +64,7 @@ export function JourneyLinesPanel() {
   const serviceGroups = useAnalysis((s) => s.transformedData?.serviceGroups);
   const services = useAnalysis((s) => s.transformedData?.services);
   const sharedLibs = useAnalysis((s) => s.transformedData?.sharedLibs);
+  const fileToComponent = useAnalysis((s) => s.transformedData?.fileToComponent);
   const prMode = useUIStore((s) => s.prMode);
   const activeLineIds = useJourneyStore((s) => s.activeLineIds);
   const toggleLine = useJourneyStore((s) => s.toggleLine);
@@ -82,11 +83,11 @@ export function JourneyLinesPanel() {
     for (const s of sharedLibs ?? []) nameById.set(s.id, s.name);
     const m = new Map<string, { components: number; steps: number }>();
     for (const j of journeys ?? []) {
-      const r = deriveJourneyRoute(j, serviceGroups, nameById);
+      const r = deriveJourneyRoute(j, serviceGroups, nameById, fileToComponent);
       m.set(j.id, { components: r.stops.length, steps: j.steps.length });
     }
     return m;
-  }, [journeys, serviceGroups, services, sharedLibs]);
+  }, [journeys, serviceGroups, services, sharedLibs, fileToComponent]);
 
   // Impacted journeys first (stable within a rank — keeps discovery order).
   const sorted = useMemo<JourneyData[]>(() => {

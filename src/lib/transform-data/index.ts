@@ -9,6 +9,10 @@ import {
   PrOverview,
 } from "@/types/intent";
 import { buildCallChainData, buildMethodIndex } from "./call-graph";
+import {
+  buildFileToComponent,
+  componentPackagesByService,
+} from "./file-groups";
 import { transformFiles, transformFunctions } from "./files";
 import { transformChapters, transformJourneys } from "./journeys";
 import { prOverlayToPRData, setPROverlay } from "./pr-overlay";
@@ -43,6 +47,26 @@ export function transformToFrontendFormat(
   const journeys = raw.journeys || [];
   const functions = transformFunctions(methods, calls, files);
 
+  // Functional components (sub-service file grouping). When the payload carries
+  // `fileGroups`, override each file's cluster key (pkg) with its component
+  // NAME and each service's package list with the component-name list — the
+  // existing package-ring layout then renders functional components, and
+  // journey transit lines can resolve component-granular stops. No-op when
+  // absent: the map is empty, transformFiles skips the override, packages
+  // stay namespace-derived.
+  const rawFileGroups = raw.fileGroups ?? null;
+  const fileToComponent = buildFileToComponent(rawFileGroups);
+  if (rawFileGroups && rawFileGroups.length > 0 && fileToComponent.size > 0) {
+    const pkgsByService = componentPackagesByService(
+      files,
+      rawFileGroups,
+      fileToComponent
+    );
+    services = services.map((s) =>
+      pkgsByService.has(s.id) ? { ...s, packages: pkgsByService.get(s.id)! } : s
+    );
+  }
+
   // Build FQN-keyed indexes and the canvas call-chain view from the new shape.
   const globalMethodIndex = buildMethodIndex(methods, files);
   let prOverlayData: PROverlayData = null;
@@ -54,7 +78,7 @@ export function transformToFrontendFormat(
     services,
     sharedLibs: transformSharedLibs(raw.sharedLibs || []),
     dependencies: transformDependencies(raw.dependencies || []),
-    files: transformFiles(files),
+    files: transformFiles(files, fileToComponent),
     functions,
     serviceColors: buildServiceColors(services),
     isRealData: raw.isRealData ?? true,
@@ -78,6 +102,8 @@ export function transformToFrontendFormat(
     prOverview: null,
     journeyKnowledge: null,
     serviceGroups,
+    fileGroups: rawFileGroups,
+    fileToComponent,
   };
 
   // ── AI-enrichment overlays (parity with the webapp dataLoader) ──────
