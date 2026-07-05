@@ -60,7 +60,11 @@ export function AskPanel({
   sessionId?: string;
   repoId?: string;
 }) {
-  const [open, setOpen] = useState(true);
+  // Collapsed by default — the diagram is the primary surface (spatial
+  // primacy) and an open 380px panel would cover the canvas toolbar,
+  // including the fullscreen exit button (the exact occlusion bug the
+  // toolbar integration just fixed). The edge tab invites; it never imposes.
+  const [open, setOpen] = useState(false);
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState<Msg[]>([]);
   const [busy, setBusy] = useState(false);
