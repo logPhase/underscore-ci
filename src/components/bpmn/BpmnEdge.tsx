@@ -154,12 +154,18 @@ function chipAnchor(pts: { x: number; y: number }[]): {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   const len = Math.hypot(dx, dy) || 1;
-  // Two unit normals; pick the one pointing up (negative y), breaking ties
-  // (vertical runs) toward the left. The caller offsets along this normal by
-  // the chip's own half-height, so the wire point + normal are returned raw.
+  // Pick which side of the wire the chip sits on. A branch heading DOWN sits
+  // its label BELOW the wire, an up/level branch ABOVE — so a gateway's two
+  // branches split apart instead of stacking on the same side (the standard
+  // BPMN label convention, and what keeps converging condition chips from
+  // colliding). Vertical runs break their tie toward the left. The caller
+  // offsets along this returned unit normal by the chip's own half-height.
+  const down = drift > 40;
   let nx = -dy / len;
   let ny = dx / len;
-  if (ny > 0 || (Math.abs(ny) < 1e-6 && nx > 0)) {
+  const vertical = Math.abs(ny) < 1e-6;
+  const wrongSide = vertical ? nx > 0 : down ? ny < 0 : ny > 0;
+  if (wrongSide) {
     nx = -nx;
     ny = -ny;
   }

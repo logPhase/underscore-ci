@@ -176,56 +176,50 @@ const isAutoPrTitle = (t?: string): boolean =>
   !t || /^[\w/-]+\s*[→→]\s*[a-f0-9]{6,}$/.test(t);
 
 /**
- * PR intro — the "what this PR does" block at the top of the journeys index.
- * PR title (real one only) + the connection-agent narrative, in reading type.
- * Long narratives collapse to a few lines with a show-more toggle. Only shown
- * in PR mode with a narrative present; full-repo reports render nothing.
+ * PR notice — the "what this PR does" block at the top of the departures
+ * board. Violet-anchored serif notice (matching the board's visual language);
+ * "What this PR does:" lead-in + the connection-agent narrative. Long
+ * narratives collapse with a show-more toggle. Only shown in PR mode with a
+ * narrative present; full-repo reports render nothing. The PR *title* lives in
+ * the header's PR line, so it isn't repeated here.
  */
 const PRIntro = () => {
   const prMode = useUIStore((s) => s.prMode);
   const prOverview = useAnalysis((s) => s.transformedData?.prOverview);
-  const prOverlay = useAnalysis((s) => s.transformedData?.prOverlay);
   const [expanded, setExpanded] = useState(false);
 
   const narrative = prOverview?.prNarrative?.trim();
   if (!prMode || !narrative) return null;
 
-  const rawTitle = prOverlay?.title;
-  const title = isAutoPrTitle(rawTitle) ? null : rawTitle;
-  const long = narrative.length > 320;
+  const long = narrative.length > 300;
 
   return (
     <motion.div
-      className="mt-5 rounded-lg border border-amber-500/25 bg-amber-500/[0.04] px-4 py-3.5"
+      className="mt-6 rounded-r-md border-l-[3px] py-3 pr-4 pl-4"
+      style={{
+        borderColor: "hsl(var(--primary))",
+        background:
+          "linear-gradient(90deg, color-mix(in srgb, hsl(var(--primary)) 10%, transparent), transparent 72%)",
+      }}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.1 }}
     >
-      <div className="mb-1.5 flex items-center gap-2 font-mono text-[10px] tracking-wider text-amber-400/90 uppercase">
-        <GitPullRequest className="h-3 w-3" />
-        What this PR does
-      </div>
-      {title && (
-        <h2
-          className="mb-1.5 text-[15px] font-semibold text-zinc-100"
-          style={{ fontFamily: "var(--reading-font)" }}
-        >
-          {title}
-        </h2>
-      )}
       <p
-        className={`text-[13.5px] leading-relaxed text-zinc-300 ${
+        className={`text-[14px] leading-relaxed text-zinc-300 ${
           long && !expanded ? "line-clamp-3" : ""
         }`}
         style={{ fontFamily: "var(--reading-font)" }}
       >
+        <span className="font-semibold text-zinc-100">What this PR does:</span>{" "}
         {narrative}
       </p>
       {long && (
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="mt-1.5 font-mono text-[11px] text-amber-400/80 transition-colors hover:text-amber-300"
+          className="mt-1.5 font-mono text-[11px] transition-opacity hover:opacity-80"
+          style={{ color: "hsl(var(--primary))" }}
         >
           {expanded ? "Show less" : "Show more"}
         </button>
@@ -271,6 +265,9 @@ const JourneyHeader = ({
 
   const clearPills = () => setActiveStatuses(new Set());
 
+  const prOverlay = useAnalysis((s) => s.transformedData?.prOverlay);
+  const prTitle = isAutoPrTitle(prOverlay?.title) ? null : prOverlay?.title;
+
   return (
     <div className="mx-auto max-w-3xl px-6 pt-6 pb-3">
       <motion.div
@@ -286,27 +283,50 @@ const JourneyHeader = ({
           <ArrowLeft className="h-3.5 w-3.5" />
           Canvas
         </Button>
-        <h1 className="mb-1.5 text-2xl font-light tracking-tight text-zinc-100">
-          Journey Index
+        {/* Departures identity: mono teal eyebrow + serif-italic headline. */}
+        <div
+          className="font-mono text-[10.5px] tracking-[0.3em] uppercase"
+          style={{ color: "hsl(var(--signal))" }}
+        >
+          {hasPR ? "Journeys · Departures" : "Journeys"}
+        </div>
+        <h1
+          className="mt-2 mb-1 text-[30px] leading-tight font-medium tracking-tight text-zinc-100"
+          style={{ fontFamily: "var(--reading-font)", fontStyle: "italic" }}
+        >
+          {hasPR
+            ? `${chapters.length} line${chapters.length === 1 ? "" : "s"} run through this change.`
+            : `${chapters.length} journey${chapters.length === 1 ? "" : "s"} through the codebase.`}
         </h1>
-        <p className="text-sm text-zinc-500">
-          {chapters.length} execution paths through the codebase.
-          {hasPR && impacted.length > 0 && (
-            <button
-              onClick={() => {
-                const allImpactedActive = ALL_IMPACTED_ACTIVE.every((s) =>
-                  activeStatuses.has(s as StatusKey)
-                );
-                setActiveStatuses(allImpactedActive ? new Set() : IMPACTED_SET);
-              }}
-              title="Filter to PR-impacted journeys only"
-              className="ml-2 cursor-pointer text-amber-500 underline-offset-2 transition-colors hover:text-amber-300 hover:underline"
-            >
-              · {impacted.length} journey{impacted.length !== 1 ? "s" : ""}{" "}
-              impacted by this PR
-            </button>
-          )}
-        </p>
+        {hasPR ? (
+          <div className="mt-2 flex flex-wrap items-center gap-2.5 font-mono text-[12px] text-zinc-400">
+            {impacted.length > 0 && (
+              <button
+                onClick={() => {
+                  const allImpactedActive = ALL_IMPACTED_ACTIVE.every((s) =>
+                    activeStatuses.has(s as StatusKey)
+                  );
+                  setActiveStatuses(
+                    allImpactedActive ? new Set() : IMPACTED_SET
+                  );
+                }}
+                title="Filter to PR-impacted journeys only"
+                className="rounded-full border border-amber-500/45 bg-amber-500/10 px-2.5 py-[2.5px] text-[10.5px] text-amber-300 transition-colors hover:bg-amber-500/20"
+              >
+                PR · {impacted.length} affected
+              </button>
+            )}
+            {prTitle && (
+              <span className="min-w-0 truncate text-zinc-400" title={prTitle}>
+                {prTitle}
+              </span>
+            )}
+          </div>
+        ) : (
+          <p className="mt-1.5 text-sm text-zinc-500">
+            {chapters.length} execution paths through the codebase.
+          </p>
+        )}
       </motion.div>
 
       {/* PR narrative — "what this PR does", at the top of the listing */}
