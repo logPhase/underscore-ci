@@ -1,3 +1,5 @@
+import CodeBlock from "@/components/journeys/CodeBlock";
+import { langFromFile } from "@/components/ui/CodeHighlight";
 import { cn } from "@/lib/misc-utils";
 import { useAnalysis } from "@/store/use-analysis-store";
 import { useSelectionStore } from "@/store/use-selection-store";
@@ -51,20 +53,9 @@ export function MethodDetailPanel() {
         </button>
       </div>
 
-      {/* Method body */}
+      {/* Method body — syntax-highlighted; language from the file extension */}
       <div className="flex-1 overflow-auto p-4">
-        {body ? (
-          <pre className="font-mono text-[11px] leading-[1.6] whitespace-pre-wrap tab-4 text-[hsl(210,20%,75%)]">
-            {body}
-          </pre>
-        ) : (
-          <div
-            className="mt-8 text-center font-mono text-xs"
-            style={{ color: "hsl(210, 15%, 40%)" }}
-          >
-            No source code available
-          </div>
-        )}
+        <CodeBlock code={body} lang={langFromFile(methodInfo?.filePath)} />
       </div>
     </div>
   );

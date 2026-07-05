@@ -1,5 +1,5 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import { ChevronRight, Eye, EyeOff, Maximize2, Minus, MousePointer2, Plus, RotateCcw } from "lucide-react";
+import { ChevronRight, Eye, EyeOff, Maximize2, Minimize2, Minus, MousePointer2, Plus, RotateCcw } from "lucide-react";
 import type { BpmnElement, BpmnJourney } from "./types";
 import type { Doc, Fact, KnowledgeSummary } from "@/types/intent";
 import type { StepKnowledge } from "@/lib/transform-data/journey-knowledge";
@@ -37,6 +37,12 @@ interface Props {
    *  passages + graph facts surfaced for each step. Drives the 📚 knowledge
    *  marker and the side panel. */
   elementKnowledge?: Map<string, StepKnowledge>;
+  /** When set, the floating toolbar grows an exit-fullscreen button at its
+   *  right end (after a divider). Passed only when the canvas is mounted
+   *  fullscreen, so the ONE control cluster in the top-right corner also
+   *  owns the exit affordance — no separate floating button stacking in the
+   *  same corner and occluding it. */
+  onExitFullscreen?: () => void;
 }
 
 type Selection =
@@ -283,7 +289,7 @@ function KnowledgePanel({
 }
 
 export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanvas(
-  { journey: initial, onChange, getSource: _getSource, onSelectionChange, elementPrStatus, elementKnowledge },
+  { journey: initial, onChange, getSource: _getSource, onSelectionChange, elementPrStatus, elementKnowledge, onExitFullscreen },
   ref,
 ) {
   const [journey, setJourney] = useState(initial);
@@ -636,12 +642,17 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
   // `fitToScreen` runs against the CURRENT layout (including manual drag
   // overrides). The toolbar Fit button uses this directly — re-fits to
   // wherever the user has dragged things.
-  const fitToScreen = useCallback(() => {
+  // Returns true when it actually fit (container measured + nodes present),
+  // false when it bailed on a 0×0 container. The initial-fit retry loop
+  // (mount effect below) keys off this — a 0×0 first paint must not count
+  // as "fitted", or the camera stays at identity and the diagram renders
+  // as a cramped top-left slice.
+  const fitToScreen = useCallback((): boolean => {
     const svg = svgRef.current;
-    if (!svg || layout.nodes.length === 0) return;
+    if (!svg || layout.nodes.length === 0) return false;
     const cw = svg.clientWidth;
     const ch = svg.clientHeight;
-    if (cw <= 0 || ch <= 0) return;
+    if (cw <= 0 || ch <= 0) return false;
     let minX = Infinity,
       minY = Infinity,
       maxX = -Infinity,
@@ -676,6 +687,7 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
     // Fitted = back in auto mode; subsequent container resizes may re-fit
     // until the user takes the camera again.
     userNavRef.current = false;
+    return true;
   }, [layout.nodes]);
 
   // Auto-fit only on (a) the FIRST mount and (b) journey id changes.
@@ -689,22 +701,46 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
     const svg = svgRef.current;
     if (!svg) return;
     userNavRef.current = false; // new journey → re-arm auto-fit
-    const r1 = requestAnimationFrame(() => {
-      fitRef.current();
-      const r2 = requestAnimationFrame(() => fitRef.current());
-      (svg as unknown as { __r2?: number }).__r2 = r2;
-    });
-    // Container resizes (code panel docking, rail drag, window resize):
-    // re-fit ONLY while the user hasn't touched the canvas. After any
-    // interaction the camera is theirs — a resize must not move it.
+
+    // Robust initial fit. The canvas frequently measures 0×0 on first
+    // paint (the flex / min-h-0 / resizable chain hasn't settled), and a
+    // fit against a 0×0 container bails — which used to leave the camera
+    // at identity (k=1): a cramped top-left slice with 260px labels
+    // overlapping neighbours ("everything looks collapsed"). Retry across
+    // animation frames until the FIRST successful fit, however many frames
+    // that takes, capped at ~5s so a permanently-hidden canvas can't spin.
+    let firstFitDone = false;
+    let rafId: number | null = null;
+    const startedAt = performance.now();
+    const tryInitialFit = () => {
+      if (firstFitDone) return;
+      if (fitRef.current()) {
+        firstFitDone = true;
+        return;
+      }
+      if (performance.now() - startedAt < 5000) {
+        rafId = requestAnimationFrame(tryInitialFit);
+      }
+    };
+    rafId = requestAnimationFrame(tryInitialFit);
+
+    // Container resizes serve two roles:
+    //   - before the first fit: a resize is often the moment the container
+    //     finally gains a real size — take the fit the instant it does.
+    //   - after the first fit (code panel docking, rail drag, window
+    //     resize): re-fit ONLY while the user hasn't touched the camera.
+    //     After any interaction the camera is theirs — a resize must not
+    //     move it.
     const ro = new ResizeObserver(() => {
-      if (!userNavRef.current) fitRef.current();
+      if (!firstFitDone) {
+        if (fitRef.current()) firstFitDone = true;
+      } else if (!userNavRef.current) {
+        fitRef.current();
+      }
     });
     ro.observe(svg);
     return () => {
-      cancelAnimationFrame(r1);
-      const r2 = (svg as unknown as { __r2?: number }).__r2;
-      if (r2) cancelAnimationFrame(r2);
+      if (rafId != null) cancelAnimationFrame(rafId);
       ro.disconnect();
     };
   }, [journey.journey_id]); // ← fit on journey change only, NOT on every drag
@@ -854,6 +890,14 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
     const onKey = (e: KeyboardEvent) => {
       if (editingId) return;
       if (e.key === "Escape") {
+        // Escape coordination with the page shell (ChapterView). The shell
+        // owns the OUTER stack — step-functions dialog, call-graph popup,
+        // fullscreen — via a capture-phase handler that runs before this
+        // bubble-phase one. When it peels one of those layers it calls
+        // preventDefault(); we then bail so a single Escape doesn't ALSO
+        // silently clear the node selection underneath. Selection-clear is
+        // ours to own; when nothing outer consumed the key, we do it here.
+        if (e.defaultPrevented) return;
         setSelection(null);
         setEditingId(null);
         setKnowledgeNodeId(null);
@@ -893,6 +937,7 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
               setLabelOffsets(new Map());
               setRevealIndex(1);
             }}
+            onExitFullscreen={onExitFullscreen}
           />
         </div>
 
@@ -1278,6 +1323,7 @@ function Toolbar({
   onZoomOut,
   onFit,
   onReset,
+  onExitFullscreen,
 }: {
   zoom: number;
   revealMode: boolean;
@@ -1286,6 +1332,10 @@ function Toolbar({
   onZoomOut: () => void;
   onFit: () => void;
   onReset: () => void;
+  /** In fullscreen only — appends an exit button at the toolbar's right
+   *  end so the exit affordance lives INSIDE this control cluster instead
+   *  of a separate button stacked in the same corner. */
+  onExitFullscreen?: () => void;
 }) {
   return (
     <div
@@ -1342,6 +1392,21 @@ function Toolbar({
       <ToolBtn onClick={onReset} title="Reset view">
         <RotateCcw size={12} />
       </ToolBtn>
+      {onExitFullscreen && (
+        <>
+          <div
+            style={{
+              width: 1,
+              height: 14,
+              background: "var(--bpmn-border-soft)",
+              margin: "0 3px",
+            }}
+          />
+          <ToolBtn onClick={onExitFullscreen} title="Exit fullscreen (Esc)">
+            <Minimize2 size={12} />
+          </ToolBtn>
+        </>
+      )}
     </div>
   );
 }

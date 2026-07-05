@@ -126,6 +126,7 @@ const ServiceItem = ({
   const focusedFileId = useFocusStore((state) => state.focusedFileId);
   const setFocusedPackageId = useFocusStore((s) => s.setFocusedPackageId);
   const setFocusedFileId = useFocusStore((s) => s.setFocusedFileId);
+  const setCodePanelFileId = useFocusStore((s) => s.setCodePanelFileId);
 
   const pushNavigation = useNavigationStore((state) => state.pushNavigation);
 
@@ -1016,8 +1017,10 @@ const ServiceItem = ({
                                       containerRef.current.getBoundingClientRect();
                                     // Zoom to L3 and immediately expand the file —
                                     // so methods are visible on the first click, not the second.
+                                    // Focusing the file also opens its code panel.
                                     setFocusedFileId(file.id);
                                     setSelectedFunctionCtx(null);
+                                    setCodePanelFileId(file.id);
                                     zoomTo(x, y, 8, rect.width, rect.height);
                                   }
                                 }}
@@ -1407,9 +1410,11 @@ const ServiceItem = ({
                                   if (isExpanded) {
                                     setFocusedFileId(null);
                                     setSelectedFunctionCtx(null);
+                                    setCodePanelFileId(null);
                                   } else {
                                     setFocusedFileId(file.id);
                                     setSelectedFunctionCtx(null);
+                                    setCodePanelFileId(file.id);
                                   }
                                 }}
                                 onMouseEnter={() =>

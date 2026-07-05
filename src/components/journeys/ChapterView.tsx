@@ -32,6 +32,7 @@ import CallFlowChart from "./CallFlowChart";
 import { JourneyOverview } from "./JourneyOverview";
 import { useUIStore } from "@/store/use-ui-store";
 import { useAnalysis } from "@/store/use-analysis-store";
+import { AskPanel } from "@/components/journeys/AskPanel";
 
 /** Maps the classifier's `intentReclass` enum to a short human label.
  *  Kept in sync with the journey index. `true-addition`/`true-removal`
@@ -164,18 +165,67 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
   const [bpmnElement, setBpmnElement] = useState<BpmnElement | null>(null);
   const [stepFnsOpen, setStepFnsOpen] = useState(false);
 
+  // Ask AI grounding — session/repo keys baked into the payload, plus the
+  // journey's steps with their source (same shape the desktop sends). The
+  // panel itself self-gates: it renders nothing when no /ask relay is
+  // derivable from the report URL (file:// artifacts).
+  const askSessionId =
+    useAnalysis((s) => s.transformedData?.sessionId) ?? undefined;
+  const askRepoId =
+    useAnalysis((s) => s.transformedData?.analyzerRepoId) ?? undefined;
+  const askJourney = useMemo(
+    () => ({
+      title: chapter.title,
+      steps: chapter.steps.map((s) => ({
+        fqn: s.fqn,
+        source: s.body || getMethodInfo(s.fqn)?.body,
+      })),
+    }),
+    [chapter]
+  );
+
+  // Esc escape-stack. Registered on the CAPTURE phase so it runs before
+  // BpmnCanvas's own bubble-phase Esc (which clears node selection) — that
+  // ordering is what lets the two coordinate instead of fighting:
+  //   - Peeling an OUTER layer (step-functions dialog, call-graph popup)
+  //     must not ALSO clear the selection underneath, so we preventDefault()
+  //     and BpmnCanvas bails on defaultPrevented (one Esc = one layer).
+  //   - Exiting fullscreen deliberately does NOT preventDefault, so
+  //     BpmnCanvas also clears the selection and the inline view returns
+  //     clean. `isFullscreen` is checked BEFORE `bpmnElement`: clicking a
+  //     step sets bpmnElement, and the old order meant Esc only ever
+  //     deselected instead of exiting fullscreen.
+  //   - Clearing a bare selection is BpmnCanvas's job (it owns the ring and
+  //     the pill's source of truth), so we leave the event alone for it.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        if (stepFnsOpen) setStepFnsOpen(false); // innermost first
-        else if (view === "flow") setView("detail"); // close call-graph popup
-        else if (bpmnElement) setBpmnElement(null); // clear selection
-        else if (isFullscreen) setIsFullscreen(false);
-        else onBack();
+      if (e.key !== "Escape") return;
+      // Don't hijack Esc from a focused text field (the inline label
+      // editor) — that must cancel the edit, not exit fullscreen.
+      const t = e.target as HTMLElement | null;
+      if (
+        t &&
+        (t.tagName === "INPUT" ||
+          t.tagName === "TEXTAREA" ||
+          t.isContentEditable)
+      )
+        return;
+      if (stepFnsOpen) {
+        setStepFnsOpen(false); // innermost dialog first — keep selection
+        e.preventDefault();
+      } else if (view === "flow") {
+        setView("detail"); // close call-graph popup — keep selection
+        e.preventDefault();
+      } else if (isFullscreen) {
+        setIsFullscreen(false); // fullscreen wins over a bare selection
+      } else if (bpmnElement) {
+        // BpmnCanvas clears its own selection → propagates to bpmnElement.
+      } else {
+        onBack();
       }
     };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    window.addEventListener("keydown", handler, true);
+    return () => window.removeEventListener("keydown", handler, true);
   }, [stepFnsOpen, bpmnElement, view, isFullscreen, onBack]);
 
   // Expanded nodes — lifted here so the set survives fullscreen transitions.
@@ -557,6 +607,23 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
           chapter={chapter}
           height="100%"
           onSelectedElementChange={setBpmnElement}
+          // Fullscreen (compact) → the exit control lives INSIDE the canvas
+          // toolbar (its right end). Nothing stacks over it in the top-right
+          // corner. Not fullscreen → no exit affordance needed here.
+          onExitFullscreen={compact ? () => setIsFullscreen(false) : undefined}
+        />
+        {/* Ask AI — docked to the diagram like the desktop; answers come
+            through the viewer's /ask relay (token stays server-side). */}
+        <AskPanel
+          stepFqn={bpmnElement?.code_fqns?.[0]}
+          stepSource={
+            bpmnElement?.code_fqns?.[0]
+              ? getMethodInfo(bpmnElement.code_fqns[0])?.body
+              : undefined
+          }
+          journey={askJourney}
+          sessionId={askSessionId}
+          repoId={askRepoId}
         />
         {bpmnElement && stepFnsOpen ? (
           <div
@@ -844,26 +911,35 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
   if (isFullscreen) {
     return (
       <div className="relative h-full" style={{ background: "var(--bpmn-bg)" }}>
-        {/* Floating exit control */}
-        <div className="absolute top-3 right-3 z-10">
-          <button
-            onClick={() => setIsFullscreen(false)}
-            title="Exit fullscreen (Esc)"
-            className="rounded-md border border-zinc-800/60 bg-zinc-900/80 p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
-          >
-            <Minimize2 className="h-3.5 w-3.5" />
-          </button>
-        </div>
-        {/* Fullscreen LEADS with the diagram (unchanged behaviour) — the
-            expand button + ?view=bpmn land here. No diagram → the summary
-            base. The call-graph popup layers over either. */}
+        {/* Exit fullscreen lives in the canvas toolbar (BpmnCanvas, via
+            onExitFullscreen) — one control cluster in the top-right corner,
+            nothing stacked over it. A separate floating button here used to
+            share `top-3 right-3 z-10` with the toolbar and got painted over,
+            so its clicks hit the toolbar's Reset button instead. Esc also
+            exits (see the keydown handler above). */}
         {chapter.bpmn ? (
           <div className="relative h-full">
             {inlineBpmn(true)}
             {flowPopup(true)}
           </div>
         ) : (
-          makeInnerLayout(true)
+          <>
+            {/* No-diagram fullscreen has no canvas toolbar to host the exit,
+                and nothing else paints in the top-right corner here — so a
+                floating button is safe (the occlusion bug only applied to
+                the diagram branch, where the toolbar shared this corner). */}
+            <div className="absolute top-3 right-3 z-10">
+              <button
+                onClick={() => setIsFullscreen(false)}
+                title="Exit fullscreen (Esc)"
+                aria-label="Exit fullscreen"
+                className="rounded-md border border-zinc-800/60 bg-zinc-900/80 p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+              >
+                <Minimize2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            {makeInnerLayout(true)}
+          </>
         )}
       </div>
     );

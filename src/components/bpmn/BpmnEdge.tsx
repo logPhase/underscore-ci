@@ -94,7 +94,16 @@ function ConditionLabel({
   // "stamped on the wire" feel rather than a generic chat-bubble.
   const padX = 8;
   const charW = 6.5;
-  const label = text.toUpperCase();
+  // Cap the pill width. Most conditions are short (yes / no / grant /
+  // deny), but synthetic flows occasionally carry a full clause
+  // ("PLATE KNOWN AND ENTITLEMENT MATCHED (ACTIVE STP OR SESSION)") whose
+  // pill grew to ~390px and welded itself across the neighbouring task
+  // node and sibling pills. Ellipsise past the cap; the full text stays in
+  // the hover <title> below.
+  const MAX_CHARS = 34;
+  const upper = text.toUpperCase();
+  const label =
+    upper.length > MAX_CHARS ? upper.slice(0, MAX_CHARS - 1).trimEnd() + "…" : upper;
   const w = Math.max(28, label.length * charW + padX * 2);
   const h = 18;
   return (
