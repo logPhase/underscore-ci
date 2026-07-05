@@ -15,6 +15,10 @@ interface Props {
   onPointerDown: (e: React.PointerEvent) => void;
   onPointerEnter: () => void;
   onPointerLeave: () => void;
+  /** Collision-resolved chip center from layout.resolveChipPlacements —
+   *  the canvas solves ALL chips together so none can stack. When absent
+   *  (defensive) the edge falls back to its own local anchor. */
+  chipPos?: { x: number; y: number } | null;
 }
 
 const VAR_BORDER     = "var(--bpmn-border)";
@@ -42,6 +46,7 @@ export function BpmnEdge({
   onPointerDown,
   onPointerEnter,
   onPointerLeave,
+  chipPos,
 }: Props) {
   const d = roundedPath(edge.points, 12);
 
@@ -107,10 +112,17 @@ export function BpmnEdge({
             // that clearance constant no matter how many lines the condition
             // wraps to — a tall chip never creeps back onto the wire.
             const geo = chipGeometry(edge.condition);
-            const anchor = chipAnchor(edge.points);
-            const GAP = 9;
-            const cx = anchor.x + anchor.nx * (GAP + geo.h / 2);
-            const cy = anchor.y + anchor.ny * (GAP + geo.h / 2);
+            let cx: number, cy: number;
+            if (chipPos) {
+              // Globally collision-resolved center (see layout.ts).
+              cx = chipPos.x;
+              cy = chipPos.y;
+            } else {
+              const anchor = chipAnchor(edge.points);
+              const GAP = 9;
+              cx = anchor.x + anchor.nx * (GAP + geo.h / 2);
+              cy = anchor.y + anchor.ny * (GAP + geo.h / 2);
+            }
             return (
               <g pointerEvents="none">
                 <ConditionChip
@@ -188,7 +200,7 @@ interface ChipGeo {
  *  truncates — the font eases down a touch for longer clauses so more fits
  *  per line, and anything left wraps onto further lines. The full text is
  *  always rendered (and also mirrored into the hover <title>). */
-function chipGeometry(raw: string): ChipGeo {
+export function chipGeometry(raw: string): ChipGeo {
   const text = raw.toUpperCase().trim();
   // Ease the font for longer clauses (never below 7.5u — still legible at
   // read zoom). Short "YES"/"NO" pills keep the original 8.5u.

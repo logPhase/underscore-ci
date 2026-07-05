@@ -351,3 +351,148 @@ export function midpointOnPath(pts: { x: number; y: number }[]): { x: number; y:
   }
   return pts[pts.length - 1];
 }
+
+// ---------------------------------------------------------------------------
+// Condition-chip placement — GLOBAL collision resolution.
+//
+// Each edge used to place its own chip in isolation; two branches whose
+// corridors run close (the classic: a gateway's level branch + its up-branch
+// whose horizontal segment sits one lane above) landed their chips on the
+// same spot and the texts stacked unreadably. This solver sees EVERY chip,
+// node, and caption zone at once and guarantees no chip-chip or chip-node
+// overlap: deterministic greedy placement — edges in index order, each chip
+// tries sliding along its own wire (then the far side of it) until it clears
+// everything already placed; if nothing clears fully it takes the
+// least-overlapping candidate. Same inputs ⇒ same placement, every render.
+// ---------------------------------------------------------------------------
+
+interface Rect {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
+const rectsOverlap = (a: Rect, b: Rect): number => {
+  const w = Math.min(a.x2, b.x2) - Math.max(a.x1, b.x1);
+  const h = Math.min(a.y2, b.y2) - Math.max(a.y1, b.y1);
+  return w > 0 && h > 0 ? w * h : 0;
+};
+
+/** Tangent-derived open-side normal at fraction `t` of a polyline. `flip`
+ *  takes the far side. Down-heading branches prefer BELOW the wire, up/level
+ *  ABOVE (standard BPMN label convention); vertical runs break left. */
+function anchorAt(
+  pts: { x: number; y: number }[],
+  t: number,
+  flip: boolean,
+): { x: number; y: number; nx: number; ny: number } {
+  const a = pointAlongPath(pts, Math.max(0, t - 0.04));
+  const b = pointAlongPath(pts, Math.min(1, t + 0.04));
+  const mid = pointAlongPath(pts, t);
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const drift = pts[pts.length - 1].y - pts[0].y;
+  const down = drift > 40;
+  let nx = -dy / len;
+  let ny = dx / len;
+  const vertical = Math.abs(ny) < 1e-6;
+  const wrongSide = vertical ? nx > 0 : down ? ny < 0 : ny > 0;
+  if (wrongSide) {
+    nx = -nx;
+    ny = -ny;
+  }
+  if (flip) {
+    nx = -nx;
+    ny = -ny;
+  }
+  return { x: mid.x, y: mid.y, nx, ny };
+}
+
+export interface ChipPlacement {
+  x: number;
+  y: number;
+}
+
+/**
+ * Resolve one non-overlapping center per conditioned edge. `measure` is the
+ * renderer's own chip sizing (BpmnEdge.chipGeometry) so the solver's rects
+ * are exactly what gets painted. Returns an array parallel to `edges`
+ * (null for edges without a condition).
+ */
+export function resolveChipPlacements(
+  edges: LaidOutEdge[],
+  nodes: LaidOutNode[],
+  measure: (text: string) => { w: number; h: number },
+): (ChipPlacement | null)[] {
+  const GAP = 9;
+  const CHIP_MARGIN = 3;
+  const occupied: Rect[] = [];
+
+  for (const n of nodes) {
+    // The shape itself…
+    occupied.push({
+      x1: n.x - n.w / 2 - 6,
+      y1: n.y - n.h / 2 - 6,
+      x2: n.x + n.w / 2 + 6,
+      y2: n.y + n.h / 2 + 6,
+    });
+    // …and its caption zone — gateways and events hang their labels BELOW
+    // the shape (tasks/call-activities carry their text inside the card).
+    if (
+      n.type === "start-event" ||
+      n.type === "end-event" ||
+      n.type === "error-end-event" ||
+      n.type === "exclusive-gateway" ||
+      n.type === "parallel-gateway"
+    ) {
+      occupied.push({
+        x1: n.x - 85,
+        y1: n.y + n.h / 2,
+        x2: n.x + 85,
+        y2: n.y + n.h / 2 + 36,
+      });
+    }
+  }
+
+  const placements: (ChipPlacement | null)[] = [];
+  for (const edge of edges) {
+    if (!edge.condition) {
+      placements.push(null);
+      continue;
+    }
+    const geo = measure(edge.condition);
+    const drift = edge.points[edge.points.length - 1].y - edge.points[0].y;
+    const baseT = drift < -40 ? 0.3 : 0.76;
+    const offsets = [0, 0.07, -0.07, 0.14, -0.14, 0.21, -0.21, 0.28, -0.28];
+
+    let best: { rect: Rect; x: number; y: number; badness: number } | null =
+      null;
+    outer: for (const flip of [false, true]) {
+      for (const off of offsets) {
+        const t = Math.min(0.92, Math.max(0.08, baseT + off));
+        const a = anchorAt(edge.points, t, flip);
+        const cx = a.x + a.nx * (GAP + geo.h / 2);
+        const cy = a.y + a.ny * (GAP + geo.h / 2);
+        const rect: Rect = {
+          x1: cx - geo.w / 2 - CHIP_MARGIN,
+          y1: cy - geo.h / 2 - CHIP_MARGIN,
+          x2: cx + geo.w / 2 + CHIP_MARGIN,
+          y2: cy + geo.h / 2 + CHIP_MARGIN,
+        };
+        let badness = 0;
+        for (const r of occupied) badness += rectsOverlap(rect, r);
+        // Prefer staying near the base spot on the natural side: tiny cost
+        // per step keeps placement stable when there's no conflict at all.
+        badness += Math.abs(off) * 0.5 + (flip ? 1 : 0);
+        if (!best || badness < best.badness)
+          best = { rect, x: cx, y: cy, badness };
+        if (badness < 1) break outer; // clear spot on the preferred ladder
+      }
+    }
+    occupied.push(best!.rect);
+    placements.push({ x: best!.x, y: best!.y });
+  }
+  return placements;
+}

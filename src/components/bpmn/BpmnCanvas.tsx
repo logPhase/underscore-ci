@@ -3,9 +3,9 @@ import { ChevronRight, Eye, EyeOff, Maximize2, Minimize2, Minus, MousePointer2, 
 import type { BpmnElement, BpmnJourney } from "./types";
 import type { Doc, Fact, KnowledgeSummary } from "@/types/intent";
 import type { StepKnowledge } from "@/lib/transform-data/journey-knowledge";
-import { layoutGraph } from "./layout";
+import { layoutGraph, resolveChipPlacements } from "./layout";
 import { BpmnNode } from "./BpmnNode";
-import { BpmnEdge } from "./BpmnEdge";
+import { BpmnEdge, chipGeometry } from "./BpmnEdge";
 import { exportBpmnSvgAsPng, type ExportOptions } from "@/lib/exportBpmnPng";
 
 export interface BpmnCanvasHandle {
@@ -539,6 +539,14 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
     });
     return { ...baseLayout, nodes, edges };
   }, [baseLayout, posOverrides]);
+
+  // One collision-solved center per conditioned edge — recomputed whenever
+  // the (possibly drag-re-routed) edges change, so chips never stack on each
+  // other, a node, or a caption zone (see layout.resolveChipPlacements).
+  const chipPlacements = useMemo(
+    () => resolveChipPlacements(layout.edges, layout.nodes, chipGeometry),
+    [layout],
+  );
 
   // "Track a line" — the through-path of the focused node. Focus is the
   // hovered node, else the selected node. An edge (u→v) is on the through-
@@ -1102,6 +1110,7 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
                 <g key={key} className={edgeClass}>
                   <BpmnEdge
                     edge={edge}
+                    chipPos={chipPlacements[edgeIndex]}
                     selected={isSel}
                     hovered={hoverEdge === key}
                     focusActive={!!throughPath}
