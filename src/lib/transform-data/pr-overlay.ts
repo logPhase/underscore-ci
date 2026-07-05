@@ -17,7 +17,13 @@ export function setPROverlay(raw: unknown) {
   return prOverlay;
 }
 
-export function prOverlayToPRData(prOverlay: PROverlayData): PRData | null {
+export function prOverlayToPRData(
+  prOverlay: PROverlayData,
+  /** FQN → file path, from the raw methods index — resolves ghost targets
+   *  to their actual file. Without it no ghosts are derived (better none
+   *  than service-wide false positives). */
+  methodFileByFqn?: Record<string, { file?: string }>
+): PRData | null {
   if (!prOverlay) return null;
   const snaps = prOverlay.snapshots || [];
 
@@ -42,19 +48,21 @@ export function prOverlayToPRData(prOverlay: PROverlayData): PRData | null {
     }
   }
 
-  // Ghost candidates: files that have callers from changed methods but aren't in the PR
-  // Derive from edge deltas — methods called by changed methods but in different files
+  // Ghost candidates: the SPECIFIC FILES that changed code calls across a
+  // service boundary but that aren't themselves in the PR — "the PR may
+  // reach here". FILE granularity is the contract: an earlier version
+  // pushed the target SERVICE id into this list and the canvas then marked
+  // every file of that service with a "?" — one cross-service call drowned
+  // whole services in question marks. A target FQN that can't be resolved
+  // to a file is skipped (no marker beats a false one).
   const changedFqns = new Set(snaps.map((s) => s.fqn));
+  const inPr = new Set(snaps.map((s) => s.fqn));
   const ghostFiles = new Set<string>();
   for (const ed of prOverlay.edgeDeltas || []) {
-    if (changedFqns.has(ed.fromFqn) && ed.crossService) {
-      // The target of a cross-service call from changed code — potential ghost
-      const targetSnap = snaps.find((s) => s.fqn === ed.toFqn);
-      if (!targetSnap) {
-        // Target isn't in the PR — it's a ghost
-        ghostFiles.add(ed.toService);
-      }
-    }
+    if (!changedFqns.has(ed.fromFqn) || !ed.crossService) continue;
+    if (inPr.has(ed.toFqn)) continue; // target is in the PR — not a ghost
+    const targetFile = methodFileByFqn?.[ed.toFqn]?.file;
+    if (targetFile) ghostFiles.add(targetFile);
   }
 
   return {

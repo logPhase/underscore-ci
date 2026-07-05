@@ -74,7 +74,7 @@ export function transformToFrontendFormat(
     chapterBySlug: new Map(),
     anomalies: [],
     PACKAGE_ROLES: {},
-    prData: prOverlayToPRData(prOverlayData),
+    prData: prOverlayToPRData(prOverlayData, methods),
     prOverview: null,
     journeyKnowledge: null,
     serviceGroups,

@@ -883,19 +883,26 @@ const ServiceItem = ({
                                 file.path.endsWith(f) ||
                                 f.endsWith(file.path)
                             );
+                          // Ghost matching is PATH-ONLY on purpose: ghost
+                          // candidates are specific files (see
+                          // prOverlayToPRData). A service-level clause here
+                          // once marked every file of a called service with
+                          // "?" — whole-canvas question marks on most PRs.
                           const isPrGhost =
                             prMode &&
                             prData.ghostCandidates.some(
                               (f) =>
                                 file.path === f ||
-                                resolveService(f) === file.service
+                                file.path.endsWith(f) ||
+                                f.endsWith(file.path)
                             );
                           const isPrSemanticGhost =
                             prMode &&
                             (prData.semanticGhosts || []).some(
                               (f) =>
                                 file.path === f ||
-                                resolveService(f) === file.service
+                                file.path.endsWith(f) ||
+                                f.endsWith(file.path)
                             );
                           const isPrUnaffected =
                             prMode &&
