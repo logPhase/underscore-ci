@@ -253,7 +253,9 @@ spec:
         # nginx — serves the synced link path.
         # ---------------------------------------------------------------
         - name: nginx
-          image: irisacrdev001.azurecr.io/underscore-viewer-iris:dev
+          # SAME image as the vas viewer — only the deployment identity and
+          # synced repo differ (the rename transform must never touch this).
+          image: irisacrdev001.azurecr.io/underscore-viewer:dev
           ports:
             - name: http
               containerPort: 80
