@@ -298,6 +298,23 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
   const [hoverEdge, setHoverEdge] = useState<string | null>(null);
   const [view, setView] = useState<ViewState>({ x: 0, y: 0, k: 1 });
   const [editingId, setEditingId] = useState<string | null>(null);
+  // Transient "⌘ + scroll to zoom" hint. Shown when a plain wheel happens
+  // over an INLINE diagram (which scrolls the page instead of zooming), so
+  // the zoom gesture stays discoverable. Auto-hides ~1.2s after the last
+  // wheel tick. Never shown fullscreen (there, plain wheel drives the canvas).
+  const [zoomHint, setZoomHint] = useState(false);
+  const zoomHintTimer = useRef<number | null>(null);
+  const showZoomHint = useCallback(() => {
+    setZoomHint(true);
+    if (zoomHintTimer.current != null) window.clearTimeout(zoomHintTimer.current);
+    zoomHintTimer.current = window.setTimeout(() => setZoomHint(false), 1200);
+  }, []);
+  useEffect(
+    () => () => {
+      if (zoomHintTimer.current != null) window.clearTimeout(zoomHintTimer.current);
+    },
+    [],
+  );
   // Node id whose journey-knowledge panel is open (click the 📚 marker).
   const [knowledgeNodeId, setKnowledgeNodeId] = useState<string | null>(null);
   // Per-node manual position overrides. Keyed by element id; absent means
@@ -883,11 +900,24 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
   const onWheel = useCallback(
     (e: WheelEvent) => {
       if (!svgRef.current) return;
+      // Pinch-zoom on Mac trackpads reports ctrlKey=true; holding Cmd/Ctrl
+      // while scrolling is the explicit zoom gesture. Everything else is a
+      // "plain wheel".
+      const isZoom = e.ctrlKey || e.metaKey;
+      // INLINE diagrams (the chapter hero) live inside a scrolling page: a
+      // plain wheel there must scroll the PAGE, not the diagram. So we let the
+      // event through (no preventDefault) and surface a transient hint that
+      // teaches the ⌘+scroll zoom gesture. FULLSCREEN has nothing behind it to
+      // scroll, so plain wheel keeps panning the canvas as before. The
+      // `onExitFullscreen` prop is passed ONLY when mounted fullscreen, so its
+      // presence is our fullscreen signal (see BpmnEditor/ChapterView).
+      const inline = !onExitFullscreen;
+      if (inline && !isZoom) {
+        showZoomHint();
+        return; // do NOT preventDefault → the page scrolls
+      }
       e.preventDefault();
       userNavRef.current = true; // wheel zoom/pan — camera is the user's now
-      // Pinch-zoom on Mac trackpads sets ctrlKey=true. Hold ctrl/cmd + wheel
-      // also zooms. Otherwise treat as a two-finger pan (deltaX/deltaY).
-      const isZoom = e.ctrlKey || e.metaKey;
       if (isZoom) {
         const rect = svgRef.current.getBoundingClientRect();
         const mx = e.clientX - rect.left;
@@ -910,7 +940,7 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
         }));
       }
     },
-    [],
+    [onExitFullscreen, showZoomHint],
   );
 
   useEffect(() => {
@@ -965,10 +995,13 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
       style={{ background: "var(--bpmn-bg)" }}
     >
       <div className="relative flex-1 overflow-hidden">
-        {/* Floating toolbar — top-right, no full-width title bar. The
-            journey title already lives in the ChapterView header; the
-            old in-canvas duplicate ate ~48px of diagram height. */}
-        <div className="absolute right-3 top-3 z-10">
+        {/* Floating toolbar — BOTTOM-right, quiet at rest (full on hover).
+            Moved out of the top-right corner (founder: "it's on the top
+            right in my face") to sit just above the footer status bar. It
+            clears the AskPanel edge tab (top-right) and the bottom-centre
+            reveal card. In fullscreen it also hosts the exit-fullscreen
+            control (its right end), so the ONE control cluster owns exit. */}
+        <div className="bpmn-quiet-chrome absolute right-3 z-10" style={{ bottom: 42 }}>
           <Toolbar
             zoom={view.k}
             revealMode={revealMode}
@@ -1316,6 +1349,14 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
           </div>
         )}
 
+        {/* Transient zoom hint — see zoomHint / showZoomHint. Centred,
+            quiet, mono; teaches ⌘+scroll on inline diagrams. */}
+        {zoomHint && (
+          <div className="bpmn-zoom-hint pointer-events-none absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2">
+            ⌘ + scroll to zoom
+          </div>
+        )}
+
         <div
           className="absolute bottom-0 left-0 right-0 z-10 flex items-center justify-between px-5 py-2"
           style={{
@@ -1329,7 +1370,10 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
         >
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1.5">
-              <MousePointer2 size={10} /> drag or two-finger swipe to pan · pinch / ⌘+scroll to zoom · F to fit
+              <MousePointer2 size={10} />{" "}
+              {onExitFullscreen
+                ? "drag or two-finger swipe to pan · pinch / ⌘+scroll to zoom · F to fit"
+                : "drag to pan · ⌘+scroll to zoom · F to fit"}
             </span>
           </div>
           <div className="flex items-center gap-3 tabular-nums">
@@ -1391,13 +1435,24 @@ function Toolbar({
    *  of a separate button stacked in the same corner. */
   onExitFullscreen?: () => void;
 }) {
+  const divider = (
+    <div
+      style={{
+        width: 1,
+        height: 12,
+        background: "var(--bpmn-border-soft)",
+        margin: "0 2px",
+      }}
+    />
+  );
   return (
     <div
-      className="flex items-center gap-0.5 rounded-md p-1"
+      className="flex items-center gap-0.5 rounded-lg p-0.5"
       style={{
         background: "var(--bpmn-surface)",
         border: "1px solid var(--bpmn-border-soft)",
         fontFamily: "var(--bpmn-font-mono)",
+        boxShadow: "0 4px 14px rgb(0 0 0 / 0.22)",
       }}
     >
       <ToolBtn
@@ -1405,59 +1460,38 @@ function Toolbar({
         title={revealMode ? "Show full diagram" : "Reveal mode — click to advance step by step"}
         active={revealMode}
       >
-        {revealMode ? <EyeOff size={13} /> : <Eye size={13} />}
+        {revealMode ? <EyeOff size={12} /> : <Eye size={12} />}
       </ToolBtn>
-      <div
-        style={{
-          width: 1,
-          height: 14,
-          background: "var(--bpmn-border-soft)",
-          margin: "0 3px",
-        }}
-      />
+      {divider}
       <ToolBtn onClick={onZoomOut} title="Zoom out">
-        <Minus size={13} />
+        <Minus size={12} />
       </ToolBtn>
       <div
-        className="px-2 text-[10.5px] tabular-nums"
+        className="px-1 text-[10px] tabular-nums"
         style={{
           color: "var(--bpmn-text-muted)",
-          minWidth: 48,
+          minWidth: 38,
           textAlign: "center",
-          letterSpacing: 0.4,
+          letterSpacing: 0.3,
         }}
       >
         {Math.round(zoom * 100)}%
       </div>
       <ToolBtn onClick={onZoomIn} title="Zoom in">
-        <Plus size={13} />
+        <Plus size={12} />
       </ToolBtn>
-      <div
-        style={{
-          width: 1,
-          height: 14,
-          background: "var(--bpmn-border-soft)",
-          margin: "0 3px",
-        }}
-      />
+      {divider}
       <ToolBtn onClick={onFit} title="Fit to screen (F)">
-        <Maximize2 size={12} />
+        <Maximize2 size={11} />
       </ToolBtn>
       <ToolBtn onClick={onReset} title="Reset view">
-        <RotateCcw size={12} />
+        <RotateCcw size={11} />
       </ToolBtn>
       {onExitFullscreen && (
         <>
-          <div
-            style={{
-              width: 1,
-              height: 14,
-              background: "var(--bpmn-border-soft)",
-              margin: "0 3px",
-            }}
-          />
+          {divider}
           <ToolBtn onClick={onExitFullscreen} title="Exit fullscreen (Esc)">
-            <Minimize2 size={12} />
+            <Minimize2 size={11} />
           </ToolBtn>
         </>
       )}
@@ -1480,7 +1514,7 @@ function ToolBtn({
     <button
       onClick={onClick}
       title={title}
-      className="flex h-7 w-7 items-center justify-center rounded transition-colors"
+      className="flex h-6 w-6 items-center justify-center rounded transition-colors"
       style={{
         color: active ? "var(--bpmn-cyan)" : "var(--bpmn-text-muted)",
         background: active ? "color-mix(in srgb, var(--bpmn-cyan) 14%, transparent)" : "transparent",

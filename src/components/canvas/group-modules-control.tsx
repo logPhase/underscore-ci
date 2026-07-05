@@ -27,6 +27,7 @@ export function GroupModulesControl() {
   return (
     <Button
       onClick={() => setGroupingVisible(!groupingVisible)}
+      onWheel={(e) => e.stopPropagation()}
       variant="ghost"
       title={
         groupingVisible
@@ -34,7 +35,10 @@ export function GroupModulesControl() {
           : "Show the agent's logical grouping"
       }
       className={cn(
-        "absolute right-4 z-40 flex h-fit cursor-pointer items-center gap-2 rounded-lg px-3 py-2 font-mono text-xs",
+        // bpmn-quiet-chrome: recede to ~55% at rest, full on hover — the
+        // same quiet treatment as the BpmnCanvas toolbar, so the canvas
+        // top-right chips (this + Search) read as one restrained cluster.
+        "bpmn-quiet-chrome absolute right-4 z-40 flex h-fit cursor-pointer items-center gap-2 rounded-lg px-3 py-2 font-mono text-xs",
         // Clear the PR banner the same way the stats pill does (top-4 + mt-15).
         hasPrOverlay ? "top-4 mt-15" : "top-4"
       )}

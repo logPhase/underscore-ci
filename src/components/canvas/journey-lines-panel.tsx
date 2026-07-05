@@ -71,9 +71,11 @@ export function JourneyLinesPanel() {
   const clearLines = useJourneyStore((s) => s.clearLines);
   const navigate = useNavigate();
 
-  const [open, setOpen] = useState(
-    () => prMode || readLinesParam().length > 0
-  );
+  // Default COLLAPSED, always. PR mode (and a `?lines=` deep link) still
+  // PRE-LIGHTS the transit lines via the init effect below — the collapsed
+  // pill shows "N lit" so the state stays visible without the 300px panel
+  // covering the map on load.
+  const [open, setOpen] = useState(false);
 
   // Per-journey route length (components) + step count — cheap to precompute
   // once for the whole list; drives the "N cmp · M steps" tag.
@@ -136,7 +138,11 @@ export function JourneyLinesPanel() {
 
   if (!open) {
     return (
-      <div className="absolute z-42" style={{ bottom: 24, left: 70 }}>
+      <div
+        className="absolute z-42"
+        style={{ bottom: 24, left: 70 }}
+        onWheel={(e) => e.stopPropagation()}
+      >
         <button
           onClick={() => setOpen(true)}
           title="Light journeys as transit lines on the map"
@@ -147,13 +153,13 @@ export function JourneyLinesPanel() {
           <span>Journey lines</span>
           {count > 0 && (
             <span
-              className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold"
+              className="ml-0.5 inline-flex h-4 items-center justify-center rounded-full px-1.5 text-[10px] font-semibold"
               style={{
                 background: "hsl(var(--primary))",
                 color: "hsl(var(--primary-foreground))",
               }}
             >
-              {count}
+              {count} lit
             </span>
           )}
         </button>
@@ -171,6 +177,9 @@ export function JourneyLinesPanel() {
         maxHeight: "46vh",
         ...pillStyle,
       }}
+      // Contain the wheel: scrolling inside the panel must never reach the
+      // canvas zoom underneath, and must not chain to the page.
+      onWheel={(e) => e.stopPropagation()}
     >
       {/* Header */}
       <div
@@ -210,7 +219,10 @@ export function JourneyLinesPanel() {
       </div>
 
       {/* Journey list */}
-      <div className="min-h-0 flex-1 overflow-y-auto py-1">
+      <div
+        className="min-h-0 flex-1 overflow-y-auto py-1"
+        style={{ overscrollBehavior: "contain" }}
+      >
         {sorted.map((j) => {
           const active = activeLineIds.includes(j.id);
           const colorIdx = activeLineIds.indexOf(j.id);

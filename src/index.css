@@ -672,6 +672,53 @@ input[type="range"]::-webkit-slider-thumb {
   .bpmn-hint-dot { animation: none; }
 }
 
+/* ── Quiet-at-rest floating chrome ───────────────────────────────────
+   The BpmnCanvas toolbar and the canvas top-right chips recede to ~55%
+   until hovered/focused — present, but out of the way (founder: the
+   controls were "in my face"). Full opacity on hover / keyboard focus. */
+.bpmn-quiet-chrome {
+  opacity: 0.55;
+  transition: opacity 160ms ease;
+}
+.bpmn-quiet-chrome:hover,
+.bpmn-quiet-chrome:focus-within {
+  opacity: 1;
+}
+
+/* Transient "⌘ + scroll to zoom" hint, centred over an INLINE diagram.
+   Shown when a plain wheel scrolls the page instead of zooming, so the
+   zoom gesture stays discoverable. Fade-in only (centring is a Tailwind
+   transform on the element, so reduced-motion still lands it centred). */
+.bpmn-zoom-hint {
+  padding: 6px 12px;
+  border-radius: 9999px;
+  font-family: var(--bpmn-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.3px;
+  color: var(--bpmn-text-muted);
+  background: color-mix(in srgb, var(--bpmn-bg-deep) 82%, transparent);
+  border: 1px solid var(--bpmn-border-soft);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.28);
+  animation: bpmn-zoom-hint-in 140ms ease-out both;
+}
+@keyframes bpmn-zoom-hint-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Session-rail collapse — smooth 232px⇄56px width change. */
+.rail-collapse-anim {
+  transition: width 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bpmn-quiet-chrome { transition: none; }
+  .bpmn-zoom-hint { animation: none; }
+  .rail-collapse-anim { transition: none; }
+}
+
 /* let the popup's blueprint grid show through the canvas component */
 .bpmn-popup-canvas .bpmn-canvas-root { background: transparent !important; } /* beats the inline var(--bpmn-bg) so the blueprint grid shows */
 

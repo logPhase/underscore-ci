@@ -23,7 +23,8 @@ import {
   transformSharedLibs,
 } from "./services";
 import { deriveAnomalies, derivePackageRoles } from "./derive-data";
-import { applyGroupLayout } from "../canvas/group-layout";
+import { applyOrderedLayout } from "../canvas/ordered-layout";
+import type { PackageSize } from "../canvas/ordered-layout";
 import { getPackagePositions } from "../canvas/get-positions";
 
 // ── Main loader ────────────────────────────────────────────────────
@@ -32,15 +33,6 @@ export function transformToFrontendFormat(
   raw: RawAnalysisJSON
 ): TransformedData {
   let services = transformServices(raw.services || []);
-  // Module groups (grouping agent, baked into the payload by the CLI):
-  // position hulls + reposition member services BEFORE anything downstream
-  // derives from service positions (packages, canvas layout).
-  let serviceGroups: TransformedData["serviceGroups"] = null;
-  if (raw.groups?.length) {
-    const laid = applyGroupLayout(services, raw.groups);
-    services = laid.services;
-    serviceGroups = laid.groupRegions;
-  }
   const methods = raw.methods || {};
   const calls = raw.calls || {};
   const files = raw.files || {};
@@ -50,10 +42,14 @@ export function transformToFrontendFormat(
   // Functional components (sub-service file grouping). When the payload carries
   // `fileGroups`, override each file's cluster key (pkg) with its component
   // NAME and each service's package list with the component-name list — the
-  // existing package-ring layout then renders functional components, and
-  // journey transit lines can resolve component-granular stops. No-op when
-  // absent: the map is empty, transformFiles skips the override, packages
-  // stay namespace-derived.
+  // package grid then renders functional components, and journey transit lines
+  // can resolve component-granular stops. No-op when absent: the map is empty,
+  // transformFiles skips the override, packages stay namespace-derived.
+  //
+  // This runs BEFORE the ordered layout: the layout sizes each service radius
+  // from its package grid, so the (possibly component-overridden) package list
+  // and per-package file counts must be final first (sizes cascade bottom-up:
+  // packages → service radius → group hull → column layout).
   const rawFileGroups = raw.fileGroups ?? null;
   const fileToComponent = buildFileToComponent(rawFileGroups);
   if (rawFileGroups && rawFileGroups.length > 0 && fileToComponent.size > 0) {
@@ -67,6 +63,51 @@ export function transformToFrontendFormat(
     );
   }
 
+  // Final per-file cluster keys (namespace pkg, or component name in fileGroups
+  // mode). Built once here and reused as transformedData.files — it's both the
+  // canvas file source AND the source of truth for package file counts.
+  const transformedFiles = transformFiles(files, fileToComponent);
+
+  // Package file counts, keyed service → package → count. Feeds two consumers
+  // that MUST agree: the ordered layout (to grow service radii) and
+  // getPackagePositions (to place the blobs). The live store isn't populated
+  // yet during this transform, so counts come from transformedFiles, not the
+  // store-backed getPackageFiles.
+  const fileCounts = new Map<string, Map<string, number>>();
+  for (const file of Object.values(transformedFiles)) {
+    let perPkg = fileCounts.get(file.service);
+    if (!perPkg) fileCounts.set(file.service, (perPkg = new Map()));
+    perPkg.set(file.pkg, (perPkg.get(file.pkg) ?? 0) + 1);
+  }
+  const fileCountOf = (serviceId: string, pkg: string): number =>
+    fileCounts.get(serviceId)?.get(pkg) ?? 0;
+
+  const dependencies = transformDependencies(raw.dependencies || []);
+
+  // Module groups (grouping agent, baked into the payload by the CLI): draw the
+  // canvas as an ordered, grid-aligned architectural diagram — dependency
+  // direction picks columns (importers left of what they import), groups stack
+  // in columns, services grid inside hulls, packages grid inside services. The
+  // engine grows service radii to contain their grids and returns positioned
+  // hulls. No groups → old behaviour untouched (services keep backend cx/cy).
+  let serviceGroups: TransformedData["serviceGroups"] = null;
+  if (raw.groups?.length) {
+    const packagesByService = new Map<string, PackageSize[]>(
+      services.map((s) => [
+        s.id,
+        s.packages.map((name) => ({ name, fileCount: fileCountOf(s.id, name) })),
+      ])
+    );
+    const laid = applyOrderedLayout(
+      services,
+      raw.groups,
+      dependencies,
+      packagesByService
+    );
+    services = laid.services;
+    serviceGroups = laid.groupRegions;
+  }
+
   // Build FQN-keyed indexes and the canvas call-chain view from the new shape.
   const globalMethodIndex = buildMethodIndex(methods, files);
   let prOverlayData: PROverlayData = null;
@@ -77,8 +118,8 @@ export function transformToFrontendFormat(
   const transformedData: TransformedData = {
     services,
     sharedLibs: transformSharedLibs(raw.sharedLibs || []),
-    dependencies: transformDependencies(raw.dependencies || []),
-    files: transformFiles(files, fileToComponent),
+    dependencies,
+    files: transformedFiles,
     functions,
     serviceColors: buildServiceColors(services),
     isRealData: raw.isRealData ?? true,
@@ -159,11 +200,13 @@ export function transformToFrontendFormat(
     files: filesList,
   });
 
+  // Package blob positions. Uses the SAME file counts the ordered layout used
+  // to grow service radii (not the yet-unpopulated store), so the stored
+  // positions match what the canvas renders and journey transit-line anchors
+  // land on the right component blobs.
   const packages = new Map<string, PackageData[]>();
-
-  services.map((service) => {
-    const pkg = getPackagePositions(service);
-    packages.set(service.id, pkg);
+  services.forEach((service) => {
+    packages.set(service.id, getPackagePositions(service, fileCountOf));
   });
   transformedData["packages"] = packages;
 

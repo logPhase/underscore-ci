@@ -17,6 +17,9 @@ interface UISlice {
   // overview-first reading (#23). Pure render toggle in the static report:
   // the layout is always applied, this only controls whether the hulls draw.
   groupingVisible: boolean;
+  // Session-shell left rail collapsed to a 56px icon rail. Default expanded.
+  // Not persisted — a per-session view preference.
+  railCollapsed: boolean;
 
   setActiveView: (v: ViewType) => void;
   setHealthSubStain: (s: HealthSubStain) => void;
@@ -26,6 +29,8 @@ interface UISlice {
   setLoadPhase: (p: number) => void;
   setHelpOpen: (helpOpen: boolean) => void;
   setGroupingVisible: (groupingVisible: boolean) => void;
+  setRailCollapsed: (railCollapsed: boolean) => void;
+  toggleRail: () => void;
 }
 
 export const useUIStore = create<UISlice>()((set) => ({
@@ -37,6 +42,7 @@ export const useUIStore = create<UISlice>()((set) => ({
   loadPhase: 0,
   helpOpen: false,
   groupingVisible: true,
+  railCollapsed: false,
 
   setActiveView: (activeView) => set({ activeView }),
   setHealthSubStain: (healthSubStain) => set({ healthSubStain }),
@@ -46,4 +52,6 @@ export const useUIStore = create<UISlice>()((set) => ({
   setLoadPhase: (loadPhase) => set({ loadPhase }),
   setHelpOpen: (helpOpen) => set({ helpOpen }),
   setGroupingVisible: (groupingVisible) => set({ groupingVisible }),
+  setRailCollapsed: (railCollapsed) => set({ railCollapsed }),
+  toggleRail: () => set((s) => ({ railCollapsed: !s.railCollapsed })),
 }));

@@ -155,16 +155,21 @@ export function SearchOverlay({ containerRef }: Props) {
     return (
       <Button
         onClick={() => setSearchOpen(true)}
+        onWheel={(e) => e.stopPropagation()}
         variant="ghost"
         className={cn(
-          "absolute right-50 z-10 flex h-fit cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-xs",
-          hasPrOverlay ? "top-6" : "top-4"
+          // One top-right cluster with the Groups chip: shared --cw-stats
+          // tokens, the same quiet-at-rest treatment (bpmn-quiet-chrome),
+          // matching z-index, and the SAME PR-banner offset so the two
+          // never sit at mismatched heights under the banner.
+          "bpmn-quiet-chrome absolute right-50 z-40 flex h-fit cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-xs",
+          hasPrOverlay ? "top-4 mt-15" : "top-4"
         )}
         style={{
-          background: "hsl(220, 20%, 8%, 0.8)",
+          background: "var(--cw-stats-bg)",
           backdropFilter: "blur(8px)",
-          border: "1px solid hsl(220, 15%, 20%)",
-          color: "hsl(210, 15%, 50%)",
+          border: "1px solid var(--cw-stats-border)",
+          color: "var(--cw-stats-text)",
         }}
       >
         {/* Cmd+K belongs to the command palette now — no shortcut hint */}

@@ -1,5 +1,13 @@
 import { useAnalysis } from "@/store/use-analysis-store";
-import { ArrowLeft, Map as MapIcon, Route, ScrollText } from "lucide-react";
+import { useUIStore } from "@/store/use-ui-store";
+import {
+  ArrowLeft,
+  Map as MapIcon,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Route,
+  ScrollText,
+} from "lucide-react";
 import { useEffect } from "react";
 import { Navigate, NavLink, Outlet } from "react-router-dom";
 
@@ -66,6 +74,8 @@ export const SessionShell = () => {
 
 const SessionRail = () => {
   const transformedData = useAnalysis((s) => s.transformedData);
+  const collapsed = useUIStore((s) => s.railCollapsed);
+  const toggleRail = useUIStore((s) => s.toggleRail);
 
   const title = transformedData?.prOverlay?.title ?? "Underscore report";
   const journeyCount = transformedData?.chapters.length ?? 0;
@@ -75,59 +85,71 @@ const SessionRail = () => {
 
   return (
     <aside
-      className="win-drag flex h-full w-[232px] shrink-0 flex-col border-r"
+      className="rail-collapse-anim win-drag flex h-full shrink-0 flex-col border-r"
       style={{
+        width: collapsed ? 56 : 232,
         background: "var(--bpmn-surface-soft)",
         borderColor: "var(--bpmn-border-soft)",
       }}
     >
       {/* Back to the hosted sessions index — a plain <a> because the index
           is a different document, not a route of this report. Hidden for
-          file:// artifacts, which have nothing above them. */}
+          file:// artifacts, which have nothing above them. Collapsed → the
+          arrow alone, tooltip carries the label. */}
       {indexHref && (
         <a
           href={indexHref}
-          className="rail-nav-item mx-2 mt-2.5 flex min-h-9 items-center gap-2 rounded-md px-3 text-[12px]"
+          title="All sessions"
+          className={`rail-nav-item mx-2 mt-2.5 flex min-h-9 items-center gap-2 rounded-md text-[12px] ${
+            collapsed ? "justify-center px-0" : "px-3"
+          }`}
           style={{
             fontFamily: "var(--bpmn-font-mono)",
             color: "var(--bpmn-text-muted)",
           }}
         >
           <ArrowLeft className="h-3.5 w-3.5 shrink-0" />
-          <span>All sessions</span>
+          {!collapsed && <span>All sessions</span>}
         </a>
       )}
 
-      {/* Session identity — static in report mode (one report per build) */}
-      <div className="mx-2 mt-1 flex items-start gap-2 rounded-md px-2 py-2.5">
-        <span className="min-w-0 flex-1">
-          <span
-            className="line-clamp-2 text-[13px]"
-            style={{
-              fontFamily: "var(--reading-font)",
-              color: "var(--bpmn-text)",
-              fontWeight: 600,
-              lineHeight: 1.35,
-            }}
-          >
-            {title}
+      {/* Session identity — static in report mode (one report per build).
+          Hidden when collapsed: the 56px icon rail has no room for a
+          two-line title. */}
+      {!collapsed && (
+        <div className="mx-2 mt-1 flex items-start gap-2 rounded-md px-2 py-2.5">
+          <span className="min-w-0 flex-1">
+            <span
+              className="line-clamp-2 text-[13px]"
+              style={{
+                fontFamily: "var(--reading-font)",
+                color: "var(--bpmn-text)",
+                fontWeight: 600,
+                lineHeight: 1.35,
+              }}
+            >
+              {title}
+            </span>
           </span>
-        </span>
-      </div>
+        </div>
+      )}
 
       {/* Nav — the session's views */}
       <nav
-        className="mt-3 flex flex-col gap-0.5 border-t px-2 pt-3"
+        className={`mt-3 flex flex-col gap-0.5 border-t pt-3 ${
+          collapsed ? "px-1.5" : "px-2"
+        }`}
         style={{ borderColor: "var(--bpmn-border-soft)" }}
         aria-label="Session views"
       >
-        <RailNavItem to="/canvas" icon={MapIcon} label="Canvas" />
+        <RailNavItem to="/canvas" icon={MapIcon} label="Canvas" collapsed={collapsed} />
         <RailNavItem
           to="/journeys"
           icon={Route}
           label="Journeys"
           badge={journeyCount > 0 ? String(journeyCount) : null}
           badgeColor="var(--bpmn-text-dim)"
+          collapsed={collapsed}
         />
         {hasSpecs && (
           <RailNavItem
@@ -136,9 +158,29 @@ const SessionRail = () => {
             label="Specs"
             badge={specCount > 0 ? String(specCount) : null}
             badgeColor="var(--bpmn-text-dim)"
+            collapsed={collapsed}
           />
         )}
       </nav>
+
+      {/* Collapse / expand toggle — pinned to the rail's bottom (mt-auto). */}
+      <button
+        onClick={toggleRail}
+        title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        aria-expanded={!collapsed}
+        className={`rail-nav-item mx-2 mb-2.5 mt-auto flex min-h-9 cursor-pointer items-center gap-2 rounded-md text-[12px] ${
+          collapsed ? "justify-center px-0" : "px-3"
+        }`}
+        style={{ fontFamily: "var(--bpmn-font-mono)" }}
+      >
+        {collapsed ? (
+          <PanelLeftOpen className="h-4 w-4 shrink-0" />
+        ) : (
+          <PanelLeftClose className="h-4 w-4 shrink-0" />
+        )}
+        {!collapsed && <span>Collapse</span>}
+      </button>
     </aside>
   );
 };
@@ -149,35 +191,52 @@ interface RailNavItemProps {
   label: string;
   badge?: string | null;
   badgeColor?: string;
+  collapsed?: boolean;
 }
 
 /** One rail entry. NavLink handles active matching (prefix match means
- *  /journeys stays lit on /journeys/:slug) and aria-current="page". */
+ *  /journeys stays lit on /journeys/:slug) and aria-current="page".
+ *  Collapsed → a centred icon with the count stacked beneath it (icons +
+ *  counts only); the tooltip carries the label. */
 const RailNavItem = ({
   to,
   icon: Icon,
   label,
   badge,
   badgeColor,
+  collapsed,
 }: RailNavItemProps) => (
   <NavLink
     to={to}
+    title={collapsed ? (badge ? `${label} (${badge})` : label) : undefined}
     className={({ isActive }) =>
-      `rail-nav-item flex min-h-11 cursor-pointer items-center gap-2.5 rounded-md px-3 text-[12.5px] focus-visible:ring-2 focus-visible:ring-[var(--bpmn-cyan)] focus-visible:outline-none ${
-        isActive ? "rail-nav-active" : ""
-      }`
+      `rail-nav-item flex min-h-11 cursor-pointer items-center rounded-md focus-visible:ring-2 focus-visible:ring-[var(--bpmn-cyan)] focus-visible:outline-none ${
+        collapsed
+          ? "flex-col justify-center gap-0.5 px-0"
+          : "gap-2.5 px-3 text-[12.5px]"
+      } ${isActive ? "rail-nav-active" : ""}`
     }
     style={{ fontFamily: "var(--bpmn-font-mono)" }}
   >
     <Icon className="h-4 w-4 shrink-0" />
-    <span>{label}</span>
-    {badge && (
-      <span
-        className="ml-auto text-[10.5px] tabular-nums"
-        style={{ color: badgeColor }}
-      >
-        {badge}
-      </span>
+    {collapsed ? (
+      badge && (
+        <span className="text-[9px] tabular-nums" style={{ color: badgeColor }}>
+          {badge}
+        </span>
+      )
+    ) : (
+      <>
+        <span>{label}</span>
+        {badge && (
+          <span
+            className="ml-auto text-[10.5px] tabular-nums"
+            style={{ color: badgeColor }}
+          >
+            {badge}
+          </span>
+        )}
+      </>
     )}
   </NavLink>
 );

@@ -57,6 +57,7 @@ const CodebaseStats = () => {
     >
       <div
         className="pointer-events-auto flex animate-fade-in items-center gap-3 rounded-lg px-3 py-1.5 font-mono text-[11px]"
+        onWheel={(e) => e.stopPropagation()}
         style={{
           // --cw-* tokens (index.css, .canvas-stage scope) — dark values are
           // the previous literals; the pill follows paper mode like the map.
