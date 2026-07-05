@@ -1024,6 +1024,25 @@ html.reading-paper, html.reading-paper body { background: #faf7f0; }
   filter: blur(0);
 }
 
+/* ── Flowing edges ────────────────────────────────────────────────────
+   The wires are dashed and MARCH toward their target (stroke-dashoffset
+   drifts negative one dash-period per cycle → an infographic data-flow
+   line the eye can follow start → end). The dash geometry lives on the
+   element (BpmnEdge sets stroke-dasharray); this only supplies the
+   motion. One period = 16 user units, so the offset step matches for a
+   seamless loop. Off-path edges (during a focus) drop the class and sit
+   still + dim, so the tracked path is the only thing moving. */
+.bpmn-edge-flow {
+  animation: bpmn-edge-flow 900ms linear infinite;
+}
+@keyframes bpmn-edge-flow {
+  to { stroke-dashoffset: -16; }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Honest static dashes — no marching — for reduced-motion users. */
+  .bpmn-edge-flow { animation: none; }
+}
+
 /* Spotlight underlay — a cyan-tinted shape rendered BEHIND the
    just-revealed node that pulses in opacity. Used instead of
    `filter: drop-shadow` on the wrapping <g> because SVG g filters

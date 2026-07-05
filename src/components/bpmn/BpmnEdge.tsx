@@ -5,13 +5,21 @@ interface Props {
   edge: LaidOutEdge;
   selected: boolean;
   hovered: boolean;
+  /** True when SOME node is focused (hovered/selected) — the diagram is in
+   *  "track a line" mode, so edges split into on-path (bright, flowing) and
+   *  off-path (dim, still). */
+  focusActive: boolean;
+  /** True when this edge lies on the focused node's through-path (its
+   *  transitive incoming + outgoing flow). */
+  onPath: boolean;
   onPointerDown: (e: React.PointerEvent) => void;
   onPointerEnter: () => void;
   onPointerLeave: () => void;
 }
 
+const VAR_BORDER     = "var(--bpmn-border)";
 const VAR_BORDER_EM  = "var(--bpmn-border-em)";
-const VAR_TEXT_DIM   = "var(--bpmn-text-dim)";
+const VAR_TEXT_MUTED = "var(--bpmn-text-muted)";
 const VAR_CYAN       = "var(--bpmn-cyan)";
 const VAR_MINT       = "var(--bpmn-mint)";
 const VAR_ROSE       = "var(--bpmn-rose)";
@@ -19,26 +27,41 @@ const VAR_TEXT       = "var(--bpmn-text)";
 const VAR_CANVAS     = "var(--bpmn-canvas)";
 const VAR_FONT_MONO  = "var(--bpmn-font-mono)";
 
+// Dash geometry. Period (dash + gap) is 16 user units so it matches the
+// bpmn-edge-flow keyframe's -16 offset step for a seamless march. Round
+// caps turn the short dash into a soft capsule — the "flowing dotted"
+// infographic line the founder asked for.
+const DASH = "2 14";
+
 export function BpmnEdge({
   edge,
   selected,
   hovered,
+  focusActive,
+  onPath,
   onPointerDown,
   onPointerEnter,
   onPointerLeave,
 }: Props) {
-  // Rounded orthogonal wire — soft elbows, per the reference. The wire is
-  // ambient: a quiet mid-grey that never competes with the cards/gateways.
-  // Selection escalates to cyan (the selection colour), hover lifts it
-  // toward text-dim so it's clearly the picked path without shouting.
   const d = roundedPath(edge.points, 12);
-  const stroke = selected ? VAR_CYAN : hovered ? VAR_TEXT_DIM : VAR_BORDER_EM;
-  // Chip at the polyline midpoint — the clearest air on a rank-to-rank
-  // edge. It sits past the source gateway's below-label (which hugs the
-  // diamond) and short of the target's below-caption (events carry one),
-  // so it collides with neither.
-  const mid = pointAlongPath(edge.points, 0.5);
 
+  // Edge state. Edges stay AMBIENT in colour (greys, never a loud hue) but
+  // carry weight + motion. Tracking works by contrast: the focused node's
+  // through-path stays bright and marching while everything else dims and
+  // holds still.
+  const dimmed = focusActive && !onPath && !selected && !hovered;
+  const lit = selected || hovered || (focusActive && onPath);
+  const stroke = selected
+    ? VAR_CYAN
+    : lit
+      ? VAR_TEXT_MUTED
+      : dimmed
+        ? VAR_BORDER
+        : VAR_BORDER_EM;
+  const width = selected ? 7 : lit ? 6.5 : dimmed ? 5 : 5.5;
+  const flowing = !dimmed;
+
+  const mid = chipAnchor(edge.points);
   const conditionPositive =
     edge.condition && /^(yes|true|grant|entry|success)$/i.test(edge.condition);
   const conditionNegative =
@@ -51,34 +74,73 @@ export function BpmnEdge({
 
   return (
     <g>
-      {/* invisible hit area */}
+      {/* invisible hit area — full width, always interactive (never dimmed) */}
       <path
         d={d}
         fill="none"
         stroke="transparent"
-        strokeWidth={14}
+        strokeWidth={16}
         onPointerDown={onPointerDown}
         onPointerEnter={onPointerEnter}
         onPointerLeave={onPointerLeave}
         style={{ cursor: "pointer" }}
       />
-      <path
-        d={d}
-        fill="none"
-        stroke={stroke}
-        strokeWidth={selected ? 2 : 1.6}
-        strokeLinejoin="round"
-        strokeLinecap="round"
-        markerEnd={`url(#bpmn-arrow-${selected ? "sel" : hovered ? "hov" : "def"})`}
-        style={{ transition: "stroke 140ms" }}
-      />
-      {edge.condition && (
-        <g pointerEvents="none">
-          <ConditionChip x={mid.x} y={mid.y} text={edge.condition} color={labelColor} />
-        </g>
-      )}
+      {/* The visible flow + its chip share one opacity, so off-path edges
+          recede together while the tracked path stays solid. */}
+      <g style={{ opacity: dimmed ? 0.22 : 1, transition: "opacity 200ms ease" }}>
+        <path
+          className={flowing ? "bpmn-edge-flow" : undefined}
+          d={d}
+          fill="none"
+          stroke={stroke}
+          strokeWidth={width}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeDasharray={DASH}
+          markerEnd={`url(#bpmn-arrow-${selected ? "sel" : lit ? "hov" : "def"})`}
+          style={{ transition: "stroke 160ms, stroke-width 160ms" }}
+        />
+        {edge.condition && (
+          <g pointerEvents="none">
+            <ConditionChip x={mid.x} y={mid.y} text={edge.condition} color={labelColor} />
+          </g>
+        )}
+      </g>
     </g>
   );
+}
+
+/** Where to sit the condition chip. Captions always hang below their
+ *  shape, so the chip has to dodge whichever endpoint caption its run
+ *  passes under:
+ *   - Most edges (level or DOWN branches) hug the TARGET end (76% along):
+ *     the source gateway's caption sits directly under the diamond where a
+ *     source-biased chip would land, and a target task has no left caption
+ *     while a target event's caption falls beyond the approach point.
+ *   - An UP branch is the exception — the target event's caption hangs
+ *     BETWEEN the two shapes, so a target-biased chip would hit it; instead
+ *     hug the SOURCE end (30% along), just past the diamond's top corner.
+ *  The point is then nudged perpendicular (up, or aside on a vertical run)
+ *  to the open side of the wire. */
+function chipAnchor(pts: { x: number; y: number }[]): { x: number; y: number } {
+  const OFFSET = 12;
+  const drift = pts[pts.length - 1].y - pts[0].y;
+  const t = drift < -40 ? 0.3 : 0.76;
+  const a = pointAlongPath(pts, Math.max(0, t - 0.04));
+  const b = pointAlongPath(pts, Math.min(1, t + 0.04));
+  const mid = pointAlongPath(pts, t);
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy) || 1;
+  // Two unit normals; pick the one pointing up (negative y), breaking ties
+  // (vertical runs) toward the left.
+  let nx = -dy / len;
+  let ny = dx / len;
+  if (ny > 0 || (Math.abs(ny) < 1e-6 && nx > 0)) {
+    nx = -nx;
+    ny = -ny;
+  }
+  return { x: mid.x + nx * OFFSET, y: mid.y + ny * OFFSET };
 }
 
 function ConditionChip({
@@ -92,12 +154,11 @@ function ConditionChip({
   text: string;
   color: string;
 }) {
-  // Small rounded chip sitting on the wire ("Yes" / "No"). Filled with the
-  // canvas colour so the wire doesn't show through, a hairline in the
-  // condition colour, and the label in that same colour. The reference's
-  // chips are tiny tags — so verbose analyzer conditions ("field missing or
-  // direction unspecified") ellipsise hard at a low cap to stay compact and
-  // out of neighbours' way; the full clause lives in the hover <title>.
+  // Small rounded chip sitting on the wire ("Yes" / "No"). Fully opaque
+  // canvas fill so the thick flowing dashes don't read through it, a
+  // hairline in the condition colour, label in that colour. Verbose
+  // analyzer conditions ellipsise hard at a low cap; the full clause lives
+  // in the hover <title>.
   const padX = 7;
   const charW = 5.6;
   const MAX_CHARS = 20;
@@ -117,7 +178,6 @@ function ConditionChip({
         fill={VAR_CANVAS}
         stroke={color}
         strokeWidth={1}
-        opacity={0.96}
       />
       <text
         x={w / 2}

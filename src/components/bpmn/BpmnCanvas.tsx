@@ -519,6 +519,44 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
     return { ...baseLayout, nodes, edges };
   }, [baseLayout, posOverrides]);
 
+  // "Track a line" — the through-path of the focused node. Focus is the
+  // hovered node, else the selected node. An edge (u→v) is on the through-
+  // path when it lies on some flow PASSING THROUGH the focus F: either its
+  // target can still reach F (upstream leg: v ∈ ancestors∪{F}) or its source
+  // is reachable from F (downstream leg: u ∈ descendants∪{F}). Reachability
+  // is transitive in both directions; the graphs are tiny (≤~15 nodes) so
+  // full traversal is cheap. Null focus → no highlight (all edges ambient).
+  const flowFocusId = hoverNode ?? (selection?.kind === "node" ? selection.id : null);
+  const throughPath = useMemo(() => {
+    if (!flowFocusId) return null;
+    const out = new Map<string, string[]>();
+    const inc = new Map<string, string[]>();
+    const push = (m: Map<string, string[]>, k: string, v: string) => {
+      const a = m.get(k);
+      if (a) a.push(v);
+      else m.set(k, [v]);
+    };
+    for (const e of layout.edges) {
+      push(out, e.from, e.to);
+      push(inc, e.to, e.from);
+    }
+    const reach = (adj: Map<string, string[]>) => {
+      const seen = new Set<string>();
+      const stack = [flowFocusId];
+      while (stack.length) {
+        const n = stack.pop()!;
+        for (const m of adj.get(n) ?? []) {
+          if (!seen.has(m)) {
+            seen.add(m);
+            stack.push(m);
+          }
+        }
+      }
+      return seen;
+    };
+    return { ancestors: reach(inc), descendants: reach(out) };
+  }, [flowFocusId, layout.edges]);
+
   // Progressive-reveal order: nodes sorted topologically by their dagre
   // x position (LR rankdir → x ≈ rank ≈ time-in-flow), then by y, then
   // id for stability. Start events lead, end events trail. Edges are
@@ -1016,12 +1054,21 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
               const edgeClass = revealMode
                 ? edgeRevealed ? "bpmn-revealed-edge" : "bpmn-ghosted-edge"
                 : undefined;
+              // On the focused node's through-path? (see throughPath memo)
+              const onPath =
+                !!throughPath &&
+                (edge.to === flowFocusId ||
+                  edge.from === flowFocusId ||
+                  throughPath.ancestors.has(edge.to) ||
+                  throughPath.descendants.has(edge.from));
               return (
                 <g key={key} className={edgeClass}>
                   <BpmnEdge
                     edge={edge}
                     selected={isSel}
                     hovered={hoverEdge === key}
+                    focusActive={!!throughPath}
+                    onPath={onPath}
                     onPointerDown={(e) => {
                       e.stopPropagation();
                       setSelection({ kind: "edge", from: edge.from, to: edge.to });
@@ -1300,17 +1347,24 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
 });
 
 function Arrow({ id, color }: { id: string; color: string }) {
+  // markerUnits="userSpaceOnUse" pins the arrowhead to a FIXED size in
+  // diagram units — without it the head scales with strokeWidth, and the
+  // now-thick (5.5–7px) flow lines would balloon the heads to blobs. 14
+  // user units ≈ 6px at the typical auto-fit scale, proportional to the
+  // thick wire. refX sits the tip just shy of the node so the round dash
+  // caps don't poke through the arrow.
   return (
     <marker
       id={id}
       viewBox="0 0 10 10"
-      refX={9}
+      refX={8.5}
       refY={5}
-      markerWidth={7}
-      markerHeight={7}
+      markerWidth={14}
+      markerHeight={14}
+      markerUnits="userSpaceOnUse"
       orient="auto-start-reverse"
     >
-      <path d="M 0 0 L 10 5 L 0 10 z" fill={color} />
+      <path d="M 0 0.5 L 10 5 L 0 9.5 z" fill={color} />
     </marker>
   );
 }
