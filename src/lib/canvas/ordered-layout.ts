@@ -271,13 +271,13 @@ function aggregateGroupEdges(
     const fg = groupOf.get(dep.from);
     const tg = groupOf.get(dep.to);
     if (!fg || !tg || fg === tg) continue;
-    const key = `${fg} ${tg}`;
+    const key = `${fg}|${tg}`;
     weights.set(key, (weights.get(key) ?? 0) + (dep.importCount ?? 1));
   }
 
   return [...weights.entries()]
     .map(([key, weight]) => {
-      const [from, to] = key.split(" ");
+      const [from, to] = key.split("|");
       return { from, to, weight };
     })
     .sort((a, b) => a.from.localeCompare(b.from) || a.to.localeCompare(b.to));
