@@ -12,6 +12,9 @@ interface Props {
    *  knock-on ghost (mirrors regionOpacity's prMode branch). */
   prMode: boolean;
   prRelevantServiceIds: Set<string>;
+  /** Journey-lines dim — when non-empty, hulls NOT on any lit journey route
+   *  fade to ground so the transit lines read cleanly. Empty = no dimming. */
+  activeRouteGroupIds?: Set<string>;
 }
 
 // Quantized label fade so the whole canvas doesn't re-render per zoom frame:
@@ -32,7 +35,12 @@ const labelFadeFor = (zoom: number) => (zoom < 0.8 ? 1 : zoom < 1.2 ? 0.4 : 0);
  * base map). Nothing renders when the run has no grouping (serviceGroups
  * null) — zero visual change for payloads without groups.
  */
-const GroupRegions = ({ onGroupClick, prMode, prRelevantServiceIds }: Props) => {
+const GroupRegions = ({
+  onGroupClick,
+  prMode,
+  prRelevantServiceIds,
+  activeRouteGroupIds,
+}: Props) => {
   const groups = useAnalysis((s) => s.transformedData?.serviceGroups);
   const groupingVisible = useUIStore((s) => s.groupingVisible);
   const labelFade = useViewportStore((s) => labelFadeFor(s.zoom));
@@ -57,7 +65,14 @@ const GroupRegions = ({ onGroupClick, prMode, prRelevantServiceIds }: Props) => 
         const onActivePath = prMode
           ? group.serviceIds.some((id) => prRelevantServiceIds.has(id))
           : true;
-        const dim = onActivePath ? 1 : 0.15;
+        // Journey lines lit: hulls off every active route fade to ground.
+        const routeDim =
+          activeRouteGroupIds && activeRouteGroupIds.size > 0
+            ? activeRouteGroupIds.has(group.id)
+              ? 1
+              : 0.25
+            : 1;
+        const dim = (onActivePath ? 1 : 0.15) * routeDim;
 
         return (
           <g

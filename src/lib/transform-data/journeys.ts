@@ -304,6 +304,9 @@ export function transformJourneys(
         service,
         file,
         phaseIdx: fqnToPhaseIdx.get(s.fqn) ?? 0,
+        // Step-level PR state — the transit-line view aggregates these into
+        // per-component "changed here" markers.
+        ...(s.prStatus !== undefined && { prStatus: s.prStatus }),
       };
     });
 

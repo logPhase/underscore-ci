@@ -11,7 +11,6 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { memo, useCallback, useEffect, useRef } from "react";
-import { CallChainTraversalPanel } from "./CallChainTraversalPanel";
 import { CanvasWorld } from "./CanvasWorld";
 import { SearchOverlay } from "./SearchOverlay";
 
@@ -77,7 +76,6 @@ function BiologicalWorld() {
         className="bg-transparent"
       >
         <Shortcuts containerRef={containerRef} />
-        <CallChainTraversalPanel containerRef={containerRef} />
         <SearchOverlay containerRef={containerRef} />
         {/* ── Wires RF viewport ↔ useViewportStore ── */}
         <ViewportBridge />

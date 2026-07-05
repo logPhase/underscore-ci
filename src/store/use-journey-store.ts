@@ -21,6 +21,8 @@ export interface JourneyStepData {
   service: string;
   file: string;
   phaseIdx: number;
+  /** Step-level PR state ("added" | "modified" | "deleted" | "disconnected"). */
+  prStatus?: string;
 }
 
 export interface JourneyData {
@@ -42,9 +44,16 @@ export interface JourneyData {
   [key: string]: unknown;
 }
 
+/** How many journey lines can be lit at once — beyond 3 the map stops
+ *  reading as a diagram (chunk budget) and line colors stop being
+ *  distinguishable. Oldest line drops when a 4th is toggled on. */
+export const MAX_JOURNEY_LINES = 3;
+
 interface JourneySlice {
   activeJourney: JourneyData | null;
   activePhaseIdx: number | null;
+  /** Journey ids rendered as transit lines on the canvas, activation order. */
+  activeLineIds: string[];
   /** Snapshot of viewport taken when a journey was activated. */
   _preJourneyViewport: { pan: { x: number; y: number }; zoom: number } | null;
 
@@ -55,12 +64,31 @@ interface JourneySlice {
   activateJourney: (journey: JourneyData) => void;
   deactivateJourney: () => void;
   selectPhase: (idx: number | null) => void;
+  /** Toggle a journey's transit line on/off (FIFO-capped at MAX_JOURNEY_LINES). */
+  toggleLine: (journeyId: string) => void;
+  clearLines: () => void;
 }
 
 export const useJourneyStore = create<JourneySlice>()((set) => ({
   activeJourney: null,
   activePhaseIdx: null,
+  activeLineIds: [],
   _preJourneyViewport: null,
+
+  toggleLine: (journeyId) => {
+    set((s) => {
+      const on = s.activeLineIds.includes(journeyId);
+      const next = on
+        ? s.activeLineIds.filter((id) => id !== journeyId)
+        : [...s.activeLineIds, journeyId].slice(-MAX_JOURNEY_LINES);
+      return { activeLineIds: next };
+    });
+    // Transit lines and the method-detail selection are different reading
+    // modes — toggling a line clears any function selection.
+    useSelectionStore.getState().clearSelection();
+  },
+
+  clearLines: () => set({ activeLineIds: [] }),
 
   activateJourney: (journey) => {
     // Snapshot current viewport from the viewport store (cross-store read).
@@ -87,6 +115,7 @@ export const useJourneyStore = create<JourneySlice>()((set) => ({
       return {
         activeJourney: null,
         activePhaseIdx: null,
+        activeLineIds: [],
         _preJourneyViewport: null,
       };
     });

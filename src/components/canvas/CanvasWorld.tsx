@@ -1,7 +1,5 @@
 import { FUNCTION_ROLE_COLORS } from "@/data/transform-data";
 import { useBlobPaths } from "@/hooks/canvas/use-blob-paths";
-import { useCallChainEdges } from "@/hooks/canvas/use-call-chain-edges";
-import { useCallChainNodes } from "@/hooks/canvas/use-call-chain-nodes";
 import { useDepPaths } from "@/hooks/canvas/use-dep-paths";
 import useJourneyData from "@/hooks/canvas/use-journey-data";
 import { usePRAffectedData } from "@/hooks/canvas/use-pr-affected-data";
@@ -30,8 +28,7 @@ import {
   useState,
 } from "react";
 import type { PositionedGroupRegion } from "@/types/grouping";
-import CallChain from "./sub-components/call-chain";
-import { MemoizedCallChainEdges } from "./sub-components/call-chain-edges";
+import { deriveJourneyRoute } from "@/lib/canvas/journey-route";
 import {
   paperMark,
   paperRegionFill,
@@ -39,7 +36,7 @@ import {
   useIsPaper,
 } from "./sub-components/canvas-theme";
 import GroupRegions from "./sub-components/group-regions";
-import JourneyCanvas from "./sub-components/journey";
+import JourneyLines from "./sub-components/journey-lines";
 import ServiceRegion from "./sub-components/service-regions";
 
 interface Props {
@@ -96,28 +93,12 @@ export function CanvasWorld({ containerRef, didDragRef }: Props) {
   const setSelectedFunctionCtx = useSelectionStore(
     (state) => state.setSelectedFunctionCtx
   );
-  const setCallChainNodes = useSelectionStore(
-    (state) => state.setCallChainNodes
-  );
-  const activeCallChain = useSelectionStore((state) => state.activeCallChain);
-  const setActiveCallChain = useSelectionStore(
-    (state) => state.setActiveCallChain
-  );
-  const setCallChainCursorFqn = useSelectionStore(
-    (state) => state.setCallChainCursorFqn
-  );
 
   const pushNavigation = useNavigationStore((state) => state.pushNavigation);
 
-  const { journeyServiceIds, activePhaseStepFqns, isJourneyActive } =
+  const { journeyServiceIds, activePhaseStepFqns, isJourneyActive, activeLines } =
     useJourneyData();
   const [selectedAnomaly, setSelectedAnomaly] = useState<string | null>(null);
-  const [expandedCollapse, setExpandedCollapse] = useState<Set<string>>(
-    new Set()
-  );
-  const [chainDirection, setChainDirection] = useState<"fan-out" | "fan-in">(
-    "fan-out"
-  );
 
   // Cross-module flow detection — activates for any function in a participating service
   const activeFlow = useMemo(() => {
@@ -177,8 +158,10 @@ export function CanvasWorld({ containerRef, didDragRef }: Props) {
 
   const isFlowActive = !!activeFlow;
 
-  // ── Position registries for call chain lines ──
-  // Populated during render by the method/file/service loops, read by callChainEdges memo.
+  // ── Position registries ──
+  // Populated during render by the method/file/service loops. servicePosRef
+  // feeds the journey-lines overlay; method/file refs are written by the
+  // ServiceRegion render (kept for its prop contract).
   const methodPosRef = useRef<
     Map<
       string,
@@ -201,107 +184,6 @@ export function CanvasWorld({ containerRef, didDragRef }: Props) {
       map.set(s.id, { cx: s.cx, cy: s.cy, radius: s.radius });
     servicePosRef.current = map;
   }, [services, sharedLibs]);
-
-  // ── Call chain nodes — spine-based cross-service highlight ──
-  const callChainNodes = useCallChainNodes({
-    servicePosRef,
-    filePosRef,
-    methodPosRef,
-    expandedCollapse,
-    chainDirection,
-  });
-
-  // Sync callChainNodes to context and manage frozen chain state
-  useEffect(() => {
-    if (!selectedFunctionCtx) {
-      // Selection cleared — clear everything
-      if (!isJourneyActive) {
-        setActiveCallChain(null);
-        setCallChainCursorFqn(null);
-      }
-      setCallChainNodes([]);
-      return;
-    }
-
-    // Skip call chain computation when a journey is active —
-    // method clicks during journey mode just highlight, don't trigger chain
-    if (isJourneyActive) return;
-
-    if (activeCallChain !== null) {
-      // A frozen chain already exists. Check if the newly selected function is
-      // part of that chain (i.e. user is navigating within the panel) or is a
-      // completely different method (i.e. user clicked a new method directly).
-      const isWithinChain = activeCallChain.some(
-        (n) => n.fqn === selectedFunctionCtx.functionId
-      );
-      if (!isWithinChain) {
-        // New method outside the existing chain — reset and freeze a new chain
-        if (callChainNodes.length > 1) {
-          setActiveCallChain(callChainNodes);
-          setCallChainCursorFqn(selectedFunctionCtx.functionId);
-          setCallChainNodes(callChainNodes);
-        } else {
-          // New method has no connections — clear the stale chain
-          setActiveCallChain(null);
-          setCallChainCursorFqn(null);
-          setCallChainNodes(callChainNodes);
-        }
-      }
-      // If within the chain, don't replace it (user is navigating via the panel)
-    } else if (callChainNodes.length > 1) {
-      // No frozen chain yet, selection has connections — freeze it
-      setActiveCallChain(callChainNodes);
-      setCallChainCursorFqn(selectedFunctionCtx.functionId);
-      setCallChainNodes(callChainNodes);
-    } else {
-      // No chain, just sync (single node or empty)
-      setCallChainNodes(callChainNodes);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedFunctionCtx, callChainNodes]);
-
-  // Auto zoom-out when a NEW chain is frozen — not for cursor movements within existing chain
-  const prevCallChainId = useRef<string | null>(null);
-  useEffect(() => {
-    if (!activeCallChain || activeCallChain.length <= 1) {
-      prevCallChainId.current = null;
-      return;
-    }
-
-    // Don't zoom-out if a cross-module flow is active (flow overlay handles its own zoom)
-    if (activeFlow) return;
-
-    const chainId = activeCallChain.map((n) => n.fqn).join("|");
-    if (chainId === prevCallChainId.current) return;
-    prevCallChainId.current = chainId;
-
-    // Compute bounding box of all call chain nodes
-    const xs = activeCallChain.map((n) => n.x);
-    const ys = activeCallChain.map((n) => n.y);
-    const padding = 200;
-    const minX = Math.min(...xs) - padding;
-    const maxX = Math.max(...xs) + padding;
-    const minY = Math.min(...ys) - padding;
-    const maxY = Math.max(...ys) + padding;
-    const cx = (minX + maxX) / 2;
-    const cy = (minY + maxY) / 2;
-
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-
-    const scaleX = rect.width / (maxX - minX);
-    const scaleY = rect.height / (maxY - minY);
-    const targetZoom = Math.min(scaleX, scaleY) * 0.75;
-
-    const clampedZoom = Math.max(0.3, Math.min(targetZoom, 2.0));
-    zoomTo(cx, cy, clampedZoom, rect.width, rect.height);
-  }, [activeCallChain, activeFlow, containerRef, zoomTo]);
-
-  const callChainEdges = useCallChainEdges({
-    methodPosRef,
-    filePosRef,
-    servicePosRef,
-  });
 
   const blobPaths = useBlobPaths();
 
@@ -407,15 +289,31 @@ export function CanvasWorld({ containerRef, didDragRef }: Props) {
 
   // Focus isolation: when zoomed into a service, everything else fades
   const isFocusIsolated = !!focusedServiceId && semanticZoomLevel >= 1;
-  const isCallChainActive =
-    (activeCallChain?.length || callChainNodes.length) > 1 && !isFlowActive;
+  // Call-graph overlay was removed (function selection now shows only the
+  // method-detail panel). These stay as inert constants so the ServiceRegion
+  // render — which reads them in ~20 opacity branches — keeps its no-chain
+  // behaviour without a rewrite.
+  const isCallChainActive = false;
+  const callChainServiceIds = useMemo(() => new Set<string>(), []);
 
-  // Precompute services that contain connected methods
-  const callChainServiceIds = useMemo(() => {
-    if (!isCallChainActive) return new Set<string>();
-    const chainToUse = activeCallChain || callChainNodes;
-    return new Set(chainToUse.map((n) => n.service));
-  }, [isCallChainActive, activeCallChain, callChainNodes]);
+  // Group hulls NOT on any lit journey route fade back to ground. Union of
+  // the group-kind stop keys across the active lines (empty when the run has
+  // no grouping or no lines are lit — GroupRegions then dims nothing).
+  const activeRouteGroupIds = useMemo(() => {
+    const groups = transformedData.serviceGroups;
+    if (!groups || groups.length === 0 || activeLines.length === 0)
+      return new Set<string>();
+    const nameById = new Map<string, string>();
+    for (const s of services) nameById.set(s.id, s.name);
+    for (const s of sharedLibs) nameById.set(s.id, s.name);
+    const ids = new Set<string>();
+    for (const j of activeLines) {
+      const route = deriveJourneyRoute(j, groups, nameById);
+      for (const stop of route.stops)
+        if (stop.kind === "group") ids.add(stop.key);
+    }
+    return ids;
+  }, [transformedData.serviceGroups, activeLines, services, sharedLibs]);
 
   const regionOpacity = useCallback(
     (id: string) => {
@@ -570,6 +468,7 @@ export function CanvasWorld({ containerRef, didDragRef }: Props) {
         onGroupClick={handleGroupClick}
         prMode={prMode}
         prRelevantServiceIds={allRelevant}
+        activeRouteGroupIds={activeRouteGroupIds}
       />
       {/* Dependency lines */}
       {loadPhase >= 3 &&
@@ -740,18 +639,6 @@ export function CanvasWorld({ containerRef, didDragRef }: Props) {
         filePosRef={filePosRef}
         methodPosRef={methodPosRef}
       />
-
-      {/* ── Call chain lines (L3 within-file/cross-file edges) ── */}
-      {/* Suppress when the cross-service overlay is active to avoid duplicate edges */}
-      {semanticZoomLevel >= 3 &&
-        selectedFunctionCtx &&
-        callChainEdges.length > 0 &&
-        !isCallChainActive && (
-          <MemoizedCallChainEdges
-            methodPosRef={methodPosRef}
-            callChainEdges={callChainEdges}
-          />
-        )}
 
       {/* Blast radius prompt */}
       {activeView === "blast-radius" && !blastTarget && loadPhase >= 5 && (
@@ -1144,19 +1031,10 @@ export function CanvasWorld({ containerRef, didDragRef }: Props) {
           );
         })()}
 
-      <CallChain
-        isCallChainActive={isCallChainActive}
-        chainDirection={chainDirection}
-        setExpandedCollapse={setExpandedCollapse}
-        setChainDirection={setChainDirection}
-        expandedCollapse={expandedCollapse}
-      />
-      <JourneyCanvas
-        methodPosRef={methodPosRef}
-        servicePosRef={servicePosRef}
-        activePhaseStepFqns={activePhaseStepFqns}
-        filePosRef={filePosRef}
-      />
+      {/* Journey transit lines — the architecture-level overlay. Drawn last
+          so the metro lines + stops sit above the group hulls and service
+          regions. */}
+      <JourneyLines servicePosRef={servicePosRef} containerRef={containerRef} />
     </>
   );
 }

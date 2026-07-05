@@ -1,21 +1,18 @@
 import { MemoizedBiologicalWorld as BiologicalWorld } from "@/components/canvas/biological-world";
 import CodebaseStats from "@/components/canvas/codebase-stats";
 import PRSummaryBanner from "@/components/canvas/PRSummaryBanner";
-import HoverTip from "@/components/ui/hover-tip";
 import { ReactFlowProvider } from "@xyflow/react";
-import { Compass } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 import "./canvas-world.css";
 import { GroupModulesControl } from "@/components/canvas/group-modules-control";
 import { HelpMessage } from "@/components/canvas/help-message";
 import { MethodDetailPanel } from "@/components/canvas/MethodDetailPanel";
 import { CanvasTooltip } from "@/components/canvas/CanvasTooltip";
+import { JourneyLinesPanel } from "@/components/canvas/journey-lines-panel";
 import { useAnalysis } from "@/store/use-analysis-store";
 import { Navigate } from "react-router-dom";
 
 export function CanvasWorldPage() {
   const transformedData = useAnalysis((s) => s.transformedData);
-  const navigate = useNavigate();
 
   if (!transformedData) return <Navigate to="/" />;
 
@@ -39,28 +36,7 @@ export function CanvasWorldPage() {
         <GroupModulesControl />
         <MethodDetailPanel />
         <CanvasTooltip />
-        <HoverTip
-          tip="Browse journey narratives — see how PRs flow through the system"
-          side="right"
-        >
-          <button
-            className="journeys-fab absolute z-42 inline-flex cursor-pointer items-center gap-2 rounded-full text-sm font-medium"
-            style={{
-              bottom: 24,
-              left: 70,
-              padding: "10px 18px 10px 14px",
-              background:
-                "linear-gradient(135deg, var(--cw-fab-g1), var(--cw-fab-g2))",
-              color: "var(--cw-fab-text)",
-              border: "1px solid var(--cw-fab-border)",
-              boxShadow: "var(--cw-fab-shadow)",
-            }}
-            onClick={() => navigate("/journeys")}
-          >
-            <Compass className="h-4 w-4" />
-            <span>Journeys</span>
-          </button>
-        </HoverTip>
+        <JourneyLinesPanel />
       </div>
     </ReactFlowProvider>
   );
