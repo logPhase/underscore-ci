@@ -28,7 +28,29 @@ git config user.email "bot@logphase.io"
 
 WORKTREE=/tmp/underscore-reports
 rm -rf "$WORKTREE"
-if git ls-remote --exit-code --heads origin "$REPORTS_BRANCH" >/dev/null 2>&1; then
+# Two publish targets:
+#   external (REPORTS_REPO + REPORTS_DEPLOY_KEY set)  — a DEDICATED reports
+#     repository, pushed over SSH with a write deploy key. Keeps report data
+#     out of the code repo entirely (no "recent pushes — open a PR?" banner
+#     noise for the team). REPORTS_BRANCH conventionally = the source repo
+#     name, so one reports repo serves a whole multi-repo platform.
+#   same-repo (default) — the orphan REPORTS_BRANCH of the analyzed repo.
+REPORTS_REMOTE=origin
+if [[ -n "${REPORTS_REPO:-}" && -n "${REPORTS_DEPLOY_KEY:-}" ]]; then
+  KEYFILE=/tmp/underscore-reports-key
+  printf '%s\n' "$REPORTS_DEPLOY_KEY" >"$KEYFILE"
+  chmod 600 "$KEYFILE"
+  export GIT_SSH_COMMAND="ssh -i $KEYFILE -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes"
+  REPORTS_REMOTE="git@github.com:${REPORTS_REPO}.git"
+  if git ls-remote --exit-code --heads "$REPORTS_REMOTE" "$REPORTS_BRANCH" >/dev/null 2>&1; then
+    git clone --depth 1 -b "$REPORTS_BRANCH" "$REPORTS_REMOTE" "$WORKTREE"
+  else
+    git init -q "$WORKTREE"
+    git -C "$WORKTREE" checkout -q --orphan "$REPORTS_BRANCH"
+  fi
+  git -C "$WORKTREE" config user.name  "underscore-bot"
+  git -C "$WORKTREE" config user.email "bot@logphase.io"
+elif git ls-remote --exit-code --heads origin "$REPORTS_BRANCH" >/dev/null 2>&1; then
   git fetch origin "$REPORTS_BRANCH:$REPORTS_BRANCH" 2>/dev/null || git fetch origin "$REPORTS_BRANCH"
   git worktree add "$WORKTREE" "$REPORTS_BRANCH"
 else
@@ -101,9 +123,9 @@ cd - >/dev/null
 git -C "$WORKTREE" add -A
 git -C "$WORKTREE" commit -m "underscore ${ID} report (${STAMP})" || { echo "nothing to publish"; exit 0; }
 # Retry once on the race between concurrent runs pushing the branch.
-git -C "$WORKTREE" push origin "$REPORTS_BRANCH" || {
-  git -C "$WORKTREE" pull --rebase origin "$REPORTS_BRANCH"
-  git -C "$WORKTREE" push origin "$REPORTS_BRANCH"
+git -C "$WORKTREE" push "$REPORTS_REMOTE" "HEAD:refs/heads/$REPORTS_BRANCH" || {
+  git -C "$WORKTREE" pull --rebase "$REPORTS_REMOTE" "$REPORTS_BRANCH"
+  git -C "$WORKTREE" push "$REPORTS_REMOTE" "HEAD:refs/heads/$REPORTS_BRANCH"
 }
 
 if [[ -n "${VIEWER_URL:-}" ]]; then

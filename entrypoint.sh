@@ -198,11 +198,15 @@ on_analysis_failure() {
 #                                and never fails on enrichment.
 if [[ -n "${INTENT_DRIFT_TOKEN:-}" ]]; then
   if [[ "$MODE" == "pr" ]]; then
-    # FINDINGS_ENABLED: the correctness audit — changed methods reviewed
-    # against the repo's ingested institutional knowledge (pr-mode-only,
-    # it needs the PR's changed-method delta).
-    export FLOW_ENABLED=1 FLOW_ANALYZER=1 OVERVIEW_ENABLED=1 FINDINGS_ENABLED=1
-    echo "Enrichment: enabled via ${INTENT_DRIFT_URL:-http://127.0.0.1:8767}"
+    export FLOW_ENABLED=1 FLOW_ANALYZER=1 OVERVIEW_ENABLED=1
+    # Correctness findings are OPT-IN (findings: 'on') — a dedicated agent
+    # run per unique change set, so the default spends nothing.
+    if [[ "${FINDINGS:-off}" == "on" ]]; then
+      export FINDINGS_ENABLED=1
+      echo "Enrichment: enabled incl. correctness findings via ${INTENT_DRIFT_URL:-http://127.0.0.1:8767}"
+    else
+      echo "Enrichment: enabled via ${INTENT_DRIFT_URL:-http://127.0.0.1:8767} (findings: off)"
+    fi
   else
     export FLOW_ENABLED=1 FLOW_ANALYZER=1 FLOW_WORKBOOK_ENABLED=1
     echo "Enrichment: BPMN flows + journey summaries via ${INTENT_DRIFT_URL:-http://127.0.0.1:8767}${BPMN_MAX_JOURNEYS:+ (BPMN_MAX_JOURNEYS=$BPMN_MAX_JOURNEYS)} (full mode; the PR-overview narrative is pr-mode-only)"

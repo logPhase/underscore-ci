@@ -41,6 +41,30 @@ inputs:
     description: "Orphan branch the 'branch' publish mode commits reports to."
     required: false
     default: 'underscore-reports'
+  findings:
+    description: >-
+      Correctness findings — the changed methods audited against the repo's
+      institutional knowledge by a dedicated agent (per-PR ledger, inline PR
+      review comments). 'off' (default): skipped, zero agent spend. 'on':
+      runs in pr mode when INTENT_DRIFT_TOKEN is set.
+    required: false
+    default: 'off'
+  reports-repo:
+    description: >-
+      OPTIONAL dedicated reports repository ('owner/name'). When set together
+      with reports-deploy-key, reports push THERE (branch = reports-branch)
+      instead of a branch of the analyzed repo — keeps report data out of the
+      code repo (no "recent pushes" PR-prompt banner for the team). One
+      reports repo can serve a whole platform: use the source repo's name as
+      reports-branch.
+    required: false
+    default: ''
+  reports-deploy-key:
+    description: >-
+      SSH private key with write access to reports-repo (a deploy key). Pass
+      a secret; required only when reports-repo is set.
+    required: false
+    default: ''
   workspace:
     description: >-
       Workspace/domain name that groups repos for shared cross-repo context
@@ -138,6 +162,7 @@ runs:
       env:
         UNDERSCORE_IMAGE: ${{ inputs.image }}
         MODE: ${{ inputs.mode }}
+        FINDINGS: ${{ inputs.findings }}
         WORKSPACE: ${{ inputs.workspace }}
         DELIVERY: ${{ inputs.delivery }}
         SLN: ${{ inputs.sln }}
@@ -189,6 +214,7 @@ runs:
           -e INTENT_DRIFT_WORKSPACE \
           -e BPMN_MAX_JOURNEYS \
           -e MODE \
+          -e FINDINGS \
           -e DELIVERY \
           -e SLN \
           -e UNDERSCORE_LANG \
@@ -203,6 +229,8 @@ runs:
       shell: bash
       env:
         REPORTS_BRANCH: ${{ inputs.reports-branch }}
+        REPORTS_REPO: ${{ inputs.reports-repo }}
+        REPORTS_DEPLOY_KEY: ${{ inputs.reports-deploy-key }}
         VIEWER_URL: ${{ inputs.viewer-url }}
         MODE_INPUT: ${{ inputs.mode }}
         REPORT_FILE: ${{ steps.analyze.outputs.report-file }}
