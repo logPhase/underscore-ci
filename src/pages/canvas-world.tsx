@@ -16,7 +16,9 @@ import { Navigate } from "react-router-dom";
 export function CanvasWorldPage() {
   const transformedData = useAnalysis((s) => s.transformedData);
 
-  if (!transformedData) return <Navigate to="/" />;
+  // replace — a data-less bounce must never become a history entry a Back
+  // press can land on.
+  if (!transformedData) return <Navigate to="/" replace />;
 
   return (
     /*

@@ -9,7 +9,7 @@ import {
   ScrollText,
   ShieldAlert,
 } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Navigate, NavLink, Outlet } from "react-router-dom";
 
 /** URL of the hosted sessions index, derived from where THIS report is
@@ -34,6 +34,31 @@ function sessionsIndexHref(): string | null {
  * so every child route redirects to the loader.
  */
 
+/** After 12s of "loading report…" offer a reload — a wedged boot (republish
+ *  race, slow parse, swallowed error) must never strand the user on a dark
+ *  screen with no way out but guessing at a manual reload. */
+const ShellLoadWatchdog = () => {
+  const [stuck, setStuck] = useState(false);
+  useEffect(() => {
+    const t = window.setTimeout(() => setStuck(true), 12_000);
+    return () => window.clearTimeout(t);
+  }, []);
+  if (!stuck) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => window.location.reload()}
+      className="rounded border px-3 py-1.5 text-[11px]"
+      style={{
+        borderColor: "var(--bpmn-border)",
+        color: "var(--bpmn-text)",
+      }}
+    >
+      Taking too long — reload report
+    </button>
+  );
+};
+
 export const SessionShell = () => {
   const transformedData = useAnalysis((s) => s.transformedData);
   const status = useAnalysis((s) => s.status);
@@ -51,14 +76,15 @@ export const SessionShell = () => {
     if (status === "error") return <Navigate to="/" replace />;
     return (
       <div
-        className="flex h-screen w-screen items-center justify-center text-[12px]"
+        className="flex h-screen w-screen flex-col items-center justify-center gap-3 text-[12px]"
         style={{
           background: "var(--bpmn-bg)",
           color: "var(--bpmn-text-muted)",
           fontFamily: "var(--bpmn-font-mono)",
         }}
       >
-        loading report…
+        <span>loading report…</span>
+        <ShellLoadWatchdog />
       </div>
     );
   }
