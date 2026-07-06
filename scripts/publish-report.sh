@@ -61,10 +61,11 @@ fi
 # Counts from the run manifest; PROJECT falls back to the repo name.
 MANIFEST="$PUBLISH_DIR/manifest.json"
 PROUT="$PUBLISH_DIR/pr-output.json"
-BPMN=0; SUM=0; PROJECT="${REPO_SLUG#*/}"
+BPMN=0; SUM=0; FND=0; PROJECT="${REPO_SLUG#*/}"
 if [[ -f "$MANIFEST" ]]; then
   BPMN=$(jq -r '.counts.bpmn // 0' "$MANIFEST")
   SUM=$(jq -r '.counts.summaries // 0' "$MANIFEST")
+  FND=$(jq -r '.counts.findings // 0' "$MANIFEST")
   PROJECT=$(jq -r --arg d "${REPO_SLUG#*/}" '.project // $d' "$MANIFEST")
 fi
 
@@ -100,7 +101,7 @@ REC=$(jq -n \
   --arg date "$ISO" --arg ref "$REF" --arg sha "$SHA" --arg short "$SHORT" \
   --arg actor "$ACTOR" --arg pr "$PRN" --arg prTitle "$PRT" \
   --arg repo "$REPO_SLUG" --arg project "$PROJECT" \
-  --arg j "$JRN" --arg b "$BPMN" --arg s "$SUM" \
+  --arg j "$JRN" --arg b "$BPMN" --arg s "$SUM" --arg f "$FND" \
   '{id:$id, dir:$dir, stamp:$stamp, run:($run|tonumber), date:$date, ref:$ref,
     sha:(if $sha=="" then null else $sha end),
     shortSha:(if $short=="" then null else $short end),
@@ -108,7 +109,8 @@ REC=$(jq -n \
     pr:(if $pr=="" then null else $pr end),
     prTitle:(if $prTitle=="" then null else $prTitle end),
     repo:$repo, project:$project,
-    journeys:($j|tonumber), bpmn:($b|tonumber), summaries:($s|tonumber)}')
+    journeys:($j|tonumber), bpmn:($b|tonumber), summaries:($s|tonumber),
+    findings:($f|tonumber)}')
 
 cd "$WORKTREE"
 [[ -f runs.json ]] || echo '[]' > runs.json

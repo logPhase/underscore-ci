@@ -6,145 +6,112 @@
 <title>logPhase · Underscore — analysis sessions</title>
 <style>
   :root{
-    --ink:#0C0F1D; --panel:#141A2E; --panel-2:#1B2238; --line:#2A3350;
-    --mist:#7E88A3; --paper:#EAEEF9; --signal:#8B7DFF; --live:#34E2C4;
+    --ink:#0C0F1D; --panel:#141A2E; --panel-2:#1B2238; --line:#2A3350; --line-soft:#1E2540;
+    --mist:#7E88A3; --dim:#556084; --paper:#EAEEF9; --signal:#8B7DFF; --live:#34E2C4;
+    --amber:#F5B950; --rose:#F0709B; --sky:#7EB6FF;
     --mono:ui-monospace,"JetBrains Mono","SF Mono",Menlo,Consolas,monospace;
     --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-    --r:14px;
   }
   *{box-sizing:border-box}
-  html{scroll-behavior:smooth}
   body{
     margin:0; background:var(--ink); color:var(--paper); font-family:var(--sans);
-    -webkit-font-smoothing:antialiased; line-height:1.55; overflow-x:hidden;
+    -webkit-font-smoothing:antialiased; line-height:1.5;
     background-image:
-      linear-gradient(var(--line) 1px,transparent 1px),
-      linear-gradient(90deg,var(--line) 1px,transparent 1px);
-    background-size:64px 64px; background-position:center -1px;
-    background-attachment:fixed;
+      linear-gradient(var(--line-soft) 1px,transparent 1px),
+      linear-gradient(90deg,var(--line-soft) 1px,transparent 1px);
+    background-size:56px 56px; background-position:center -1px; background-attachment:fixed;
   }
-  body::before{ /* fade the grid so it reads as ambient, not a table */
+  body::before{
     content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
-    background:radial-gradient(120% 90% at 50% 0%, transparent 0%, rgba(12,15,29,.72) 55%, var(--ink) 100%);
+    background:radial-gradient(120% 90% at 50% 0%, transparent 0%, rgba(12,15,29,.78) 50%, var(--ink) 100%);
   }
-  .wrap{position:relative; z-index:1; max-width:1080px; margin:0 auto; padding:0 24px}
+  .wrap{position:relative; z-index:1; max-width:880px; margin:0 auto; padding:0 20px}
 
   /* ---- top bar ---- */
   .bar{
     position:sticky; top:0; z-index:20; backdrop-filter:blur(10px);
-    background:rgba(12,15,29,.66); border-bottom:1px solid var(--line);
+    background:rgba(12,15,29,.72); border-bottom:1px solid var(--line);
   }
-  .bar .wrap{display:flex; align-items:center; gap:16px; height:60px}
-  .mark{font-family:var(--mono); font-weight:700; font-size:18px; letter-spacing:-.02em; color:var(--paper); text-decoration:none}
+  .bar .wrap{display:flex; align-items:center; gap:14px; height:52px}
+  .mark{font-family:var(--mono); font-weight:700; font-size:16px; letter-spacing:-.02em; color:var(--paper); text-decoration:none}
   .mark b{color:var(--signal); font-weight:700}
   .cursor{color:var(--live); font-weight:400}
-  .bar .tag{font-family:var(--mono); font-size:11px; letter-spacing:.14em; color:var(--mist); text-transform:uppercase; padding:3px 8px; border:1px solid var(--line); border-radius:999px}
+  .bar .tag{font-family:var(--mono); font-size:10.5px; letter-spacing:.14em; color:var(--mist); text-transform:uppercase; padding:3px 8px; border:1px solid var(--line); border-radius:999px}
   .bar .spacer{flex:1}
-  .bar .repo{font-family:var(--mono); font-size:12px; color:var(--mist)}
-  .bar .repo b{color:var(--paper); font-weight:600}
+  .bar .crumb{font-family:var(--mono); font-size:11px; color:var(--dim); letter-spacing:.06em}
 
-  /* ---- hero ---- */
-  .hero{position:relative; padding:72px 0 40px}
-  .eyebrow{font-family:var(--mono); font-size:12px; letter-spacing:.28em; text-transform:uppercase; color:var(--signal); margin:0 0 18px}
-  .hero h1{
-    font-family:var(--mono); font-weight:700; letter-spacing:-.03em; line-height:1.02;
-    font-size:clamp(38px,7vw,68px); margin:0 0 20px; max-width:16ch;
-  }
-  .hero h1 .u{color:var(--signal)}
-  .lede{font-size:clamp(16px,2.1vw,19px); color:#B7BFD4; max-width:56ch; margin:0 0 30px}
-  .stats{display:flex; flex-wrap:wrap; gap:28px; font-family:var(--mono)}
-  .stat .n{font-size:26px; font-weight:700; letter-spacing:-.02em}
-  .stat .l{font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--mist)}
-  .stat .n .live-dot{display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--live); margin-left:6px; vertical-align:middle; box-shadow:0 0 0 0 rgba(52,226,196,.6)}
+  /* ---- board head ---- */
+  .head{padding:34px 0 6px}
+  .eyebrow{font-family:var(--mono); font-size:11px; letter-spacing:.26em; text-transform:uppercase; color:var(--signal); margin:0 0 10px}
+  .head h1{font-family:var(--mono); font-weight:700; letter-spacing:-.02em; font-size:24px; margin:0 0 10px}
+  .sum{font-family:var(--mono); font-size:12.5px; color:var(--mist); display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:0 0 6px}
+  .sum b{color:var(--paper); font-weight:600}
+  .sum .dot{color:var(--dim)}
+  .live-dot{display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--live);
+    box-shadow:0 0 0 0 rgba(52,226,196,.55); animation:ping 2.4s ease-out infinite}
+  .note{font-family:var(--mono); font-size:11.5px; color:var(--amber); margin:6px 0 0}
 
-  /* signature: phase waveform */
-  .wave{position:absolute; right:-40px; top:40px; width:min(560px,52vw); opacity:.9; pointer-events:none; z-index:0}
-  .wave path{fill:none; stroke-linecap:round}
-  .wave .sig{stroke:var(--signal); stroke-width:2.5;
-    stroke-dasharray:2600; stroke-dashoffset:2600; animation:draw 2.2s .2s cubic-bezier(.6,.02,.2,1) forwards}
-  .wave .echo{stroke:var(--signal); stroke-width:1.2; opacity:.25}
-  .wave .live{stroke:var(--live); stroke-width:2; stroke-dasharray:2600; stroke-dashoffset:2600; animation:draw 2.4s .5s cubic-bezier(.6,.02,.2,1) forwards}
-  .wavepulse{animation:bob 7s ease-in-out infinite; transform-origin:center}
-  @keyframes draw{to{stroke-dashoffset:0}}
-  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+  /* ---- filter chips (repos) ---- */
+  .filters{display:flex; gap:8px; margin:16px 0 12px; flex-wrap:wrap}
+  .fchip{font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; cursor:pointer;
+    padding:4px 11px; border-radius:999px; border:1px solid var(--line); background:transparent; color:var(--mist)}
+  .fchip:hover{border-color:var(--mist)}
+  .fchip.on{color:var(--ink); background:var(--paper); border-color:var(--paper); font-weight:700}
+  .fchip .n{opacity:.6; margin-left:4px}
 
-  /* ---- sections ---- */
-  .sec-head{display:flex; align-items:baseline; gap:14px; margin:52px 0 20px; border-top:1px solid var(--line); padding-top:24px}
-  .sec-head h2{font-size:15px; font-family:var(--mono); font-weight:600; letter-spacing:.02em; margin:0}
-  .sec-head .count{font-family:var(--mono); font-size:12px; color:var(--mist)}
-  .sec-head .rule{flex:1; height:1px; background:linear-gradient(90deg,var(--line),transparent)}
-
-  /* featured latest */
-  .feat{
-    display:block; text-decoration:none; color:inherit; position:relative; overflow:hidden;
-    background:linear-gradient(180deg,var(--panel-2),var(--panel)); border:1px solid var(--line);
-    border-radius:var(--r); padding:26px 28px; margin-bottom:14px;
-    transition:border-color .25s, transform .25s;
-  }
-  .feat::before{content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--live)}
-  .feat:hover{border-color:#3c477099; transform:translateY(-2px)}
-  .feat .row1{display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px}
-  .pill{font-family:var(--mono); font-size:10.5px; letter-spacing:.16em; text-transform:uppercase; padding:4px 9px; border-radius:999px; border:1px solid var(--live); color:var(--live)}
-  .feat .id{font-family:var(--mono); font-size:20px; font-weight:700; letter-spacing:-.01em}
-  .feat .when{font-family:var(--mono); font-size:12px; color:var(--mist); margin-left:auto}
-  .open{font-family:var(--mono); font-size:13px; color:var(--signal); white-space:nowrap}
-  .feat:hover .open .arw{transform:translateX(4px)}
-  .arw{display:inline-block; transition:transform .25s}
-
-  /* session list */
-  .sessions{display:flex; flex-direction:column; gap:10px}
+  /* ---- session list ---- */
+  .board{border:1px solid var(--line); border-radius:12px; overflow:hidden; background:rgba(20,26,46,.55); margin-bottom:26px}
   .s{
-    display:grid; grid-template-columns:1.2fr 1fr auto; align-items:center; gap:18px;
-    text-decoration:none; color:inherit; position:relative;
-    background:var(--panel); border:1px solid var(--line); border-radius:var(--r);
-    padding:18px 22px; transition:border-color .2s, transform .2s, background .2s;
-    opacity:0; transform:translateY(14px);
+    display:flex; align-items:center; gap:12px; text-decoration:none; color:inherit;
+    padding:11px 16px; border-bottom:1px solid var(--line-soft); position:relative;
+    transition:background .15s;
   }
-  .s.in{opacity:1; transform:none; transition:border-color .2s, transform .55s cubic-bezier(.2,.7,.2,1), opacity .55s}
-  .s::before{content:""; position:absolute; left:0; top:14px; bottom:14px; width:2px; background:var(--signal); opacity:0; transition:opacity .2s}
-  .s:hover{border-color:#3c4770; background:var(--panel-2); transform:translateY(-2px)}
-  .s:hover::before{opacity:1}
-  .s .id{font-family:var(--mono); font-weight:600; font-size:15px}
-  .s .sub{font-family:var(--mono); font-size:12px; color:var(--mist); margin-top:3px}
-  .s .src a{color:var(--signal); text-decoration:none}
-  .s .src a:hover{text-decoration:underline}
-  .metrics{display:flex; gap:16px}
-  .m{font-family:var(--mono); text-align:right}
-  .m .mv{font-size:17px; font-weight:700; letter-spacing:-.01em}
-  .m .ml{font-size:9.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--mist)}
-  .m.zero .mv{color:var(--mist); font-weight:500}
-  .s .go{font-family:var(--mono); font-size:13px; color:var(--signal); white-space:nowrap}
-  .s:hover .go .arw{transform:translateX(4px)}
+  .s:last-child{border-bottom:0}
+  .s:hover{background:var(--panel-2)}
+  .s.latest{background:linear-gradient(90deg, rgba(52,226,196,.06), transparent 40%)}
+  .s.latest::before{content:""; position:absolute; left:0; top:0; bottom:0; width:2px; background:var(--live)}
+  .chip{font-family:var(--mono); font-size:10px; letter-spacing:.1em; text-transform:uppercase; white-space:nowrap;
+    padding:2px 8px; border-radius:999px; border:1px solid; flex:none}
+  .chip.repo{border-color:color-mix(in srgb, var(--c) 55%, transparent); color:var(--c);
+    min-width:78px; text-align:center}
+  .sid{font-family:var(--mono); font-size:12px; font-weight:600; color:var(--paper); white-space:nowrap; flex:none; min-width:64px}
+  .sid.full{color:var(--mist); font-weight:500}
+  .t{flex:1; min-width:0}
+  .title{font-size:13.5px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#CDD5E8}
+  .title .fulltag{color:var(--dim); font-style:italic}
+  .counts{font-family:var(--mono); font-size:11px; color:var(--dim); white-space:nowrap; flex:none}
+  .fnd{font-family:var(--mono); font-size:10px; letter-spacing:.06em; white-space:nowrap; flex:none;
+    color:var(--amber); border:1px solid color-mix(in srgb, var(--amber) 45%, transparent);
+    border-radius:999px; padding:2px 8px}
+  .when{font-family:var(--mono); font-size:11px; color:var(--mist); white-space:nowrap; flex:none; min-width:64px; text-align:right}
+  .arw{font-family:var(--mono); color:var(--dim); flex:none; transition:transform .2s, color .2s}
+  .s:hover .arw{transform:translateX(3px); color:var(--signal)}
+  .ltag{font-family:var(--mono); font-size:9px; letter-spacing:.16em; color:var(--live); flex:none}
 
-  .msg{font-family:var(--mono); font-size:14px; color:var(--mist); padding:34px 22px; text-align:center; border:1px dashed var(--line); border-radius:var(--r)}
+  .msg{font-family:var(--mono); font-size:13px; color:var(--mist); padding:40px 20px; text-align:center}
   .msg b{color:var(--paper); font-weight:600}
 
-  footer{margin:60px 0 46px; padding-top:22px; border-top:1px solid var(--line); font-family:var(--mono); font-size:12px; color:var(--mist); display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+  footer{margin:8px 0 40px; font-family:var(--mono); font-size:11px; color:var(--dim); display:flex; gap:10px}
   footer .spacer{flex:1}
-  footer a{color:var(--mist); text-decoration:none}
-  footer a:hover{color:var(--paper)}
 
-  @media (max-width:720px){
-    .wave{display:none}
-    .s{grid-template-columns:1fr; gap:14px}
-    .metrics{gap:22px}
-    .feat .when{margin-left:0; width:100%}
+  /* entrance: one quiet stagger, capped */
+  .s{opacity:0; transform:translateY(6px); animation:in .4s cubic-bezier(.2,.7,.2,1) forwards}
+  .s:nth-child(1){animation-delay:.02s}.s:nth-child(2){animation-delay:.06s}.s:nth-child(3){animation-delay:.1s}
+  .s:nth-child(4){animation-delay:.14s}.s:nth-child(5){animation-delay:.18s}.s:nth-child(6){animation-delay:.22s}
+  .s:nth-child(n+7){animation-delay:.26s}
+  @keyframes in{to{opacity:1; transform:none}}
+  @keyframes ping{0%{box-shadow:0 0 0 0 rgba(52,226,196,.55)}70%,100%{box-shadow:0 0 0 7px rgba(52,226,196,0)}}
+
+  @media (max-width:700px){
+    .counts{display:none}
+    .sid{min-width:0}
+    .when{min-width:0}
+    .chip.repo{padding:2px 6px}
   }
   @media (prefers-reduced-motion:reduce){
-    html{scroll-behavior:auto}
-    .wave .sig,.wave .live{animation:none; stroke-dashoffset:0}
-    .wavepulse{animation:none}
-    .s{opacity:1; transform:none}
-    .live-dot{box-shadow:none !important}
+    .s{opacity:1; transform:none; animation:none}
+    .live-dot{animation:none; box-shadow:none}
   }
-  @keyframes ping{0%{box-shadow:0 0 0 0 rgba(52,226,196,.55)}70%,100%{box-shadow:0 0 0 7px rgba(52,226,196,0)}}
-  /* Repository switcher — rendered only when the viewer ships a ./viewers.json
-     (deployment-owned: the action can't know a host's path layout). */
-  .viewers{display:flex;gap:6px;margin-left:14px;align-items:center}
-  .viewers a{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;text-decoration:none;
-    padding:4px 10px;border:1px solid rgba(126,136,163,.35);border-radius:999px;color:#7E88A3;white-space:nowrap}
-  .viewers a:hover{color:#EAEEF9;border-color:rgba(126,136,163,.6)}
-  .viewers a.on{color:#34E2C4;border-color:rgba(52,226,196,.5)}
 </style>
 </head>
 <body>
@@ -153,199 +120,185 @@
       <a class="mark" href="./">log<b>Phase</b><span class="cursor" id="cur">_</span></a>
       <span class="tag">Underscore</span>
       <span class="spacer"></span>
-      <nav class="viewers" id="viewers" aria-label="Repositories"></nav>
-      <span class="repo" id="repo-label"></span>
+      <span class="crumb">analysis sessions</span>
     </div>
   </header>
 
   <main class="wrap">
-    <section class="hero">
-      <svg class="wave" viewBox="0 0 600 240" aria-hidden="true">
-        <g class="wavepulse">
-          <path class="echo" d="M0,140 C60,60 100,60 150,130 C200,200 240,200 300,120 C360,40 400,40 450,130 C500,215 540,215 600,120"/>
-          <path class="sig"  d="M0,150 C55,70 105,70 150,140 C200,215 245,215 300,130 C358,45 402,45 450,140 C505,225 545,225 600,130"/>
-          <path class="live" d="M300,130 C358,45 402,45 450,140 C505,225 545,225 600,130"/>
-        </g>
-      </svg>
-      <p class="eyebrow">Code analysis · hosted reports</p>
-      <h1 id="hero-title">Code cartography.</h1>
-      <p class="lede">Each session maps every execution journey, call graph, and business flow in the codebase into one interactive report. Pick a session to open it.</p>
-      <div class="stats" id="stats"></div>
+    <section class="head">
+      <p class="eyebrow" id="eyebrow">Analysis sessions</p>
+      <h1>Every run, one board.</h1>
+      <p class="sum" id="sum"></p>
+      <div id="notes"></div>
     </section>
 
-    <div class="sec-head">
-      <h2>Latest session</h2>
-      <span class="rule"></span>
-    </div>
-    <div id="feat"></div>
+    <div class="filters" id="filters" hidden></div>
 
-    <div class="sec-head">
-      <h2>Pull requests</h2>
-      <span class="count" id="prcount"></span>
-      <span class="rule"></span>
-    </div>
-    <div class="sessions" id="prlist">
-      <div class="msg">Loading sessions…</div>
-    </div>
-
-    <div class="sec-head">
-      <h2>Full codebase runs</h2>
-      <span class="count" id="fullcount"></span>
-      <span class="rule"></span>
-    </div>
-    <div class="sessions" id="fulllist">
+    <div class="board" id="board">
       <div class="msg">Loading sessions…</div>
     </div>
 
     <footer>
       <span>logPhase · Underscore</span>
       <span class="spacer"></span>
-      <a id="repo-link" href="#" target="_blank" rel="noopener">repository ↗</a>
+      <span id="foot-src"></span>
     </footer>
   </main>
 
 <script>
 (function(){
-  // Repo identity is DATA-DRIVEN (from runs.json), never hardcoded — the same
-  // page serves any repo. REPO is resolved from the latest session's `repo`
-  // ("owner/name"); until then commit/PR links degrade to plain text.
-  var REPO = null;
-
-  function applyMeta(runs){
-    var m = runs[0] || {};
-    if(m.repo){
-      REPO = "https://github.com/" + m.repo;
-      var p = String(m.repo).split("/");
-      document.getElementById("repo-label").innerHTML = esc(p[0]||"") + " / <b>" + esc(p.slice(1).join("/")) + "</b>";
-      var rl = document.getElementById("repo-link"); rl.href = REPO;
-    } else {
-      document.getElementById("repo-link").style.display = "none";
-    }
-    var h1 = document.getElementById("hero-title");
-    if(m.project){ h1.innerHTML = 'Code cartography for <span class="u">' + esc(m.project) + '</span>.'; }
-    else { h1.textContent = 'Code cartography.'; }
-  }
-
-  // blinking cursor (respect reduced motion)
+  "use strict";
+  // Blinking cursor (reduced-motion aware) — the one bit of brand motion.
   if(!matchMedia("(prefers-reduced-motion: reduce)").matches){
     var cur=document.getElementById("cur"), on=true;
-    setInterval(function(){ on=!on; cur.style.opacity = on?1:0.15; }, 560);
+    setInterval(function(){ on=!on; cur.style.opacity=on?1:.15; }, 560);
   }
 
+  var ACCENTS=["#8B7DFF","#34E2C4","#F5B950","#F0709B","#7EB6FF","#B5E27A"];
+
   function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
+  function joinUrl(base,path){ return String(base||"./").replace(/\/+$/,"")+"/"+String(path||"").replace(/^\/+/,""); }
+  function isoFromStamp(st){
+    if(!st||String(st).length<15) return null;
+    st=String(st);
+    return st.slice(0,4)+"-"+st.slice(4,6)+"-"+st.slice(6,8)+"T"+st.slice(9,11)+":"+st.slice(11,13)+":"+st.slice(13,15)+"Z";
+  }
   function rel(iso){
     if(!iso) return "";
     var t=Date.parse(iso); if(isNaN(t)) return iso;
     var s=(Date.now()-t)/1000;
     if(s<60) return "just now";
-    var m=s/60; if(m<60) return Math.round(m)+" min ago";
-    var h=m/60; if(h<24) return Math.round(h)+" h ago";
-    var d=h/24; if(d<30) return Math.round(d)+" d ago";
+    var m=s/60; if(m<60) return Math.round(m)+"m ago";
+    var h=m/60; if(h<24) return Math.round(h)+"h ago";
+    var d=h/24; if(d<30) return Math.round(d)+"d ago";
     return new Date(t).toISOString().slice(0,10);
   }
-  function metric(v,label){
-    var zero = (!v || v===0);
-    return '<div class="m'+(zero?' zero':'')+'"><div class="mv">'+(v==null?"—":v)+'</div><div class="ml">'+label+'</div></div>';
-  }
-  function source(s){
-    if(s.pr){
-      var lbl = "PR #"+esc(s.pr);
-      var pr = REPO ? '<a href="'+REPO+'/pull/'+encodeURIComponent(s.pr)+'" target="_blank" rel="noopener">'+lbl+'</a>' : lbl;
-      return pr + (s.prTitle ? ' · '+esc(s.prTitle) : '');
-    }
-    var ref = esc(s.ref||"main");
-    if(s.sha){
-      var sh = esc(s.shortSha||String(s.sha).slice(0,7));
-      return REPO ? ref+' @ <a href="'+REPO+'/commit/'+esc(s.sha)+'" target="_blank" rel="noopener">'+sh+'</a>' : ref+' @ '+sh;
-    }
-    return ref;
-  }
 
-  function render(runs){
-    // newest first
-    runs.sort(function(a,b){ return (b.date||b.stamp||"").localeCompare(a.date||a.stamp||""); });
-    applyMeta(runs);            // derive repo/project identity from the data
-    var latest = runs[0];
-
-    // hero stats
-    var totalJ = latest ? latest.journeys : null;
-    document.getElementById("stats").innerHTML =
-      '<div class="stat"><div class="n">'+runs.length+'</div><div class="l">Sessions</div></div>'+
-      '<div class="stat"><div class="n">'+(totalJ==null?"—":totalJ)+'</div><div class="l">Journeys mapped</div></div>'+
-      '<div class="stat"><div class="n">'+(latest?rel(latest.date||isoFromStamp(latest.stamp)):"—")+'<span class="live-dot" style="animation:ping 2s ease-out infinite"></span></div><div class="l">Last run</div></div>';
-
-    // featured latest
-    var feat=document.getElementById("feat");
-    if(latest){
-      var href = esc(latest.dir)+"/underscore-report.html";
-      feat.innerHTML =
-        '<a class="feat" href="'+href+'">'+
-          '<div class="row1"><span class="pill">Live · latest</span>'+
-            '<span class="id">'+esc(latest.id||("run-"+latest.run))+'</span>'+
-            '<span class="when">'+esc(latest.stamp||"")+' UTC</span></div>'+
-          '<div class="s" style="opacity:1;transform:none;border:0;background:transparent;padding:0;grid-template-columns:1.2fr 1fr auto">'+
-            '<div><div class="sub" style="margin:0">source</div><div class="src" style="font-family:var(--mono);font-size:14px;margin-top:3px">'+source(latest)+'</div></div>'+
-            '<div class="metrics">'+metric(latest.journeys,"journeys")+metric(latest.bpmn,"flows")+metric(latest.summaries,"summaries")+'</div>'+
-            '<div class="open">Open report <span class="arw">→</span></div>'+
-          '</div>'+
-        '</a>';
-    }
-
-    // sessions, sectioned by kind: PR analyses vs full codebase runs
-    function row(s){
-      var href=esc(s.dir)+"/underscore-report.html";
-      return '<a class="s" href="'+href+'">'+
-        '<div><div class="id">'+esc(s.id||("run-"+s.run))+'</div>'+
-          '<div class="sub">'+esc(s.stamp||"")+' UTC · '+source(s)+'</div></div>'+
-        '<div class="metrics">'+metric(s.journeys,"journeys")+metric(s.bpmn,"flows")+metric(s.summaries,"summaries")+'</div>'+
-        '<div class="go">Open <span class="arw">→</span></div>'+
-      '</a>';
-    }
-    var prs   = runs.filter(function(s){ return s.pr; });
-    var fulls = runs.filter(function(s){ return !s.pr; });
-    document.getElementById("prcount").textContent   = prs.length+" total";
-    document.getElementById("fullcount").textContent = fulls.length+" total";
-    document.getElementById("prlist").innerHTML = prs.length ? prs.map(row).join("")
-      : '<div class="msg"><b>No PR sessions yet.</b> Open a pull request — Underscore analyzes it automatically.</div>';
-    document.getElementById("fulllist").innerHTML = fulls.length ? fulls.map(row).join("")
-      : '<div class="msg"><b>No full runs yet.</b> Trigger the Underscore workflow from the Actions tab to map the codebase.</div>';
-
-    // scroll reveal
-    var items=[].slice.call(document.querySelectorAll(".sessions .s"));
-    if(matchMedia("(prefers-reduced-motion: reduce)").matches){ items.forEach(function(el){el.classList.add("in");}); return; }
-    var io=new IntersectionObserver(function(es){es.forEach(function(e){ if(e.isIntersecting){ var el=e.target; setTimeout(function(){el.classList.add("in");}, items.indexOf(el)%8*55); io.unobserve(el);} });},{threshold:.12});
-    items.forEach(function(el){io.observe(el);});
-    // Failsafe: never leave a row stuck invisible if the observer doesn't fire
-    // (background tabs, headless capture, odd viewports).
-    setTimeout(function(){ items.forEach(function(el){el.classList.add("in");}); }, 1400);
-  }
-
-  function isoFromStamp(st){ // "yyyymmdd-HHMMSS" -> ISO
-    if(!st||st.length<15) return null;
-    return st.slice(0,4)+"-"+st.slice(4,6)+"-"+st.slice(6,8)+"T"+st.slice(9,11)+":"+st.slice(11,13)+":"+st.slice(13,15)+"Z";
-  }
-
-  // Repository switcher — OPTIONAL ./viewers.json ([{name, href}]) owned by
-  // the hosting viewer (a multi-repo platform serves several dashboards under
-  // one host; the action can't know that layout). Absent file → no switcher.
-  fetch("./viewers.json",{cache:"no-store"}).then(function(r){ if(!r.ok) throw 0; return r.json(); })
+  // Sources: ./viewers.json ([{name, href}]) when the deployment ships one —
+  // this page then AGGREGATES every source's runs.json into ONE board.
+  // Absent (single-repo deployments, file://) → just ./runs.json as before.
+  fetch("./viewers.json",{cache:"no-store"})
+    .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+    .catch(function(){ return null; })
     .then(function(vs){
-      if(!Array.isArray(vs)||vs.length<2) return;
-      var here=location.pathname.replace(/index\.html$/,"");
-      document.getElementById("viewers").innerHTML=vs.map(function(v){
-        var href=String(v.href||"");
-        var on=here.indexOf(href.replace(/index\.html$/,""))===0;
-        return '<a href="'+href+'"'+(on?' class="on" aria-current="page"':'')+'>'+
-               String(v.name||"").replace(/[<>&]/g,"")+"</a>";
-      }).join("");
-    }).catch(function(){});
+      var sources=(Array.isArray(vs)&&vs.length)
+        ? vs.map(function(v,i){ return {name:String(v.name||("repo "+(i+1))), href:String(v.href||"./"), i:i}; })
+        : [{name:null, href:"./", i:0}];
+      return Promise.all(sources.map(function(src){
+        return fetch(joinUrl(src.href,"runs.json"),{cache:"no-store"})
+          .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+          .then(function(runs){ return {src:src, runs:Array.isArray(runs)?runs:[]}; })
+          .catch(function(){ return {src:src, failed:true, runs:[]}; });
+      }));
+    })
+    .then(render)
+    .catch(function(){ fail(); });
 
-  fetch("./runs.json",{cache:"no-store"}).then(function(r){ if(!r.ok) throw 0; return r.json(); })
-    .then(function(runs){ runs.forEach(function(s){ if(!s.date) s.date=isoFromStamp(s.stamp); }); render(runs); })
-    .catch(function(){
-      document.getElementById("list").innerHTML='<div class="msg"><b>Session list unavailable.</b> No <code>runs.json</code> yet — it is written on the next Underscore Full Report run. Meanwhile, open <a class="open" href="latest/underscore-report.html">the latest report →</a></div>';
-      document.getElementById("stats").innerHTML='';
+  function fail(){
+    document.getElementById("board").innerHTML=
+      '<div class="msg"><b>Session list unavailable.</b> No runs.json yet — it is written by the next Underscore run.</div>';
+  }
+
+  var ALL=[], SOURCES=[], FILTER=null;
+
+  function render(loaded){
+    SOURCES=loaded.map(function(l){ return l.src; });
+    var failedNames=loaded.filter(function(l){ return l.failed; }).map(function(l){ return l.src.name||"sessions"; });
+    ALL=[];
+    loaded.forEach(function(l){
+      l.runs.forEach(function(r){
+        if(!r.date) r.date=isoFromStamp(r.stamp);
+        r._src=l.src;
+        ALL.push(r);
+      });
     });
+    ALL.sort(function(a,b){ return String(b.date||"").localeCompare(String(a.date||"")); });
+
+    // summary strip
+    var multi=SOURCES.length>1;
+    var repoNames={}; ALL.forEach(function(r){ repoNames[srcLabel(r)]=1; });
+    var nRepos=Object.keys(repoNames).length;
+    var latest=ALL[0];
+    document.getElementById("sum").innerHTML = ALL.length
+      ? '<b>'+ALL.length+'</b>&nbsp;session'+(ALL.length===1?'':'s')
+        +(multi||nRepos>1 ? '<span class="dot">·</span><b>'+nRepos+'</b>&nbsp;repositor'+(nRepos===1?'y':'ies') : '')
+        +'<span class="dot">·</span><span class="live-dot"></span>last run <b>'+esc(rel(latest.date))+'</b>'
+      : '';
+    if(multi){ document.getElementById("eyebrow").textContent="Analysis sessions · all repositories"; }
+
+    // failed sources — a quiet line, never an empty box
+    document.getElementById("notes").innerHTML =
+      failedNames.map(function(n){ return '<p class="note">'+esc(n)+' sessions unavailable right now.</p>'; }).join("");
+
+    // repo filter chips (only when there is something to filter)
+    var fl=document.getElementById("filters");
+    if(multi && ALL.length){
+      var counts={};
+      ALL.forEach(function(r){ var k=srcLabel(r); counts[k]=(counts[k]||0)+1; });
+      fl.hidden=false;
+      fl.innerHTML='<button class="fchip on" data-k="">All<span class="n">'+ALL.length+'</span></button>'+
+        SOURCES.map(function(s){
+          var k=s.name||""; if(!counts[k]) return "";
+          return '<button class="fchip" data-k="'+esc(k)+'">'+esc(k)+'<span class="n">'+counts[k]+'</span></button>';
+        }).join("");
+      fl.addEventListener("click",function(e){
+        var b=e.target.closest(".fchip"); if(!b) return;
+        FILTER=b.getAttribute("data-k")||null;
+        [].forEach.call(fl.querySelectorAll(".fchip"),function(x){ x.classList.toggle("on",x===b); });
+        list();
+      });
+    }
+    list();
+    document.getElementById("foot-src").textContent = multi ? "aggregated across "+SOURCES.length+" repositories" : "";
+  }
+
+  function srcLabel(r){
+    if(r._src && r._src.name) return r._src.name;
+    if(r.project) return String(r.project);
+    if(r.repo) return String(r.repo).split("/").pop();
+    return "repo";
+  }
+  function accent(r){ return ACCENTS[(r._src?r._src.i:0)%ACCENTS.length]; }
+
+  function counts(r){
+    // zeros are silence, not information — a config-only PR just shows no counts
+    var parts=[];
+    if(r.journeys>0) parts.push(r.journeys+" journey"+(r.journeys===1?"":"s"));
+    if(r.bpmn>0) parts.push(r.bpmn+" flow"+(r.bpmn===1?"":"s"));
+    return parts.join(" · ");
+  }
+
+  function row(r, isLatest){
+    var href=joinUrl(r._src?r._src.href:"./", String(r.dir||"")+"/underscore-report.html");
+    var id=esc(r.id||("run-"+r.run));
+    var isPr=!!r.pr;
+    var title=isPr
+      ? esc(r.prTitle||("Pull request #"+r.pr))
+      : 'Whole-repo report <span class="fulltag">· '+esc(r.ref||"main")+'</span>';
+    var abs=esc(r.date||"");
+    var multi=SOURCES.length>1;
+    return '<a class="s'+(isLatest?' latest':'')+'" href="'+esc(href)+'">'+
+      (multi?'<span class="chip repo" style="--c:'+accent(r)+'">'+esc(srcLabel(r))+'</span>':'')+
+      '<span class="sid'+(isPr?'':' full')+'">'+id+'</span>'+
+      '<div class="t"><div class="title" title="'+(isPr?esc(r.prTitle||""):"whole-repo report")+'">'+title+'</div></div>'+
+      (isLatest?'<span class="ltag">LATEST</span>':'')+
+      (r.findings>0?'<span class="fnd">'+r.findings+' finding'+(r.findings===1?'':'s')+'</span>':'')+
+      '<span class="counts">'+esc(counts(r))+'</span>'+
+      '<span class="when" title="'+abs+' UTC">'+esc(rel(r.date))+'</span>'+
+      '<span class="arw">→</span>'+
+    '</a>';
+  }
+
+  function list(){
+    var rows=FILTER?ALL.filter(function(r){ return srcLabel(r)===FILTER; }):ALL;
+    var board=document.getElementById("board");
+    if(!rows.length){
+      board.innerHTML='<div class="msg"><b>No sessions yet.</b> Open a pull request — Underscore analyzes it automatically and the report lands here.</div>';
+      return;
+    }
+    var latestId=ALL.length?ALL[0]:null;
+    board.innerHTML=rows.map(function(r){ return row(r, r===latestId); }).join("");
+  }
 })();
 </script>
 </body>
