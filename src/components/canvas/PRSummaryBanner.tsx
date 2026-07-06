@@ -274,10 +274,28 @@ const PRSummaryBanner: React.FC = () => {
                 <p className="mb-1.5 text-[10px] tracking-wider text-zinc-400 uppercase">
                   Impact
                 </p>
-                <div className="grid grid-cols-3 gap-2 text-[11px]">
+                <div
+                  className={cn(
+                    "grid gap-2 text-[11px]",
+                    transformedData.findings ? "grid-cols-4" : "grid-cols-3"
+                  )}
+                >
                   <Stat label="files" value={s.filesTouched ?? 0} />
                   <Stat label="classes" value={s.classesTouched ?? 0} />
                   <Stat label="journeys" value={journeyImpact} />
+                  {transformedData.findings && (
+                    <Stat
+                      label="findings"
+                      value={transformedData.findings.items?.length ?? 0}
+                      color={
+                        transformedData.findings.items?.some(
+                          (f) => f.severity === "high"
+                        )
+                          ? "text-rose-400"
+                          : "text-zinc-50"
+                      }
+                    />
+                  )}
                 </div>
               </div>
             )}

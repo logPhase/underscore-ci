@@ -131,7 +131,10 @@ on_analysis_failure() {
 #                                and never fails on enrichment.
 if [[ -n "${INTENT_DRIFT_TOKEN:-}" ]]; then
   if [[ "$MODE" == "pr" ]]; then
-    export FLOW_ENABLED=1 FLOW_ANALYZER=1 OVERVIEW_ENABLED=1
+    # FINDINGS_ENABLED: the correctness audit — changed methods reviewed
+    # against the repo's ingested institutional knowledge (pr-mode-only,
+    # it needs the PR's changed-method delta).
+    export FLOW_ENABLED=1 FLOW_ANALYZER=1 OVERVIEW_ENABLED=1 FINDINGS_ENABLED=1
     echo "Enrichment: enabled via ${INTENT_DRIFT_URL:-http://127.0.0.1:8767}"
   else
     export FLOW_ENABLED=1 FLOW_ANALYZER=1 FLOW_WORKBOOK_ENABLED=1
@@ -212,10 +215,15 @@ if [[ "$MODE" == "pr" ]]; then
       jq -r '
         "**PR #\(.prNumber // "?") — \(.prTitle // "untitled")**",
         "",
-        "| Journeys | Business flows (BPMN) | Summaries |",
-        "|---:|---:|---:|",
-        "| \(.counts.journeys // 0) | \(.counts.bpmn // 0) | \(.counts.summaries // 0) |",
+        "| Journeys | Business flows (BPMN) | Summaries | Findings |",
+        "|---:|---:|---:|---:|",
+        "| \(.counts.journeys // 0) | \(.counts.bpmn // 0) | \(.counts.summaries // 0) | \(.counts.findings // 0) |",
         "",
+        (if ((.findingTitles // []) | length) > 0 then
+          "**Correctness findings** (checked against your institutional knowledge — details in the report):",
+          ((.findingTitles // [])[] | "- \(.)"),
+          ""
+        else empty end),
         (if ((.bpmnFlows // []) | length) > 0 then
           "**Business flows touched:**",
           ((.bpmnFlows // [])[] | "- \(.title)")

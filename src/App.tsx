@@ -7,6 +7,7 @@ import NotFound from "./pages/NotFound";
 import { CanvasWorldPage } from "./pages/canvas-world";
 import ChapterPage from "./pages/chapter";
 import JourneyPage from "./pages/journeys";
+import FindingsPage from "./pages/findings";
 import ReportLoader from "./pages/report-loader";
 import SpecsPage from "./pages/specs";
 
@@ -28,6 +29,7 @@ const App = () => {
             <Route path="/journeys" element={<JourneyPage />} />
             <Route path="/journeys/:chapterSlug" element={<ChapterPage />} />
             <Route path="/specs" element={<SpecsPage />} />
+            <Route path="/findings" element={<FindingsPage />} />
           </Route>
           {/* Legacy canvas path — kept working for old deep links. */}
           <Route path="/home" element={<Navigate to="/canvas" replace />} />

@@ -7,6 +7,7 @@ import {
   PanelLeftOpen,
   Route,
   ScrollText,
+  ShieldAlert,
 } from "lucide-react";
 import { useEffect } from "react";
 import { Navigate, NavLink, Outlet } from "react-router-dom";
@@ -81,6 +82,15 @@ const SessionRail = () => {
   const journeyCount = transformedData?.chapters.length ?? 0;
   const specCount = transformedData?.specs?.specs.length ?? 0;
   const hasSpecs = transformedData?.specs != null;
+  const findingItems = transformedData?.findings?.items ?? [];
+  const hasFindings = transformedData?.findings != null;
+  // Badge color mirrors the worst severity present — rose demands a look,
+  // amber suggests one, dim means the audit ran and found nothing loud.
+  const findingsBadgeColor = findingItems.some((f) => f.severity === "high")
+    ? "var(--bpmn-rose)"
+    : findingItems.length > 0
+      ? "var(--bpmn-amber)"
+      : "var(--bpmn-text-dim)";
   const indexHref = sessionsIndexHref();
 
   return (
@@ -187,6 +197,16 @@ const SessionRail = () => {
             label="Specs"
             badge={specCount > 0 ? String(specCount) : null}
             badgeColor="var(--bpmn-text-dim)"
+            collapsed={collapsed}
+          />
+        )}
+        {hasFindings && (
+          <RailNavItem
+            to="/findings"
+            icon={ShieldAlert}
+            label="Findings"
+            badge={findingItems.length > 0 ? String(findingItems.length) : null}
+            badgeColor={findingsBadgeColor}
             collapsed={collapsed}
           />
         )}

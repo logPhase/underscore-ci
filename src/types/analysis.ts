@@ -257,6 +257,8 @@ export interface RawAnalysisJSON {
   fileGroups?: import("./grouping").ServiceFileGroups[];
   /** Living-specs bundle (list + history + version contents), baked in. */
   specs?: import("./specs").SpecsPayload;
+  /** Correctness-audit findings from the analyzer's review agent, baked in. */
+  findings?: import("./findings").FindingsPayload;
 }
 // ── Global method index ───────────────────────────────────────────
 // Provides cross-file method lookup by FQN (the method's `id` field).
@@ -316,6 +318,8 @@ export interface TransformedData extends AnalysisData {
   fileToComponent?: Map<string, import("./grouping").FileComponentRef>;
   /** Living-specs bundle embedded in the payload; null = not exported. */
   specs?: import("./specs").SpecsPayload | null;
+  /** Correctness-audit findings; null = the run had no review enrichment. */
+  findings?: import("./findings").FindingsPayload | null;
 
   packages?: Map<string, PackageData[]>; //serviceId:packageData
   anomalies: Anomaly[];
