@@ -138,6 +138,13 @@
     .live-dot{box-shadow:none !important}
   }
   @keyframes ping{0%{box-shadow:0 0 0 0 rgba(52,226,196,.55)}70%,100%{box-shadow:0 0 0 7px rgba(52,226,196,0)}}
+  /* Repository switcher — rendered only when the viewer ships a ./viewers.json
+     (deployment-owned: the action can't know a host's path layout). */
+  .viewers{display:flex;gap:6px;margin-left:14px;align-items:center}
+  .viewers a{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;text-decoration:none;
+    padding:4px 10px;border:1px solid rgba(126,136,163,.35);border-radius:999px;color:#7E88A3;white-space:nowrap}
+  .viewers a:hover{color:#EAEEF9;border-color:rgba(126,136,163,.6)}
+  .viewers a.on{color:#34E2C4;border-color:rgba(52,226,196,.5)}
 </style>
 </head>
 <body>
@@ -146,6 +153,7 @@
       <a class="mark" href="./">log<b>Phase</b><span class="cursor" id="cur">_</span></a>
       <span class="tag">Underscore</span>
       <span class="spacer"></span>
+      <nav class="viewers" id="viewers" aria-label="Repositories"></nav>
       <span class="repo" id="repo-label"></span>
     </div>
   </header>
@@ -316,6 +324,21 @@
     if(!st||st.length<15) return null;
     return st.slice(0,4)+"-"+st.slice(4,6)+"-"+st.slice(6,8)+"T"+st.slice(9,11)+":"+st.slice(11,13)+":"+st.slice(13,15)+"Z";
   }
+
+  // Repository switcher — OPTIONAL ./viewers.json ([{name, href}]) owned by
+  // the hosting viewer (a multi-repo platform serves several dashboards under
+  // one host; the action can't know that layout). Absent file → no switcher.
+  fetch("./viewers.json",{cache:"no-store"}).then(function(r){ if(!r.ok) throw 0; return r.json(); })
+    .then(function(vs){
+      if(!Array.isArray(vs)||vs.length<2) return;
+      var here=location.pathname.replace(/index\.html$/,"");
+      document.getElementById("viewers").innerHTML=vs.map(function(v){
+        var href=String(v.href||"");
+        var on=here.indexOf(href.replace(/index\.html$/,""))===0;
+        return '<a href="'+href+'"'+(on?' class="on" aria-current="page"':'')+'>'+
+               String(v.name||"").replace(/[<>&]/g,"")+"</a>";
+      }).join("");
+    }).catch(function(){});
 
   fetch("./runs.json",{cache:"no-store"}).then(function(r){ if(!r.ok) throw 0; return r.json(); })
     .then(function(runs){ runs.forEach(function(s){ if(!s.date) s.date=isoFromStamp(s.stamp); }); render(runs); })
