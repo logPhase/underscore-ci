@@ -82,7 +82,11 @@ const SessionRail = () => {
   const journeyCount = transformedData?.chapters.length ?? 0;
   const specCount = transformedData?.specs?.specs.length ?? 0;
   const hasSpecs = transformedData?.specs != null;
-  const findingItems = transformedData?.findings?.items ?? [];
+  // OPEN findings only — resolved ones are ledger history (struck on the
+  // page), not something the rail should keep shouting about.
+  const findingItems = (transformedData?.findings?.items ?? []).filter(
+    (f) => f.status !== "resolved"
+  );
   const hasFindings = transformedData?.findings != null;
   // Badge color mirrors the worst severity present — rose demands a look,
   // amber suggests one, dim means the audit ran and found nothing loud.

@@ -59,14 +59,29 @@ const FindingsPage = () => {
   const payload = useAnalysis((s) => s.transformedData?.findings);
   const repoId = useAnalysis((s) => s.transformedData?.analyzerRepoId);
 
-  const items = useMemo(() => orderFindings(payload?.items ?? []), [payload]);
+  // The ledger keeps fixed findings as history (status "resolved") — they
+  // render retired at the bottom, never deleted. Absent status = open.
+  const open = useMemo(
+    () =>
+      orderFindings(
+        (payload?.items ?? []).filter((f) => f.status !== "resolved")
+      ),
+    [payload]
+  );
+  const resolved = useMemo(
+    () =>
+      orderFindings(
+        (payload?.items ?? []).filter((f) => f.status === "resolved")
+      ),
+    [payload]
+  );
   const consulted = payload?.consulted ?? [];
 
   const counts = useMemo(() => {
     const c: Record<FindingLevel, number> = { high: 0, medium: 0, low: 0 };
-    for (const f of items) c[(f.severity as FindingLevel) ?? "low"]++;
+    for (const f of open) c[(f.severity as FindingLevel) ?? "low"]++;
     return c;
-  }, [items]);
+  }, [open]);
 
   // The rail hides this tab without findings, but guard deep links too.
   if (!payload) return <Navigate to="/journeys" replace />;
@@ -107,7 +122,7 @@ const FindingsPage = () => {
           </span>
         )}
         <span className="ml-auto" />
-        {items.length > 0 && (
+        {open.length > 0 && (
           <div className="flex items-center gap-1.5">
             {(["high", "medium", "low"] as const).map(
               (lvl) =>
@@ -128,7 +143,7 @@ const FindingsPage = () => {
         )}
       </header>
 
-      {items.length === 0 ? (
+      {open.length === 0 && resolved.length === 0 ? (
         <AllClear consulted={consulted} />
       ) : (
         <div className="mx-auto w-full max-w-3xl px-6 pt-5 pb-10">
@@ -141,14 +156,41 @@ const FindingsPage = () => {
               color: "var(--bpmn-text)",
             }}
           >
-            {framingSentence(items)}
+            {open.length === 0
+              ? "All findings from earlier pushes are resolved."
+              : framingSentence(open)}
           </p>
 
           <div className="flex flex-col gap-4">
-            {items.map((f) => (
+            {open.map((f) => (
               <FindingCard key={f.id} finding={f} />
             ))}
           </div>
+
+          {/* The ledger's history — fixed findings retire here, struck but
+              legible: proof the audit is tracking the PR, not re-litigating
+              it on every push. */}
+          {resolved.length > 0 && (
+            <>
+              <div
+                className={`flex items-center gap-3 ${open.length > 0 ? "mt-8" : "mt-1"}`}
+              >
+                <Eyebrow color="var(--bpmn-mint)">
+                  {`Resolved — fixed in a later push`}
+                </Eyebrow>
+                <span
+                  aria-hidden
+                  className="h-px flex-1"
+                  style={{ background: "var(--bpmn-border-soft)" }}
+                />
+              </div>
+              <div className="mt-3 flex flex-col gap-4">
+                {resolved.map((f) => (
+                  <FindingCard key={f.id} finding={f} resolved />
+                ))}
+              </div>
+            </>
+          )}
 
           <ConsultedFooter consulted={consulted} />
         </div>
@@ -195,11 +237,25 @@ const Eyebrow = ({ children, color }: { children: string; color?: string }) => (
   </span>
 );
 
-const FindingCard = ({ finding: f }: { finding: Finding }) => {
+/** "resolved 6 Jul 2026" — locale date, no time; null when unparseable. */
+function resolvedDate(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  return Number.isNaN(t) ? null : new Date(t).toLocaleDateString();
+}
+
+const FindingCard = ({
+  finding: f,
+  resolved = false,
+}: {
+  finding: Finding;
+  resolved?: boolean;
+}) => {
   const sev = SEVERITY_COLOR[(f.severity as FindingLevel) ?? "low"];
-  const tentative = f.confidence === "low";
+  const tentative = !resolved && f.confidence === "low";
   const citations = f.citations ?? [];
   const quoted = citations.find((c) => (c.quote ?? "").trim().length > 0);
+  const fixedOn = resolved ? resolvedDate(f.resolved_at) : null;
 
   return (
     <article
@@ -207,18 +263,31 @@ const FindingCard = ({ finding: f }: { finding: Finding }) => {
       style={{
         borderColor: "var(--bpmn-border-soft)",
         background: "var(--bpmn-surface-soft)",
-        borderLeft: `3px ${tentative ? "dashed" : "solid"} ${sev}`,
-        opacity: tentative ? 0.86 : 1,
+        // Resolved = retired history: mint accent (fixed, not failing), the
+        // whole card dimmed. Evidence stays legible — that's the point.
+        borderLeft: `3px ${tentative ? "dashed" : "solid"} ${resolved ? "var(--bpmn-mint)" : sev}`,
+        opacity: resolved ? 0.55 : tentative ? 0.86 : 1,
       }}
     >
       {/* Badges + title */}
       <div className="mb-1 flex flex-wrap items-center gap-1.5">
         <KindBadge finding={f} />
-        <ConfidenceChip level={f.confidence} />
+        {resolved && (
+          <span
+            className="rounded border px-1.5 py-0.5 font-mono text-[9.5px] tracking-wider whitespace-nowrap uppercase"
+            style={{
+              borderColor: "var(--bpmn-mint)",
+              color: "var(--bpmn-mint)",
+            }}
+          >
+            resolved
+          </span>
+        )}
+        {!resolved && <ConfidenceChip level={f.confidence} />}
         <span className="ml-auto" />
         <span
           className="font-mono text-[9.5px] tracking-wider uppercase"
-          style={{ color: sev }}
+          style={{ color: resolved ? "var(--bpmn-text-dim)" : sev }}
         >
           {f.severity}
         </span>
@@ -228,10 +297,20 @@ const FindingCard = ({ finding: f }: { finding: Finding }) => {
         style={{
           fontFamily: "var(--bpmn-font-display)",
           color: "var(--bpmn-text)",
+          textDecoration: resolved ? "line-through" : undefined,
+          textDecorationThickness: resolved ? "1px" : undefined,
         }}
       >
         {f.title}
       </h2>
+      {fixedOn && (
+        <p
+          className="mb-1.5 font-mono text-[10px]"
+          style={{ color: "var(--bpmn-text-dim)" }}
+        >
+          resolved {fixedOn}
+        </p>
+      )}
 
       {/* Body */}
       <div className="prose-read-sm text-[13px] leading-relaxed">

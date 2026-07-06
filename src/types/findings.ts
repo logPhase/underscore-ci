@@ -36,6 +36,14 @@ export interface Finding {
   citations: FindingCitation[];
   /** How a human verifies this finding. */
   check?: string | null;
+  /** Ledger status — findings persist across pushes of the same PR; a fixed
+   *  finding is marked resolved (kept for history), never deleted. Absent on
+   *  pre-ledger payloads → treat as "open". */
+  status?: "open" | "resolved";
+  /** ISO timestamp of the push that first reported this finding. */
+  first_seen?: string | null;
+  /** ISO timestamp of the push that resolved it (status "resolved" only). */
+  resolved_at?: string | null;
 }
 
 export interface FindingsPayload {

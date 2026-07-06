@@ -286,10 +286,15 @@ const PRSummaryBanner: React.FC = () => {
                   {transformedData.findings && (
                     <Stat
                       label="findings"
-                      value={transformedData.findings.items?.length ?? 0}
+                      value={
+                        transformedData.findings.items?.filter(
+                          (f) => f.status !== "resolved"
+                        ).length ?? 0
+                      }
                       color={
                         transformedData.findings.items?.some(
-                          (f) => f.severity === "high"
+                          (f) =>
+                            f.status !== "resolved" && f.severity === "high"
                         )
                           ? "text-rose-400"
                           : "text-zinc-50"

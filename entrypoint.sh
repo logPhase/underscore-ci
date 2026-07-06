@@ -84,6 +84,73 @@ upsert_comment() {
   fi
 }
 
+# --- findings → PR review (inline where anchorable) --------------------------
+# Open findings become inline review comments anchored to the finding's file +
+# excerpt line at HEAD; resolved ones ride struck-through in the review body.
+# Previous runs' inline comments (marker-tagged) are retired first so a PR
+# never accumulates stale anchors. Soft everywhere — reviews are additive.
+FINDING_MARKER="<!-- underscore-finding -->"
+
+post_findings_review() {
+  [[ -n "${PR_NUMBER:-}" && -s "$OUT_DIR/pr-output.json" ]] || return 0
+  local n_items
+  n_items=$(jq '(.findings.items // []) | length' "$OUT_DIR/pr-output.json" 2>/dev/null || echo 0)
+  [[ "$n_items" == "0" || -z "$n_items" ]] && return 0
+
+  # Retire the previous run's inline finding comments.
+  gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/comments" --paginate \
+    -q ".[] | select(.body | contains(\"$FINDING_MARKER\")) | .id" 2>/dev/null |
+  while read -r cid; do
+    [[ -n "$cid" ]] && gh api -X DELETE "repos/$GITHUB_REPOSITORY/pulls/comments/$cid" >/dev/null 2>&1 || true
+  done
+
+  # Inline comments for OPEN findings whose excerpt anchors to a HEAD line.
+  local comments=/tmp/underscore/finding-comments.jsonl
+  : > "$comments"
+  while IFS= read -r f; do
+    file=$(jq -r '.file // empty' <<<"$f")
+    [[ -n "$file" && -f "$GITHUB_WORKSPACE/$file" ]] || continue
+    first=$(jq -r '.excerpt // empty' <<<"$f" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -v '^$' | head -1)
+    [[ -n "$first" ]] || continue
+    line=$(grep -nF -- "$first" "$GITHUB_WORKSPACE/$file" | head -1 | cut -d: -f1)
+    [[ -n "$line" ]] || continue
+    jq -n --arg path "$file" --argjson line "$line" --arg marker "$FINDING_MARKER" --argjson f "$f" '
+      {path: $path, line: $line, side: "RIGHT",
+       body: ($marker + "\n**[\($f.severity // "?") · \(if ($f.kind // "") == "divergence" then "docs disagree" else "correctness" end)] \($f.title // "")**\n\n"
+              + ($f.detail // "")
+              + (if ($f.expected // "") != "" then "\n\n**Documented:** \($f.expected)" else "" end)
+              + (if ($f.observed // "") != "" then "\n**In the code:** \($f.observed)" else "" end)
+              + (if (($f.citations // []) | length) > 0 then "\n\n_Sources: \([$f.citations[].title] | join("; "))_" else "" end)
+              + (if ($f.check // "") != "" then "\n\n**Verify:** \($f.check)" else "" end))}' \
+      >>"$comments" 2>/dev/null || true
+  done < <(jq -c '(.findings.items // [])[] | select((.status // "open") != "resolved")' "$OUT_DIR/pr-output.json")
+
+  local body cs review
+  body=$(jq -r --arg marker "$FINDING_MARKER" '
+    (.findings.items // []) as $items |
+    ([$items[] | select((.status // "open") != "resolved")]) as $open |
+    ([$items[] | select((.status // "open") == "resolved")]) as $res |
+    $marker + "\n### Underscore correctness findings\n"
+    + (if ($open | length) > 0
+       then "\n" + ([$open[] | "- **[\(.severity)]** \(.title)"] | join("\n")) + "\n"
+       else "\nAll previously reported findings are resolved. ✅\n" end)
+    + (if ($res | length) > 0
+       then "\n**Resolved since earlier pushes:**\n" + ([$res[] | "- ~~\(.title)~~ ✅"] | join("\n")) + "\n"
+       else "" end)
+    + "\nGrounded against this repository'\''s institutional knowledge — full evidence in the Findings tab of the interactive report."
+  ' "$OUT_DIR/pr-output.json")
+  cs=/tmp/underscore/finding-comments.json
+  jq -s '.' "$comments" >"$cs" 2>/dev/null || echo '[]' >"$cs"
+  review=/tmp/underscore/finding-review.json
+  jq -n --arg body "$body" --arg commit "$HEAD_SHA" --slurpfile cs "$cs" \
+     '{commit_id: $commit, event: "COMMENT", body: $body, comments: $cs[0]}' >"$review"
+  if ! gh api -X POST "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews" --input "$review" >/dev/null 2>&1; then
+    # An inline anchor outside the diff 422s the whole review — retry body-only.
+    jq 'del(.comments)' "$review" >"$review.body" &&
+      gh api -X POST "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews" --input "$review.body" >/dev/null
+  fi
+}
+
 on_analysis_failure() {
   if [[ "$MODE" == "full" ]]; then
     # Full mode: ALWAYS fail the step, regardless of FAIL_ON_ERROR. There is
@@ -219,16 +286,28 @@ if [[ "$MODE" == "pr" ]]; then
         "|---:|---:|---:|---:|",
         "| \(.counts.journeys // 0) | \(.counts.bpmn // 0) | \(.counts.summaries // 0) | \(.counts.findings // 0) |",
         "",
-        (if ((.findingTitles // []) | length) > 0 then
-          "**Correctness findings** (checked against your institutional knowledge — details in the report):",
-          ((.findingTitles // [])[] | "- \(.)"),
-          ""
-        else empty end),
         (if ((.bpmnFlows // []) | length) > 0 then
           "**Business flows touched:**",
           ((.bpmnFlows // [])[] | "- \(.title)")
         else empty end)
       ' "$OUT_DIR/manifest.json"
+      # Findings come from the payload (not the manifest): items carry the
+      # per-PR ledger status, so fixed ones show struck-through, not deleted.
+      jq -r '
+        (.findings.items // []) as $items |
+        ([$items[] | select((.status // "open") != "resolved")]) as $open |
+        ([$items[] | select((.status // "open") == "resolved")]) as $res |
+        (if ($open | length) > 0 then
+          "",
+          "**Correctness findings** (checked against your institutional knowledge — details in the report):",
+          ($open[] | "- [\(.severity)] \(.title)")
+        else empty end),
+        (if ($res | length) > 0 then
+          "",
+          "**Resolved since earlier pushes:**",
+          ($res[] | "- ~~\(.title)~~ ✅")
+        else empty end)
+      ' "$OUT_DIR/pr-output.json" 2>/dev/null || true
     else
       echo "_Analysis completed; no manifest was produced._"
     fi
@@ -245,6 +324,7 @@ if [[ "$MODE" == "pr" ]]; then
   # `|| …` also suspends set -e inside upsert_comment, so no gh hiccup can
   # abort the script after a successful analysis.
   upsert_comment "$SUMMARY" || echo "::warning::PR comment upsert failed — report was still produced"
+  post_findings_review || echo "::warning::findings review post failed — report and comment were still produced"
 else
   # Full mode: step summary only — there is no PR comment to upsert.
   {
