@@ -43,7 +43,18 @@ import {
 const lineLabel = (idx: number): string =>
   idx < 26 ? String.fromCharCode(65 + idx) : String(idx + 1);
 
+/** "1 step" / "3 steps" — the board quotes counts everywhere; a bare
+ *  "1 components" reads like a bug (54-journey board audit). */
+const plural = (n: number, word: string): string =>
+  `${n} ${word}${n === 1 ? "" : "s"}`;
+
 const MAX_ROUTE_STOPS = 6;
+
+// Long boards (54 journeys on a whole-repo run): cap the entrance stagger
+// so the tail rows don't sit invisible for seconds while their delay burns
+// down — past the first dozen rows everything enters together.
+const staggerDelay = (i: number, step: number): number =>
+  0.08 + Math.min(i, 12) * step;
 
 /** The route string — component stops joined by dotted flow segments. */
 const RouteString = ({
@@ -69,8 +80,19 @@ const RouteString = ({
               className={`rounded-md border px-2 py-[3px] font-mono text-[10px] tracking-wide whitespace-nowrap ${
                 changed
                   ? "border-amber-500/55 bg-amber-500/[0.07] text-amber-300"
-                  : "border-zinc-700/70 bg-zinc-800/50 text-zinc-300"
+                  : ""
               }`}
+              style={
+                changed
+                  ? undefined
+                  : {
+                      // Tokens, not zinc: the paper theme's zinc compat sweep
+                      // misses opacity variants, leaving dark chips on cream.
+                      borderColor: "var(--bpmn-border-em)",
+                      background: "var(--bpmn-bg-deep)",
+                      color: "var(--bpmn-text)",
+                    }
+              }
             >
               {changed && <span className="mr-1">Δ</span>}
               {stop.name}
@@ -81,7 +103,13 @@ const RouteString = ({
       {extra > 0 && (
         <span className="flex items-center">
           <span className="route-seg" style={{ color }} />
-          <span className="rounded-md border border-zinc-700/50 px-2 py-[3px] font-mono text-[10px] text-zinc-500">
+          <span
+            className="rounded-md border px-2 py-[3px] font-mono text-[10px]"
+            style={{
+              borderColor: "var(--bpmn-border)",
+              color: "var(--bpmn-text-dim)",
+            }}
+          >
             +{extra} more
           </span>
         </span>
@@ -101,15 +129,15 @@ const LineBadge = ({
   color: string;
   affected: boolean;
 }) => (
-  <span className="relative flex h-11 w-11 shrink-0 items-center justify-center">
+  <span className="relative flex h-[52px] w-[52px] shrink-0 items-center justify-center">
     {affected && (
       <span
-        className="absolute inset-[-5px] rounded-full border-[1.5px] border-dashed border-amber-500/55"
+        className="absolute inset-[-7px] rounded-full border-[1.5px] border-dashed border-amber-500/55"
         aria-hidden="true"
       />
     )}
     <span
-      className="flex h-11 w-11 items-center justify-center rounded-full border-[2.5px] font-mono text-[16px] font-bold"
+      className="flex h-[52px] w-[52px] items-center justify-center rounded-full border-[2.5px] font-mono text-[19px] font-bold"
       style={{ borderColor: color, color }}
     >
       {label}
@@ -129,20 +157,28 @@ const RowStats = ({
   affected: boolean;
 }) => (
   <div className="hidden shrink-0 text-right font-mono sm:block">
-    <div className="text-[22px] leading-none font-bold tracking-tight text-zinc-100">
+    <div
+      className="text-[24px] leading-none font-bold tracking-tight"
+      style={{ color: "var(--bpmn-text)" }}
+    >
       {route?.stops.length ?? chapter.services.length}
-      <span className="ml-1 text-[11px] font-medium text-zinc-500">
-        components
+      <span
+        className="ml-1 text-[12px] font-medium"
+        style={{ color: "var(--bpmn-text-dim)" }}
+      >
+        {(route?.stops.length ?? chapter.services.length) === 1
+          ? "component"
+          : "components"}
       </span>
     </div>
-    <div className="mt-1.5 text-[10.5px] text-zinc-500">
-      {chapter.steps.length} steps
+    <div className="mt-1.5 text-[11px]" style={{ color: "var(--bpmn-text-dim)" }}>
+      {plural(chapter.steps.length, "step")}
       {chapter.bpmn?.elements?.length
-        ? ` · ${chapter.bpmn.elements.length} flow elements`
+        ? ` · ${plural(chapter.bpmn.elements.length, "flow element")}`
         : ""}
     </div>
     {affected && (
-      <span className="mt-2 inline-flex items-center rounded-full border border-amber-500/45 bg-amber-500/[0.08] px-2 py-[2px] text-[9.5px] tracking-wider text-amber-300">
+      <span className="mt-2 inline-flex items-center rounded-full border border-amber-500/45 bg-amber-500/[0.08] px-2 py-[2px] text-[10px] tracking-wider text-amber-300">
         <span className="mr-1">Δ</span>affected
       </span>
     )}
@@ -278,7 +314,7 @@ const JourneyHeader = ({
         <Button
           onClick={onBack}
           variant="ghost"
-          className="mb-3 gap-1.5 px-2 py-1 text-zinc-500 hover:bg-zinc-800/60 hover:text-zinc-200"
+          className="mb-3 gap-1.5 px-2 py-1 text-zinc-500 hover:bg-[color:var(--bpmn-surface-hi)] hover:text-zinc-200"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
           Canvas
@@ -291,7 +327,7 @@ const JourneyHeader = ({
           {hasPR ? "Journeys · Departures" : "Journeys"}
         </div>
         <h1
-          className="mt-2 mb-1 text-[30px] leading-tight font-medium tracking-tight text-zinc-100"
+          className="mt-2 mb-1 text-[34px] leading-tight font-medium tracking-tight text-zinc-100"
           style={{ fontFamily: "var(--reading-font)", fontStyle: "italic" }}
         >
           {hasPR
@@ -313,7 +349,7 @@ const JourneyHeader = ({
                 title="Filter to PR-impacted journeys only"
                 className="rounded-full border border-amber-500/45 bg-amber-500/10 px-2.5 py-[2.5px] text-[10.5px] text-amber-300 transition-colors hover:bg-amber-500/20"
               >
-                PR · {impacted.length} affected
+                PR · {plural(impacted.length, "line")} affected
               </button>
             )}
             {prTitle && (
@@ -340,7 +376,11 @@ const JourneyHeader = ({
         transition={{ delay: 0.15 }}
       >
         <div
-          className="flex cursor-text items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-900/50 px-4 py-2.5 transition-colors hover:border-zinc-700"
+          className="flex cursor-text items-center gap-3 rounded-lg border px-4 py-2.5 transition-colors"
+          style={{
+            borderColor: "var(--bpmn-border-soft)",
+            background: "var(--bpmn-surface-soft)",
+          }}
           onClick={() => setSearchOpen(true)}
         >
           <Search className="h-4 w-4 text-zinc-500" />
@@ -612,18 +652,24 @@ const JourneyPage = () => {
           {/* Board strip — the departures-board caption over the lists. */}
           {chapters.length > 0 && (
             <div className="mb-4 flex items-baseline gap-3 border-b border-zinc-800 pb-2">
-              <span className="font-mono text-[10.5px] tracking-[0.22em] text-zinc-500 uppercase">
+              <span className="font-mono text-[11px] tracking-[0.22em] text-zinc-500 uppercase">
                 In service
               </span>
-              <span className="ml-auto font-mono text-[10.5px] text-zinc-600">
-                {chapters.length} lines ·{" "}
-                {chapters.reduce((n, c) => n + c.steps.length, 0)} steps ·{" "}
-                {new Set(
-                  chapters.flatMap(
-                    (c) => routesById.get(c.id)?.stops.map((s) => s.key) ?? []
-                  )
-                ).size}{" "}
-                components
+              <span className="ml-auto font-mono text-[11px] text-zinc-600">
+                {plural(chapters.length, "line")} ·{" "}
+                {plural(
+                  chapters.reduce((n, c) => n + c.steps.length, 0),
+                  "step"
+                )}{" "}
+                ·{" "}
+                {plural(
+                  new Set(
+                    chapters.flatMap(
+                      (c) => routesById.get(c.id)?.stops.map((s) => s.key) ?? []
+                    )
+                  ).size,
+                  "component"
+                )}
               </span>
             </div>
           )}
@@ -704,9 +750,11 @@ const JourneyPage = () => {
                     key={chapter.id}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.08 + i * 0.04 }}
+                    transition={{ delay: staggerDelay(i, 0.04) }}
                     onClick={() => onSelectChapter(chapter.slug)}
                     className={wrapperClass}
+                    data-tour="journey-row"
+                    data-chapter-slug={chapter.slug}
                   >
                     {opts?.primary && (
                       <span
@@ -725,7 +773,7 @@ const JourneyPage = () => {
                         affected={!isRemoved}
                       />
                       <div className="min-w-0 flex-1">
-                        <h2 className="journey-card-title flex flex-wrap items-center gap-2 text-[17px] font-bold tracking-tight transition-colors">
+                        <h2 className="journey-card-title flex flex-wrap items-center gap-2 text-[19px] font-bold tracking-tight transition-colors">
                           {chapter.title}
                           <span
                             className={`inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 font-mono text-[10px] ${badgeClass}`}
@@ -735,7 +783,7 @@ const JourneyPage = () => {
                             {!isAdded &&
                               !isRemoved &&
                               changedSteps > 0 &&
-                              ` · ${changedSteps}/${chapter.steps.length}`}
+                              ` · ${changedSteps}/${chapter.steps.length} steps`}
                           </span>
                           {reclassLabel && (
                             <span
@@ -749,7 +797,7 @@ const JourneyPage = () => {
                         {chapter.entryFqn && <FqnRow fqn={chapter.entryFqn} />}
                         {chapter.intentWhy ? (
                           <p
-                            className="mt-1 line-clamp-2 text-[13px] leading-snug text-cyan-100/85"
+                            className="mt-1 line-clamp-2 text-[13.5px] leading-snug text-cyan-100/85"
                             style={{ fontFamily: "var(--reading-font)" }}
                           >
                             {chapter.intentWhy}
@@ -757,7 +805,7 @@ const JourneyPage = () => {
                         ) : (
                           chapter.summary && (
                             <p
-                              className="mt-1 line-clamp-2 text-[13px] text-zinc-400"
+                              className="mt-1 line-clamp-2 text-[13.5px] text-zinc-400"
                               style={{ fontFamily: "var(--reading-font)" }}
                             >
                               {chapter.summary}
@@ -794,7 +842,7 @@ const JourneyPage = () => {
                   {hint && (
                     <span className="text-[11px] text-zinc-600">{hint}</span>
                   )}
-                  <div className="h-px flex-1 bg-zinc-800" />
+                  <div className="h-px flex-1" style={{background: "var(--bpmn-border-soft)"}} />
                 </div>
               );
 
@@ -845,7 +893,7 @@ const JourneyPage = () => {
                         type="button"
                         onClick={() => setShowNoise((v) => !v)}
                         aria-expanded={showNoise}
-                        className="mb-3 flex w-full items-center gap-2 rounded border border-dashed border-zinc-800 px-3 py-2 transition-colors hover:border-zinc-700 hover:bg-zinc-900/40"
+                        className="journey-card-quiet mb-3 flex w-full items-center gap-2 rounded border border-dashed px-3 py-2 transition-colors"
                       >
                         {showNoise ? (
                           <ChevronDown className="h-3.5 w-3.5 text-zinc-500" />
@@ -882,7 +930,7 @@ const JourneyPage = () => {
                   <span className="font-mono text-xs tracking-wider text-zinc-600 uppercase">
                     Unaffected · {unimpacted.length}
                   </span>
-                  <div className="h-px flex-1 bg-zinc-800" />
+                  <div className="h-px flex-1" style={{background: "var(--bpmn-border-soft)"}} />
                 </div>
               )}
               <div className="space-y-2.5">
@@ -891,9 +939,11 @@ const JourneyPage = () => {
                     key={chapter.id}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.08 + i * 0.05 }}
+                    transition={{ delay: staggerDelay(i, 0.05) }}
                     onClick={() => onSelectChapter(chapter.slug)}
-                    className="group cursor-pointer rounded-lg border border-zinc-800/60 bg-zinc-900/30 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-700 hover:bg-zinc-900/60"
+                    className="group journey-card-quiet cursor-pointer rounded-lg border p-4 transition-all duration-200 hover:-translate-y-0.5"
+                    data-tour="journey-row"
+                    data-chapter-slug={chapter.slug}
                   >
                     <div className="flex items-center gap-5">
                       <LineBadge
@@ -902,13 +952,13 @@ const JourneyPage = () => {
                         affected={false}
                       />
                       <div className="min-w-0 flex-1">
-                        <h2 className="text-[17px] font-bold tracking-tight text-zinc-300 transition-colors group-hover:text-zinc-100">
+                        <h2 className="journey-card-title text-[19px] font-bold tracking-tight transition-colors">
                           {chapter.title}
                         </h2>
                         {chapter.entryFqn && <FqnRow fqn={chapter.entryFqn} />}
                         {chapter.summary && (
                           <p
-                            className="mt-1 line-clamp-2 text-[13px] text-zinc-400"
+                            className="mt-1 line-clamp-2 text-[13.5px] text-zinc-400"
                             style={{ fontFamily: "var(--reading-font)" }}
                           >
                             {chapter.summary}

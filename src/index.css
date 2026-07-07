@@ -1022,6 +1022,18 @@ html.reading-paper, html.reading-paper body { background: #faf7f0; }
 }
 .journey-card-title { color: var(--bpmn-text); }
 
+/* Quiet variant — unaffected board rows + the noise toggle. Same token
+   family, one step softer, and paper-safe (the zinc compat sweep misses
+   the opacity-variant classes these surfaces used to carry). */
+.journey-card-quiet {
+  background: var(--bpmn-surface-soft);
+  border-color: var(--bpmn-border-soft);
+}
+.journey-card-quiet:hover {
+  background: var(--bpmn-surface-hi);
+  border-color: var(--bpmn-border-em);
+}
+
 /* ── Token baseline at :root ─────────────────────────────────────────
    The theme sweep moved page chrome (banner, canvas world, tooltips,
    panels) onto the --bpmn-* tokens, and that chrome lives OUTSIDE

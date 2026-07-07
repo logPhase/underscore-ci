@@ -1,7 +1,10 @@
+import Tour from "@/components/tour/Tour";
+import { useTour } from "@/components/tour/tour-store";
 import { useAnalysis } from "@/store/use-analysis-store";
 import { useUIStore } from "@/store/use-ui-store";
 import {
   ArrowLeft,
+  HelpCircle,
   Map as MapIcon,
   PanelLeftClose,
   PanelLeftOpen,
@@ -95,6 +98,9 @@ export const SessionShell = () => {
       <main className="h-full min-w-0 flex-1">
         <Outlet />
       </main>
+      {/* Guided onboarding — overlays the whole shell; renders nothing when
+          inactive. Mounted here so it lives inside the Router with data. */}
+      <Tour />
     </div>
   );
 };
@@ -210,6 +216,7 @@ const SessionRail = () => {
         }`}
         style={{ borderColor: "var(--bpmn-border-soft)" }}
         aria-label="Session views"
+        data-tour="rail-nav"
       >
         <RailNavItem to="/canvas" icon={MapIcon} label="Canvas" collapsed={collapsed} />
         <RailNavItem
@@ -241,7 +248,38 @@ const SessionRail = () => {
           />
         )}
       </nav>
+
+      {/* Tour — pinned to the rail's bottom, always available so anyone can
+          re-take the orientation at any time. */}
+      <div
+        className={`mt-auto border-t pb-2 pt-2 ${collapsed ? "px-1.5" : "px-2"}`}
+        style={{ borderColor: "var(--bpmn-border-soft)" }}
+      >
+        <TourButton collapsed={collapsed} />
+      </div>
     </aside>
+  );
+};
+
+/** Relaunches the guided tour from step 1. */
+const TourButton = ({ collapsed }: { collapsed: boolean }) => {
+  const startTour = useTour((s) => s.start);
+  return (
+    <button
+      type="button"
+      onClick={startTour}
+      title={collapsed ? "Tour" : undefined}
+      className={`rail-nav-item flex min-h-10 w-full cursor-pointer items-center rounded-md ${
+        collapsed ? "justify-center px-0" : "gap-2.5 px-3 text-[12.5px]"
+      }`}
+      style={{
+        fontFamily: "var(--bpmn-font-mono)",
+        color: "var(--bpmn-text-muted)",
+      }}
+    >
+      <HelpCircle className="h-4 w-4 shrink-0" />
+      {!collapsed && <span>Tour</span>}
+    </button>
   );
 };
 

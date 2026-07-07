@@ -32,7 +32,10 @@ export function CanvasWorldPage() {
           the shadcn tokens / zinc remap like the rest of the app. */}
       {/* h-full/w-full — sized by the SessionShell content area, not the
           viewport (the session rail owns the left 232px). */}
-      <div className="canvas-stage relative flex h-full w-full flex-col items-center justify-center">
+      <div
+        className="canvas-stage relative flex h-full w-full flex-col items-center justify-center"
+        data-tour="canvas-root"
+      >
         <PRSummaryBanner />
         <CodebaseStats />
         <BiologicalWorld />

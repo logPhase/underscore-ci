@@ -139,6 +139,7 @@ export function AskPanel({
         type="button"
         onClick={() => setOpen(true)}
         title="Ask AI"
+        data-tour="ask-ai"
         className="absolute right-0 top-24 z-40 flex flex-col items-center gap-1 rounded-l-md border border-r-0 px-1.5 py-2.5 shadow"
         style={{
           background: "var(--bpmn-surface)",

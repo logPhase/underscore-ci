@@ -309,7 +309,7 @@ const PRSummaryBanner: React.FC = () => {
       </Popover>
 
       {/* Toggles — theme + PR comparison */}
-      <div className="flex w-fit items-center gap-2.5">
+      <div className="flex w-fit items-center gap-2.5" data-tour="pr-toggle">
         <ThemeToggle />
         <label
           htmlFor="pr-mode-toggle"

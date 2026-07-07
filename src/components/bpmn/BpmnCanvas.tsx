@@ -1005,6 +1005,7 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
       ref={containerRef}
       className="bpmn-canvas-root flex h-full w-full"
       style={{ background: "var(--bpmn-bg)" }}
+      data-tour="bpmn-canvas"
     >
       <div className="relative flex-1 overflow-hidden">
         {/* Floating toolbar — BOTTOM-right, quiet at rest (full on hover).
