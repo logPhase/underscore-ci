@@ -169,6 +169,7 @@ runs:
         UNDERSCORE_IMAGE: ${{ inputs.image }}
         MODE: ${{ inputs.mode }}
         FINDINGS: ${{ inputs.findings }}
+        VIEWER_URL: ${{ inputs.viewer-url }}
         WORKSPACE: ${{ inputs.workspace }}
         DELIVERY: ${{ inputs.delivery }}
         SLN: ${{ inputs.sln }}
@@ -221,6 +222,7 @@ runs:
           -e BPMN_MAX_JOURNEYS \
           -e MODE \
           -e FINDINGS \
+          -e VIEWER_URL \
           -e DELIVERY \
           -e SLN \
           -e UNDERSCORE_LANG \

@@ -84,6 +84,9 @@
     color:var(--amber); border:1px solid color-mix(in srgb, var(--amber) 45%, transparent);
     border-radius:999px; padding:2px 8px}
   .when{font-family:var(--mono); font-size:11px; color:var(--mist); white-space:nowrap; flex:none; min-width:64px; text-align:right}
+  .prlink{font-family:var(--mono); font-size:10px; letter-spacing:.06em; white-space:nowrap; flex:none;
+    color:var(--sky); border:1px solid color-mix(in srgb, var(--sky) 40%, transparent); border-radius:999px; padding:2px 8px; cursor:alias}
+  .prlink:hover{color:var(--paper); border-color:var(--sky)}
   .arw{font-family:var(--mono); color:var(--dim); flex:none; transition:transform .2s, color .2s}
   .s:hover .arw{transform:translateX(3px); color:var(--signal)}
   .ltag{font-family:var(--mono); font-size:9px; letter-spacing:.16em; color:var(--live); flex:none}
@@ -284,6 +287,9 @@
       (isLatest?'<span class="ltag">LATEST</span>':'')+
       (r.findings>0?'<span class="fnd">'+r.findings+' finding'+(r.findings===1?'':'s')+'</span>':'')+
       '<span class="counts">'+esc(counts(r))+'</span>'+
+      // Jump to the pull request itself — a link INSIDE the row link, so it
+      // must stop propagation and open in a new tab.
+      (isPr&&r.repo?'<span class="prlink" data-pr-url="https://github.com/'+esc(r.repo)+'/pull/'+esc(String(r.pr))+'" title="Open pull request #'+esc(String(r.pr))+' on GitHub">PR ↗</span>':'')+
       '<span class="when" title="'+abs+' UTC">'+esc(rel(r.date))+'</span>'+
       '<span class="arw">→</span>'+
     '</a>';
@@ -298,6 +304,14 @@
     }
     var latestId=ALL.length?ALL[0]:null;
     board.innerHTML=rows.map(function(r){ return row(r, r===latestId); }).join("");
+    // PR jump chips live inside the row <a> — intercept so they open GitHub
+    // in a new tab instead of following the report link.
+    board.querySelectorAll(".prlink").forEach(function(el){
+      el.addEventListener("click", function(ev){
+        ev.preventDefault(); ev.stopPropagation();
+        window.open(el.getAttribute("data-pr-url"), "_blank", "noopener");
+      });
+    });
   }
 })();
 </script>

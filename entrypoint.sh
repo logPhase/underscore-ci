@@ -300,8 +300,25 @@ set_output publish-dir "$PUBLISH_REL"
 # kind/project/timestamp/counts{journeys,bpmn,summaries}/bpmnFlows only.
 SUMMARY=/tmp/underscore/summary.md
 if [[ "$MODE" == "pr" ]]; then
+  # The PR COMMENT is deliberately just the links — no counts, no analysis
+  # content on the PR itself (that lives in the report; the rich breakdown
+  # below goes to the step summary only).
+  COMMENT=/tmp/underscore/comment.md
   {
     echo "$COMMENT_MARKER"
+    if [[ -n "${VIEWER_URL:-}" ]]; then
+      VBASE="${VIEWER_URL%/}"
+      echo "**Underscore** analyzed this PR — [open the interactive report](${VBASE}/reports/pr-${PR_NUMBER}/underscore-report.html) · [all sessions](${VBASE}/)"
+    elif [[ "$DELIVERY" == "artifact" ]]; then
+      echo "**Underscore** analyzed this PR — download **underscore-report** from [this run's artifacts]($RUN_URL) and open the HTML."
+    else
+      OWNER="${GITHUB_REPOSITORY%%/*}"
+      REPO="${GITHUB_REPOSITORY#*/}"
+      echo "**Underscore** analyzed this PR — [open the interactive report](https://${OWNER}.github.io/${REPO}/pr-${PR_NUMBER}/)"
+    fi
+  } >"$COMMENT"
+
+  {
     echo "## Underscore PR analysis"
     echo ""
     if [[ -f "$OUT_DIR/manifest.json" ]]; then
@@ -349,7 +366,7 @@ if [[ "$MODE" == "pr" ]]; then
 
   # `|| …` also suspends set -e inside upsert_comment, so no gh hiccup can
   # abort the script after a successful analysis.
-  upsert_comment "$SUMMARY" || echo "::warning::PR comment upsert failed — report was still produced"
+  upsert_comment "$COMMENT" || echo "::warning::PR comment upsert failed — report was still produced"
   post_findings_review || echo "::warning::findings review post failed — report and comment were still produced"
 else
   # Full mode: step summary only — there is no PR comment to upsert.
