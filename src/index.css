@@ -1527,3 +1527,25 @@ html.reading-paper, html.reading-paper body { background: #faf7f0; }
   border: 3.5px solid transparent;
   border-left: 5px solid currentColor;
 }
+
+/* Diagram frame → fixed inset overlay: the SAME framed container grown
+   (chapter page's expand control), not a separate surface. One quiet
+   200ms settle; off under reduced motion. */
+.frame-overlay-enter {
+  animation: frame-overlay-in 200ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+@keyframes frame-overlay-in {
+  from {
+    opacity: 0.7;
+    transform: scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .frame-overlay-enter {
+    animation: none;
+  }
+}

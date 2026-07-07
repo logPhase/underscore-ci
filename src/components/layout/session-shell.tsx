@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Navigate, NavLink, Outlet } from "react-router-dom";
+import { RouteErrorBoundary } from "@/components/layout/RouteErrorBoundary";
 
 /** URL of the hosted sessions index, derived from where THIS report is
  *  served: reports live at <index>/reports/<dir>/underscore-report.html (or
@@ -96,7 +97,9 @@ export const SessionShell = () => {
     <div className="flex h-screen w-screen overflow-hidden">
       <SessionRail />
       <main className="h-full min-w-0 flex-1">
-        <Outlet />
+        <RouteErrorBoundary>
+          <Outlet />
+        </RouteErrorBoundary>
       </main>
       {/* Guided onboarding — overlays the whole shell; renders nothing when
           inactive. Mounted here so it lives inside the Router with data. */}

@@ -16,7 +16,8 @@ const BULLET = /^\s*(?:[-*]|\d+\.)\s+/;
  *  markdown, and individual `shall`-statement requirements numbered
  *  top-to-bottom (REQ-n anchors). Headings and fenced code are never
  *  requirements, whatever they contain. */
-export function splitSpecBlocks(markdown: string): SpecBlock[] {
+export function splitSpecBlocks(markdown: string | null | undefined): SpecBlock[] {
+  if (typeof markdown !== "string" || markdown.length === 0) return [];
   const units: Unit[] = [];
   let buf: string[] = [];
   let inFence = false;

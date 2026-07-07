@@ -23,6 +23,8 @@ import {
   Download,
   GitPullRequest,
   Info,
+  Maximize2,
+  Minimize2,
   RotateCw,
   Sparkles,
   Workflow,
@@ -181,6 +183,29 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
   // only when asked. Declared up here for the Esc handler.
   const [bpmnElement, setBpmnElement] = useState<BpmnElement | null>(null);
   const [stepFnsOpen, setStepFnsOpen] = useState(false);
+  // The framed diagram can EXPAND into a fixed inset overlay — the same
+  // container grown (spatial continuity), not a separate mode: pure
+  // component state, no route/hash change, no history entries. Esc
+  // collapses it AFTER the inner layers (step dialog, docks, call graph),
+  // and the frame's chrome (header strip, border) rides along so it reads
+  // as the same object.
+  const [frameExpanded, setFrameExpanded] = useState(false);
+  const frameRef = useRef<HTMLElement | null>(null);
+
+  // While expanded there is no page to scroll — but a plain wheel that
+  // BpmnCanvas lets through (zoom is ⌘+scroll) would scroll the page
+  // UNDERNEATH the overlay (fixed positioning doesn't detach the DOM
+  // subtree from the scroll container). Swallow it at the frame boundary;
+  // ⌘+scroll zoom still works (the canvas preventDefaults it first, and
+  // nothing here stops propagation).
+  useEffect(() => {
+    if (!frameExpanded) return;
+    const el = frameRef.current;
+    if (!el) return;
+    const swallow = (e: WheelEvent) => e.preventDefault();
+    el.addEventListener("wheel", swallow, { passive: false });
+    return () => el.removeEventListener("wheel", swallow);
+  }, [frameExpanded]);
 
   // Right-edge code dock — shared with AskPanel via the code-view store
   // (only one of the two right panels open at a time). `codeWidth` also
@@ -266,6 +291,9 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
       } else if (view === "flow") {
         setView("detail"); // close call-graph popup — keep selection
         e.preventDefault();
+      } else if (frameExpanded) {
+        setFrameExpanded(false); // collapse the expanded frame — keep selection
+        e.preventDefault();
       } else if (bpmnElement) {
         // BpmnCanvas clears its own selection → propagates to bpmnElement.
       } else {
@@ -274,7 +302,15 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
     };
     window.addEventListener("keydown", handler, true);
     return () => window.removeEventListener("keydown", handler, true);
-  }, [stepFnsOpen, bpmnElement, view, onBack, rightDock, setRightDock]);
+  }, [
+    stepFnsOpen,
+    bpmnElement,
+    view,
+    frameExpanded,
+    onBack,
+    rightDock,
+    setRightDock,
+  ]);
 
   // Expanded nodes — lifted here so the set survives fullscreen transitions.
   // Seeds with the root PLUS the ancestor chain of every PR-changed step:
@@ -646,19 +682,41 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
           <JourneyIntro chapter={chapter} badges={introBadges} />
 
           {chapter.bpmn ? (
-            <section
-              className="overflow-hidden rounded-xl"
-              style={{
-                border: "1px solid var(--bpmn-border-em)",
-                background: "var(--bpmn-bg)",
-                boxShadow:
-                  "0 1px 3px rgb(0 0 0 / 0.18), 0 18px 44px rgb(0 0 0 / 0.22)",
-              }}
-            >
+            <>
+              {/* Dim the page while the frame is expanded — the overlay
+                  reads as the same frame grown, floating above. Click
+                  outside collapses (Esc too). */}
+              {frameExpanded && (
+                <div
+                  aria-hidden
+                  className="fixed inset-0 z-[55]"
+                  style={{
+                    background: "rgba(0, 0, 0, 0.5)",
+                    backdropFilter: "blur(2px)",
+                  }}
+                  onClick={() => setFrameExpanded(false)}
+                />
+              )}
+              <section
+                ref={frameRef}
+                className={
+                  frameExpanded
+                    ? "frame-overlay-enter fixed z-[60] flex flex-col overflow-hidden rounded-xl"
+                    : "overflow-hidden rounded-xl"
+                }
+                style={{
+                  border: "1px solid var(--bpmn-border-em)",
+                  background: "var(--bpmn-bg)",
+                  boxShadow: frameExpanded
+                    ? "0 24px 80px rgb(0 0 0 / 0.5)"
+                    : "0 1px 3px rgb(0 0 0 / 0.18), 0 18px 44px rgb(0 0 0 / 0.22)",
+                  ...(frameExpanded ? { inset: 12 } : {}),
+                }}
+              >
               {/* The frame's header strip — diagram-level identity and
                   controls only (the journey identity lives in the intro). */}
               <div
-                className="flex items-center gap-2.5 px-4 py-2.5"
+                className="flex shrink-0 items-center gap-2.5 px-4 py-2.5"
                 style={{
                   borderBottom: "1px solid var(--bpmn-border-soft)",
                   background: "var(--bpmn-bg-deep)",
@@ -720,16 +778,45 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
                 >
                   <Download className="h-3.5 w-3.5" />
                 </button>
+                <button
+                  onClick={() => setFrameExpanded((v) => !v)}
+                  title={
+                    frameExpanded
+                      ? "Exit expanded view (Esc)"
+                      : "Expand the flow to fill the screen"
+                  }
+                  aria-label={
+                    frameExpanded ? "Exit expanded view" : "Expand the flow"
+                  }
+                  className="shrink-0 rounded-md p-1.5 transition-colors"
+                  style={{ color: "var(--bpmn-text-dim)" }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.color = "var(--bpmn-text)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = "var(--bpmn-text-dim)";
+                  }}
+                >
+                  {frameExpanded ? (
+                    <Minimize2 className="h-3.5 w-3.5" />
+                  ) : (
+                    <Maximize2 className="h-3.5 w-3.5" />
+                  )}
+                </button>
               </div>
-              {/* The window into the diagram — generous fixed height; the
-                  canvas pans and zooms INSIDE it, the page scrolls outside. */}
+              {/* The window into the diagram — generous fixed height in the
+                  page flow, the remaining overlay height when expanded; the
+                  canvas pans and zooms INSIDE it either way. */}
               <div
-                className="relative w-full"
-                style={{ height: "70vh", minHeight: 480 }}
+                className={
+                  frameExpanded ? "relative min-h-0 w-full flex-1" : "relative w-full"
+                }
+                style={frameExpanded ? {} : { height: "70vh", minHeight: 480 }}
               >
                 {inlineBpmn()}
               </div>
-            </section>
+              </section>
+            </>
           ) : (
             noDiagram
           )}

@@ -16,7 +16,8 @@ function parseTimestamp(ts: string): number | null {
  *  library.tsx relativeTime, widened to accept the ISO timestamps the specs
  *  history uses (the desktop original only parsed the compact run-id form).
  *  Falls back to the raw string when a value parses to neither. */
-export function relativeTime(ts: string): string {
+export function relativeTime(ts: string | null | undefined): string {
+  if (!ts) return "";
   const then = parseTimestamp(ts);
   if (then === null) return ts;
   const mins = Math.floor((Date.now() - then) / 60_000);

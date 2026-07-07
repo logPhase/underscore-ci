@@ -53,14 +53,33 @@ const OP_STYLE: Record<
   },
 };
 
+/** TOLERANT operation lookup — the wire outgrew the UI's vocabulary (newer
+ * analyzers emit "modified"; the hard OP_STYLE[op] index threw and blanked
+ * the whole app). Known ops style as themselves; "modified" borrows the
+ * updated style but keeps its honest label; anything unknown renders neutral
+ * with the raw label — never throws. */
+const opStyle = (op: string): { label: string; cls: string; dot: string } => {
+  if (op in OP_STYLE) return OP_STYLE[op as SpecOperation];
+  if (op === "modified") return { ...OP_STYLE.updated, label: "modified" };
+  return {
+    label: op || "changed",
+    cls: "border-zinc-500/30 bg-zinc-500/10 text-zinc-400",
+    dot: "#8b93a7",
+  };
+};
+
+/** Bucket an arbitrary wire op into the three summary families. */
+const opFamily = (op: string): SpecOperation =>
+  op === "created" || op === "deleted" ? op : "updated";
+
 const FRESH_MS = 48 * 60 * 60 * 1000;
 const isFresh = (at: string) => Date.now() - Date.parse(at) < FRESH_MS;
 
-const OpBadge = ({ op }: { op: SpecOperation }) => (
+const OpBadge = ({ op }: { op: string }) => (
   <span
-    className={`shrink-0 rounded border px-1.5 py-0.5 font-mono text-[10px] whitespace-nowrap ${OP_STYLE[op].cls}`}
+    className={`shrink-0 rounded border px-1.5 py-0.5 font-mono text-[10px] whitespace-nowrap ${opStyle(op).cls}`}
   >
-    {OP_STYLE[op].label}
+    {opStyle(op).label}
   </span>
 );
 
@@ -77,16 +96,16 @@ const RevisionDot = ({
   <button
     type="button"
     onClick={() => onOpen(event)}
-    aria-label={`${capabilityTitle(event.capability)} ${OP_STYLE[event.operation].label} ${relativeTime(event.at)} — view change`}
-    title={`${capabilityTitle(event.capability)} · ${OP_STYLE[event.operation].label} · ${relativeTime(event.at)}`}
+    aria-label={`${capabilityTitle(event.capability)} ${opStyle(event.operation).label} ${relativeTime(event.at)} — view change`}
+    title={`${capabilityTitle(event.capability)} · ${opStyle(event.operation).label} · ${relativeTime(event.at)}`}
     className={`h-2.5 w-2.5 shrink-0 animate-fade-in cursor-pointer rounded-full transition-transform hover:scale-150 focus-visible:ring-2 focus-visible:ring-[var(--bpmn-cyan)] focus-visible:outline-none ${
       isFresh(event.at) ? "spec-fresh" : ""
     }`}
     style={{
-      background: OP_STYLE[event.operation].dot,
+      background: opStyle(event.operation).dot,
       // Stagger the strip's entrance — one orchestrated moment, ~250ms total.
       animationDelay: `${index * 25}ms`,
-      ["--pulse-color" as string]: OP_STYLE[event.operation].dot,
+      ["--pulse-color" as string]: opStyle(event.operation).dot,
     }}
   />
 );
@@ -101,7 +120,7 @@ function activitySummary(history: SpecHistoryEvent[]): string {
   };
   for (const e of history) {
     if (Date.parse(e.at) < weekAgo) break; // newest-first
-    counts[e.operation]++;
+    counts[opFamily(e.operation)]++;
   }
   return (
     [
@@ -136,7 +155,7 @@ const RevisionStrip = ({
       <div className="flex items-center gap-1.5">
         {recent.map((event, i) => (
           <RevisionDot
-            key={event.version_id}
+            key={event.version_id || String(i)}
             event={event}
             index={i}
             onOpen={onOpen}
@@ -292,10 +311,10 @@ const SpecsPage = () => {
                     }`}
                     style={{
                       background: last
-                        ? OP_STYLE[last.operation].dot
+                        ? opStyle(last.operation).dot
                         : "var(--bpmn-border-soft)",
                       ["--pulse-color" as string]: last
-                        ? OP_STYLE[last.operation].dot
+                        ? opStyle(last.operation).dot
                         : "transparent",
                     }}
                   />
@@ -316,7 +335,7 @@ const SpecsPage = () => {
                         className="block font-mono text-[10px]"
                         style={{ color: "var(--bpmn-text-dim)" }}
                       >
-                        {OP_STYLE[last.operation].label} {relativeTime(last.at)}
+                        {opStyle(last.operation).label} {relativeTime(last.at)}
                       </span>
                     )}
                   </span>
@@ -332,9 +351,9 @@ const SpecsPage = () => {
                 >
                   Superseded ({removed.length})
                 </summary>
-                {removed.map((event) => (
+                {removed.map((event, i) => (
                   <button
-                    key={event.version_id}
+                    key={event.version_id || String(i)}
                     type="button"
                     onClick={() => openEventDiff(event)}
                     title={`Superseded ${relativeTime(event.at)} — view what it said`}
@@ -422,7 +441,7 @@ const SpecsPage = () => {
                   <HistoryTimeline events={selectedHistory} onOpen={openDiff} />
                 ) : (
                   <SpecReader
-                    content={selectedSpec.content}
+                    content={selectedSpec.content ?? ""}
                     touched={reqChanges[selectedSpec.capability]}
                   />
                 )}
@@ -570,8 +589,8 @@ const HistoryTimeline = ({
   onOpen: (event: SpecHistoryEvent) => void;
 }) => (
   <ol className="flex flex-col gap-1.5">
-    {events.map((event) => (
-      <li key={event.version_id}>
+    {events.map((event, i) => (
+      <li key={event.version_id || String(i)}>
         <button
           type="button"
           onClick={() => onOpen(event)}

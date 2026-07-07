@@ -145,8 +145,10 @@ export const useSpecsStore = create<SpecsState>()((set, get) => ({
     if (capability in reqChanges) return;
     const latest = history.find((e) => e.capability === capability);
     // Change bars only make sense for a revision; a `created` spec is all new
-    // by definition and the created badge already says so.
-    if (!latest || latest.operation !== "updated") return;
+    // by definition and the created badge already says so. The wire says
+    // "updated" or (newer analyzers) "modified" — both are revisions.
+    if (!latest || latest.operation === "created" || latest.operation === "deleted")
+      return;
     const spec = specs.find((s) => s.capability === capability);
     const prevEvent = previousVersionOf(history, latest.version_id);
     if (!spec || !prevEvent) return;
@@ -157,11 +159,11 @@ export const useSpecsStore = create<SpecsState>()((set, get) => ({
     set((s) => ({
       reqChanges: {
         ...s.reqChanges,
-        [capability]: touchedRequirements(prev.content, spec.content),
+        [capability]: touchedRequirements(prev.content ?? "", spec.content ?? ""),
       },
       removedReqCounts: {
         ...s.removedReqCounts,
-        [capability]: removedRequirementCount(prev.content, spec.content),
+        [capability]: removedRequirementCount(prev.content ?? "", spec.content ?? ""),
       },
     }));
   },

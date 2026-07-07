@@ -13,13 +13,16 @@ export interface SpecEntry {
   content: string;
 }
 
+/** The style vocabulary the UI knows. The WIRE may carry more (newer
+ * analyzers emit e.g. "modified") — wire fields are typed string and every
+ * lookup must be tolerant (see specs.tsx opStyle). */
 export type SpecOperation = "created" | "updated" | "deleted";
 
 export interface SpecHistoryEvent {
   version_id: string;
   capability: string;
   path: string;
-  operation: SpecOperation;
+  operation: string;
   at: string;
   size: number;
   sha256: string;
@@ -29,7 +32,7 @@ export interface SpecVersionContent {
   version_id: string;
   capability: string;
   path: string;
-  operation: SpecOperation;
+  operation: string;
   at: string;
   content: string;
 }
