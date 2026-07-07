@@ -5,7 +5,7 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { stripPRFromChapter } from "@/data/prModeFilter";
-import { getPrOverview, getPROverlay, getMethodInfo } from "@/data/parity-loader";
+import { getPROverlay, getMethodInfo } from "@/data/parity-loader";
 import { bpmnExportFilename } from "@/lib/exportBpmnPng";
 import { useJourneyUIStore } from "@/store/use-journey-ui-store";
 import { Chapter, ChapterPRStatus } from "@/types/journey";
@@ -17,8 +17,6 @@ import {
   Download,
   GitPullRequest,
   Info,
-  Maximize2,
-  Minimize2,
   RotateCw,
   Sparkles,
   Workflow,
@@ -29,7 +27,7 @@ import { useLocation } from "react-router-dom";
 import { BpmnEditor, type BpmnCanvasHandle } from "./BpmnEditor";
 import { BpmnStepFunctions } from "./BpmnStepFunctions";
 import CallFlowChart from "./CallFlowChart";
-import { JourneyOverview } from "./JourneyOverview";
+import { JourneyIntro } from "./JourneyIntro";
 import { useUIStore } from "@/store/use-ui-store";
 import { useAnalysis } from "@/store/use-analysis-store";
 import { AskPanel } from "@/components/journeys/AskPanel";
@@ -91,24 +89,17 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
 }) => {
   const activeFunctionId = useJourneyUIStore((state) => state.activeFunctionId);
   const location = useLocation();
-  // Deep link ?view=bpmn opens the fullscreen business-flow diagram —
-  // same surface the summary's expand button opens. (?view=flow is
-  // handled by the `view` state below; absent → the summary page.)
-  const [isFullscreen, setIsFullscreen] = useState(
-    () =>
-      new URLSearchParams(location.search).get("view") === "bpmn" &&
-      !!chapter.bpmn,
-  );
   const [dockPosition, setDockPositionState] =
     useState<DockPosition>(loadDockPosition);
-  // The journey detail page LEADS with the summary (JourneyOverview),
-  // which embeds the BPMN diagram prominently near the top. `view`
-  // governs only the call-graph POPUP layered over that summary base:
-  //   - "detail" — the summary page with embedded diagram (default)
-  //   - "flow"   — the call-graph popup is open over the summary
+  // The journey page reads top-to-bottom: intro (description +
+  // connections), then the framed diagram. `view` governs only the
+  // call-graph POPUP layered over that base:
+  //   - "detail" — the page (default)
+  //   - "flow"   — the call-graph popup is open over it
   //
-  // Deep links: ?view=bpmn opens the fullscreen diagram (handled by
-  // `isFullscreen` above); ?view=flow opens the call graph.
+  // Deep link: ?view=flow opens the call graph. (?view=bpmn — the old
+  // fullscreen diagram — is retired; such links simply land on the page,
+  // whose diagram is already the centerpiece.)
   //
   // Desktop adaptation: under HashRouter the query string lives INSIDE
   // the hash (#/journeys/slug?view=flow), so window.location.search is
@@ -166,9 +157,6 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
   // only when asked. Declared up here for the Esc handler.
   const [bpmnElement, setBpmnElement] = useState<BpmnElement | null>(null);
   const [stepFnsOpen, setStepFnsOpen] = useState(false);
-  // Whether the journey description (chapter.summary) in the hero band is
-  // expanded past its 2-line clamp.
-  const [descExpanded, setDescExpanded] = useState(false);
 
   // Right-edge code dock — shared with AskPanel via the code-view store
   // (only one of the two right panels open at a time). `codeWidth` also
@@ -228,18 +216,13 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
   //   - Peeling an OUTER layer (step-functions dialog, call-graph popup)
   //     must not ALSO clear the selection underneath, so we preventDefault()
   //     and BpmnCanvas bails on defaultPrevented (one Esc = one layer).
-  //   - Exiting fullscreen deliberately does NOT preventDefault, so
-  //     BpmnCanvas also clears the selection and the inline view returns
-  //     clean. `isFullscreen` is checked BEFORE `bpmnElement`: clicking a
-  //     step sets bpmnElement, and the old order meant Esc only ever
-  //     deselected instead of exiting fullscreen.
   //   - Clearing a bare selection is BpmnCanvas's job (it owns the ring and
   //     the pill's source of truth), so we leave the event alone for it.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       // Don't hijack Esc from a focused text field (the inline label
-      // editor) — that must cancel the edit, not exit fullscreen.
+      // editor) — that must cancel the edit, not navigate.
       const t = e.target as HTMLElement | null;
       if (
         t &&
@@ -259,8 +242,6 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
       } else if (view === "flow") {
         setView("detail"); // close call-graph popup — keep selection
         e.preventDefault();
-      } else if (isFullscreen) {
-        setIsFullscreen(false); // fullscreen wins over a bare selection
       } else if (bpmnElement) {
         // BpmnCanvas clears its own selection → propagates to bpmnElement.
       } else {
@@ -269,7 +250,7 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
     };
     window.addEventListener("keydown", handler, true);
     return () => window.removeEventListener("keydown", handler, true);
-  }, [stepFnsOpen, bpmnElement, view, isFullscreen, onBack, rightDock, setRightDock]);
+  }, [stepFnsOpen, bpmnElement, view, onBack, rightDock, setRightDock]);
 
   // Expanded nodes — lifted here so the set survives fullscreen transitions.
   // Seeds with the root PLUS the ancestor chain of every PR-changed step:
@@ -521,26 +502,11 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
     [expandPath, selectFunction, setRightDock]
   );
 
-  // Adapter for the JourneyOverview's drill-in buttons. The diagram is the
-  // inline base; "business flow" opens the existing fullscreen popup,
-  // "call graph" opens the call-graph popup.
-  const onOpenView = useCallback((target: "bpmn" | "flow") => {
-    if (target === "flow") setView("flow");
-    else setIsFullscreen(true);
-  }, []);
-
-  // Inline business-flow diagram — the PRIMARY content of the journey
-  // page now. The reader looks at the BPMN directly instead of wading
-  // through prose; the step-functions dialog overlays it (code on
-  // demand). `compact` drops the inline header chrome + narrative in
-  // fullscreen so the diagram fills the screen.
-  // The diagram surface itself — header-less. The journey identity + the
-  // fullscreen/export controls now live in the compact hero band above
-  // (see heroHeader), so the diagram fills its container edge to edge and
-  // reads as the page's centerpiece. `compact` is fullscreen: it wires the
-  // exit-fullscreen control into the canvas toolbar (nothing stacks over
-  // it in the top-right corner).
-  const inlineBpmn = (compact: boolean) => (
+  // The diagram surface itself — header-less. The journey identity lives
+  // in the intro above; the frame's own header strip (see pageBody) hosts
+  // the diagram-level controls. The step-functions dialog and the right
+  // docks overlay it (code on demand).
+  const inlineBpmn = () => (
     <div className="flex h-full flex-col" style={{ background: "var(--bpmn-bg)" }}>
       {/* Honest-uncertainty banner (#9). `synthetic` is set only on the
           deterministic call-trace fallback (synthBpmnFromTrace) — never on
@@ -569,10 +535,6 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
           onSelectedElementChange={setBpmnElement}
           // Double-click a step → open its code in the docked CODE panel.
           onElementDoubleClick={openCodeForElement}
-          // Fullscreen (compact) → the exit control lives INSIDE the canvas
-          // toolbar (its right end). Nothing stacks over it in the top-right
-          // corner. Not fullscreen → no exit affordance needed here.
-          onExitFullscreen={compact ? () => setIsFullscreen(false) : undefined}
         />
         {/* Ask AI — docked to the diagram like the desktop; answers come
             through the viewer's /ask relay (token stays server-side). */}
@@ -666,202 +628,144 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
   );
 
   // No-diagram state — trivial / over-cap / on-demand journeys have no
-  // BPMN. Lead with the narrative + a tasteful note instead of crashing.
+  // BPMN. The intro still orients; this names the absence honestly.
   const noDiagram = (
     <div
-      className="flex shrink-0 items-center gap-2.5 px-6 pt-4 pb-3"
-      style={{ color: "var(--bpmn-text-dim)" }}
+      className="flex items-center gap-2.5 rounded-xl px-5 py-4"
+      style={{
+        color: "var(--bpmn-text-dim)",
+        border: "1px dashed var(--bpmn-border-soft)",
+      }}
     >
       <Workflow className="h-3.5 w-3.5" />
       <span className="font-mono text-[11px]">
-        No business-flow diagram for this journey — read the steps below.
+        No business-flow diagram for this journey — open the call graph (top
+        right) to explore its code.
       </span>
     </div>
   );
 
-  // Compact hero band — the diagram's own header, sitting on the same dark
-  // plate directly above it. Eyebrow + journey title (the display serif, the
-  // one human-voiced headline on the page) + a tight stats/badges/controls
-  // cluster on the right. Kept to two lines, no fat: the diagram below is the
-  // star, this just names it and hosts its verify badge + fullscreen/export.
-  const heroHeader = () => (
-    <div
-      className="flex shrink-0 items-start gap-4 px-6 pt-4 pb-3.5"
-      style={{ background: "var(--bpmn-bg)" }}
+  // Badges the intro's eyebrow row hosts — journey-level status.
+  const introBadges = prBadge && (
+    <span
+      className={`flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[10px] ${prBadge.cls}`}
+      title="PR status — per-step details shown inline in the flow"
     >
-      <div className="min-w-0 flex-1">
-        <div className="mb-1.5 flex items-center gap-2">
-          <Workflow className="h-3 w-3" style={{ color: "var(--bpmn-mint)" }} />
-          <span
-            className="font-mono text-[9.5px] uppercase"
-            style={{ color: "var(--bpmn-mint)", letterSpacing: 3 }}
-          >
-            business flow
-          </span>
-          <span style={{ color: "var(--bpmn-border-em)" }}>·</span>
-          <span
-            className="font-mono text-[9.5px] tabular-nums"
-            style={{ color: "var(--bpmn-text-dim)" }}
-          >
-            {chapter.bpmn?.elements?.length ?? 0} steps ·{" "}
-            {chapter.bpmn?.flows?.length ?? 0} paths
-          </span>
-        </div>
-        <h2
-          className="m-0"
-          style={{
-            fontFamily: "var(--bpmn-font-display)",
-            fontStyle: "italic",
-            fontSize: 20,
-            lineHeight: 1.28,
-            letterSpacing: 0.2,
-            color: "var(--bpmn-text)",
-            display: "-webkit-box",
-            WebkitBoxOrient: "vertical",
-            WebkitLineClamp: 2,
-            overflow: "hidden",
-          }}
-        >
-          {chapter.title}
-        </h2>
-        {/* Journey description — what this journey does, right at the top of
-            the chapter (founder ask). Clamped to two muted reading lines so
-            the diagram stays the hero; click to expand the full text. */}
-        {chapter.summary && (
-          <p
-            onClick={() => setDescExpanded((v) => !v)}
-            title={
-              descExpanded ? "Click to collapse" : "Click to read the full description"
-            }
-            className="mt-1.5 max-w-[70ch] cursor-pointer text-[12px] leading-relaxed"
-            style={{
-              color: "var(--bpmn-text-muted)",
-              ...(descExpanded
-                ? {}
-                : {
-                    display: "-webkit-box",
-                    WebkitBoxOrient: "vertical",
-                    WebkitLineClamp: 2,
-                    overflow: "hidden",
-                  }),
-            }}
-          >
-            {chapter.summary}
-          </p>
-        )}
-      </div>
-      <div className="flex shrink-0 items-center gap-2 pt-0.5">
-        {chapter.bpmnValidation && (
-          <span
-            className={`flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 font-mono text-[10px] ${
-              chapter.bpmnValidation.verdict === "errors"
-                ? "border-red-500/30 bg-red-500/10 text-red-400"
-                : chapter.bpmnValidation.verdict === "warnings"
-                  ? "border-amber-500/30 bg-amber-500/10 text-amber-400"
-                  : "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
-            }`}
-            title={
-              chapter.bpmnValidation.issues.length === 0
-                ? "BPMN verified — every claim cross-checked against source."
-                : chapter.bpmnValidation.issues
-                    .map((i) => `${i.severity}: ${i.claim}`)
-                    .join("\n")
-            }
-          >
-            {chapter.bpmnValidation.verdict === "ok"
-              ? "✓ verified"
-              : `${chapter.bpmnValidation.issues.length} ${chapter.bpmnValidation.verdict}`}
-          </span>
-        )}
-        {prBadge && (
-          <span
-            className={`flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[10px] ${prBadge.cls}`}
-            title="PR status — per-step details shown inline in the flow"
-          >
-            <GitPullRequest className="h-3 w-3" />
-            {prBadge.label}
-            {changedStepCount > 0 && (
-              <span className="opacity-70">· {changedStepCount}</span>
-            )}
-          </span>
-        )}
-        <button
-          onClick={() => setIsFullscreen(true)}
-          title="Fullscreen the business flow (Esc to exit)"
-          aria-label="Fullscreen the business flow"
-          className="shrink-0 rounded-lg p-2 transition-colors"
-          style={{ color: "var(--bpmn-text-dim)" }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.color = "var(--bpmn-text)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.color = "var(--bpmn-text-dim)";
-          }}
-        >
-          <Maximize2 className="h-4 w-4" />
-        </button>
-        <button
-          onClick={onExportBpmn}
-          disabled={exporting}
-          title="Download as PNG (engineering-paper export)"
-          className="shrink-0 rounded-lg p-2 transition-colors disabled:cursor-wait disabled:opacity-50"
-          style={{ color: "var(--bpmn-text-dim)" }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.color = "var(--bpmn-text)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.color = "var(--bpmn-text-dim)";
-          }}
-        >
-          <Download className="h-4 w-4" />
-        </button>
-      </div>
-    </div>
+      <GitPullRequest className="h-3 w-3" />
+      {prBadge.label}
+      {changedStepCount > 0 && (
+        <span className="opacity-70">· {changedStepCount}</span>
+      )}
+    </span>
   );
 
-  const makeCanvas = (compact: boolean) => (
+  // READING ORDER (founder ask): the journey's description and its
+  // connections come FIRST; below them the diagram sits inside a hard
+  // boundary — a framed, browsable window with its own header strip. The
+  // page scrolls normally around the frame; the diagram pans/zooms inside
+  // it (plain wheel scrolls the page, ⌘+scroll zooms). A thunk (not a
+  // const element) because it closes over flowPopup, declared later.
+  const pageBody = () => (
     <div
       className="relative h-full overflow-hidden"
       style={{ background: "var(--bpmn-bg)" }}
     >
-      {/* HERO-FIRST — the business-flow diagram IS the journey page. The
-          reading order is: a compact header band naming the journey, then
-          the diagram as a full-width, tall hero (the eye lands here — entry
-          point), then everything else (the overview: PR narrative, hub,
-          neighbors, steps) as a subordinate section below the fold. The
-          diagram keeps full interaction (select a step → BpmnStepFunctions /
-          code on demand; the "call graph" affordance opens flowPopup). No
-          diagram → overview only. */}
       <div className="h-full overflow-y-auto">
-        {chapter.bpmn ? (
-          <>
-            {/* 1 — the compact hero band */}
-            {heroHeader()}
+        <div className="mx-auto max-w-[1180px] px-6 pb-8">
+          <JourneyIntro chapter={chapter} badges={introBadges} />
 
-            {/* 2 — the diagram hero: full-width, tall, the page's anchor */}
-            <div
-              className="w-full min-h-0 border-y"
+          {chapter.bpmn ? (
+            <section
+              className="overflow-hidden rounded-xl"
               style={{
-                height: "68vh",
-                minHeight: 440,
-                borderColor: "var(--bpmn-border-soft)",
+                border: "1px solid var(--bpmn-border-em)",
+                background: "var(--bpmn-bg)",
+                boxShadow:
+                  "0 1px 3px rgb(0 0 0 / 0.18), 0 18px 44px rgb(0 0 0 / 0.22)",
               }}
             >
-              {inlineBpmn(compact)}
-            </div>
-
-            {/* 3 — everything else, visually subordinate, below the fold */}
-            <JourneyOverview chapter={chapter} onOpenView={onOpenView} embedded />
-          </>
-        ) : (
-          <>
-            {noDiagram}
-            <JourneyOverview chapter={chapter} onOpenView={onOpenView} />
-          </>
-        )}
+              {/* The frame's header strip — diagram-level identity and
+                  controls only (the journey identity lives in the intro). */}
+              <div
+                className="flex items-center gap-2.5 px-4 py-2.5"
+                style={{
+                  borderBottom: "1px solid var(--bpmn-border-soft)",
+                  background: "var(--bpmn-bg-deep)",
+                }}
+              >
+                <Workflow
+                  className="h-3 w-3"
+                  style={{ color: "var(--bpmn-mint)" }}
+                />
+                <span
+                  className="font-mono text-[9.5px] uppercase"
+                  style={{ color: "var(--bpmn-mint)", letterSpacing: 3 }}
+                >
+                  business flow
+                </span>
+                <span style={{ color: "var(--bpmn-border-em)" }}>·</span>
+                <span
+                  className="font-mono text-[9.5px] tabular-nums"
+                  style={{ color: "var(--bpmn-text-dim)" }}
+                >
+                  {chapter.bpmn.elements?.length ?? 0} steps ·{" "}
+                  {chapter.bpmn.flows?.length ?? 0} paths
+                </span>
+                <span className="flex-1" />
+                {chapter.bpmnValidation && (
+                  <span
+                    className={`flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-0.5 font-mono text-[10px] ${
+                      chapter.bpmnValidation.verdict === "errors"
+                        ? "border-red-500/30 bg-red-500/10 text-red-400"
+                        : chapter.bpmnValidation.verdict === "warnings"
+                          ? "border-amber-500/30 bg-amber-500/10 text-amber-400"
+                          : "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                    }`}
+                    title={
+                      chapter.bpmnValidation.issues.length === 0
+                        ? "BPMN verified — every claim cross-checked against source."
+                        : chapter.bpmnValidation.issues
+                            .map((i) => `${i.severity}: ${i.claim}`)
+                            .join("\n")
+                    }
+                  >
+                    {chapter.bpmnValidation.verdict === "ok"
+                      ? "✓ verified"
+                      : `${chapter.bpmnValidation.issues.length} ${chapter.bpmnValidation.verdict}`}
+                  </span>
+                )}
+                <button
+                  onClick={onExportBpmn}
+                  disabled={exporting}
+                  title="Download as PNG (engineering-paper export)"
+                  className="shrink-0 rounded-md p-1.5 transition-colors disabled:cursor-wait disabled:opacity-50"
+                  style={{ color: "var(--bpmn-text-dim)" }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.color = "var(--bpmn-text)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = "var(--bpmn-text-dim)";
+                  }}
+                >
+                  <Download className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              {/* The window into the diagram — generous fixed height; the
+                  canvas pans and zooms INSIDE it, the page scrolls outside. */}
+              <div
+                className="relative w-full"
+                style={{ height: "70vh", minHeight: 480 }}
+              >
+                {inlineBpmn()}
+              </div>
+            </section>
+          ) : (
+            noDiagram
+          )}
+        </div>
       </div>
 
-      {flowPopup(compact)}
+      {flowPopup()}
     </div>
   );
 
@@ -882,10 +786,10 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
   // popup. key={dockPosition} remounts the group cleanly when dock
   // direction changes; stable panel ids keep react-resizable-panels
   // tracking the canvas across the codePane toggle.
-  const flowChart = (compact: boolean) => (
+  const flowChart = () => (
     <CallFlowChart
       chapter={chapter}
-      compact={compact}
+      compact={false}
       expanded={expanded}
       onToggleExpand={toggleExpand}
       onExpandAll={expandAll}
@@ -893,12 +797,12 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
       scrollRequestRef={scrollRequestRef}
     />
   );
-  const flowDockLayout = (compact: boolean) => (
+  const flowDockLayout = () => (
     <div key={dockPosition} className="h-full">
       {dockPosition === "bottom" && (
         <ResizablePanelGroup orientation="vertical">
           <ResizablePanel id="canvas" minSize={30}>
-            {flowChart(compact)}
+            {flowChart()}
           </ResizablePanel>
           {codePaneVisible && (
             <>
@@ -913,7 +817,7 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
       {dockPosition === "right" && (
         <ResizablePanelGroup orientation="horizontal">
           <ResizablePanel id="canvas" minSize={35}>
-            {flowChart(compact)}
+            {flowChart()}
           </ResizablePanel>
           {codePaneVisible && (
             <>
@@ -936,7 +840,7 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
             </>
           )}
           <ResizablePanel id="canvas" minSize={35}>
-            {flowChart(compact)}
+            {flowChart()}
           </ResizablePanel>
         </ResizablePanelGroup>
       )}
@@ -946,7 +850,7 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
   // The call-graph POPUP, layered over whatever the base surface is
   // (the inline summary, or the fullscreen diagram). Self-contained so
   // both bases can mount it.
-  const flowPopup = (compact: boolean) =>
+  const flowPopup = () =>
     view === "flow" && (
       <div
         className="absolute inset-0 z-30 flex items-center justify-center p-4"
@@ -1010,51 +914,10 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
-          <div className="min-h-0 flex-1">{flowDockLayout(compact)}</div>
+          <div className="min-h-0 flex-1">{flowDockLayout()}</div>
         </div>
       </div>
     );
-
-  // The popups carry their own inner layouts now — the outer shell is
-  // just the canvas (overview + overlays).
-  const makeInnerLayout = (compact: boolean) => makeCanvas(compact);
-
-  if (isFullscreen) {
-    return (
-      <div className="relative h-full" style={{ background: "var(--bpmn-bg)" }}>
-        {/* Exit fullscreen lives in the canvas toolbar (BpmnCanvas, via
-            onExitFullscreen) — one control cluster in the top-right corner,
-            nothing stacked over it. A separate floating button here used to
-            share `top-3 right-3 z-10` with the toolbar and got painted over,
-            so its clicks hit the toolbar's Reset button instead. Esc also
-            exits (see the keydown handler above). */}
-        {chapter.bpmn ? (
-          <div className="relative h-full">
-            {inlineBpmn(true)}
-            {flowPopup(true)}
-          </div>
-        ) : (
-          <>
-            {/* No-diagram fullscreen has no canvas toolbar to host the exit,
-                and nothing else paints in the top-right corner here — so a
-                floating button is safe (the occlusion bug only applied to
-                the diagram branch, where the toolbar shared this corner). */}
-            <div className="absolute top-3 right-3 z-10">
-              <button
-                onClick={() => setIsFullscreen(false)}
-                title="Exit fullscreen (Esc)"
-                aria-label="Exit fullscreen"
-                className="rounded-md border border-zinc-800/60 bg-zinc-900/80 p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
-              >
-                <Minimize2 className="h-3.5 w-3.5" />
-              </button>
-            </div>
-            {makeInnerLayout(true)}
-          </>
-        )}
-      </div>
-    );
-  }
 
   return (
     <div
@@ -1087,21 +950,8 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
         >
           {chapter.title}
         </span>
-        {chapter.summary && (
-          <div className="group relative">
-            <Info className="h-3.5 w-3.5 cursor-help text-zinc-500 hover:text-zinc-300" />
-            <div
-              role="tooltip"
-              className="invisible absolute left-0 top-full z-30 mt-1 w-[28rem] max-w-[80vw] rounded-md border border-zinc-700 bg-zinc-900 p-3 text-xs leading-relaxed text-zinc-300 opacity-0 shadow-xl transition-opacity group-hover:visible group-hover:opacity-100"
-            >
-              {chapter.summary}
-            </div>
-          </div>
-        )}
-        {/* spacer — the "N phases · M methods" counter was noise
-            ("20 phases is not good; I don't need it"). The PR status badge
-            now lives in the hero header band beside the journey title, so it
-            isn't duplicated up here. */}
+        {/* The description tooltip is gone — the full description now leads
+            the page (JourneyIntro), so the ⓘ was redundant. */}
         <span className="ml-auto" />
         {chapter.reviewSummary && (
           <span
@@ -1210,18 +1060,8 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
             call graph
           </button>
         )}
-        {/* Export + validation moved INTO the business-flow popup header —
-            the popup is self-contained; the page header stays clean. */}
-        {/* Labeled — the icon-only 14px version was effectively
-            undiscoverable ("the diagram cannot be expanded"). */}
-        <button
-          onClick={() => setIsFullscreen(true)}
-          title="Fullscreen — hides header (Esc to exit)"
-          className="flex items-center gap-1.5 rounded-md border border-zinc-800 px-2.5 py-1 font-mono text-[11px] text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200"
-        >
-          <Maximize2 className="h-3 w-3" />
-          expand
-        </button>
+        {/* Fullscreen/expand is retired (founder: "get rid of that") — the
+            diagram lives in a framed, browsable container on the page. */}
       </div>
 
       {/* Intent banner — surfaces the AI classifier's reasoning for this
@@ -1293,7 +1133,7 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
         })()}
 
       {/* Main content — no outer split needed now that Narrative is removed */}
-      <div className="min-h-0 flex-1">{makeInnerLayout(false)}</div>
+      <div className="min-h-0 flex-1">{pageBody()}</div>
     </div>
   );
 };

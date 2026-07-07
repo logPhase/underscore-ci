@@ -1,5 +1,5 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import { ChevronRight, Eye, EyeOff, Maximize2, Minimize2, Minus, MousePointer2, Plus, RotateCcw } from "lucide-react";
+import { ChevronRight, Eye, EyeOff, Maximize2, Minus, MousePointer2, Plus, RotateCcw } from "lucide-react";
 import type { BpmnElement, BpmnJourney } from "./types";
 import type { Doc, Fact, KnowledgeSummary } from "@/types/intent";
 import type { StepKnowledge } from "@/lib/transform-data/journey-knowledge";
@@ -37,12 +37,6 @@ interface Props {
    *  passages + graph facts surfaced for each step. Drives the 📚 knowledge
    *  marker and the side panel. */
   elementKnowledge?: Map<string, StepKnowledge>;
-  /** When set, the floating toolbar grows an exit-fullscreen button at its
-   *  right end (after a divider). Passed only when the canvas is mounted
-   *  fullscreen, so the ONE control cluster in the top-right corner also
-   *  owns the exit affordance — no separate floating button stacking in the
-   *  same corner and occluding it. */
-  onExitFullscreen?: () => void;
   /** When set, double-clicking a node fires this with the element id
    *  instead of starting the default inline label edit. The read/review
    *  surfaces (ChapterView) wire this to open the step's code. */
@@ -293,7 +287,7 @@ function KnowledgePanel({
 }
 
 export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanvas(
-  { journey: initial, onChange, getSource: _getSource, onSelectionChange, elementPrStatus, elementKnowledge, onExitFullscreen, onElementDoubleClick },
+  { journey: initial, onChange, getSource: _getSource, onSelectionChange, elementPrStatus, elementKnowledge, onElementDoubleClick },
   ref,
 ) {
   const [journey, setJourney] = useState(initial);
@@ -303,9 +297,9 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
   const [view, setView] = useState<ViewState>({ x: 0, y: 0, k: 1 });
   const [editingId, setEditingId] = useState<string | null>(null);
   // Transient "⌘ + scroll to zoom" hint. Shown when a plain wheel happens
-  // over an INLINE diagram (which scrolls the page instead of zooming), so
+  // over the framed diagram (which scrolls the page instead of zooming), so
   // the zoom gesture stays discoverable. Auto-hides ~1.2s after the last
-  // wheel tick. Never shown fullscreen (there, plain wheel drives the canvas).
+  // wheel tick.
   const [zoomHint, setZoomHint] = useState(false);
   const zoomHintTimer = useRef<number | null>(null);
   const showZoomHint = useCallback(() => {
@@ -916,43 +910,31 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
       // while scrolling is the explicit zoom gesture. Everything else is a
       // "plain wheel".
       const isZoom = e.ctrlKey || e.metaKey;
-      // INLINE diagrams (the chapter hero) live inside a scrolling page: a
-      // plain wheel there must scroll the PAGE, not the diagram. So we let the
-      // event through (no preventDefault) and surface a transient hint that
-      // teaches the ⌘+scroll zoom gesture. FULLSCREEN has nothing behind it to
-      // scroll, so plain wheel keeps panning the canvas as before. The
-      // `onExitFullscreen` prop is passed ONLY when mounted fullscreen, so its
-      // presence is our fullscreen signal (see BpmnEditor/ChapterView).
-      const inline = !onExitFullscreen;
-      if (inline && !isZoom) {
+      // The diagram lives framed inside a scrolling page: a plain wheel must
+      // scroll the PAGE, not the diagram. So we let the event through (no
+      // preventDefault) and surface a transient hint that teaches the
+      // ⌘+scroll zoom gesture.
+      if (!isZoom) {
         showZoomHint();
         return; // do NOT preventDefault → the page scrolls
       }
       e.preventDefault();
-      userNavRef.current = true; // wheel zoom/pan — camera is the user's now
-      if (isZoom) {
-        const rect = svgRef.current.getBoundingClientRect();
-        const mx = e.clientX - rect.left;
-        const my = e.clientY - rect.top;
-        setView((v) => {
-          const factor = Math.exp(-e.deltaY * 0.01);
-          const nk = Math.max(MIN_K, Math.min(MAX_K, v.k * factor));
-          const ratio = nk / v.k;
-          return {
-            k: nk,
-            x: mx - (mx - v.x) * ratio,
-            y: my - (my - v.y) * ratio,
-          };
-        });
-      } else {
-        setView((v) => ({
-          ...v,
-          x: v.x - e.deltaX,
-          y: v.y - e.deltaY,
-        }));
-      }
+      userNavRef.current = true; // wheel zoom — camera is the user's now
+      const rect = svgRef.current.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      setView((v) => {
+        const factor = Math.exp(-e.deltaY * 0.01);
+        const nk = Math.max(MIN_K, Math.min(MAX_K, v.k * factor));
+        const ratio = nk / v.k;
+        return {
+          k: nk,
+          x: mx - (mx - v.x) * ratio,
+          y: my - (my - v.y) * ratio,
+        };
+      });
     },
-    [onExitFullscreen, showZoomHint],
+    [showZoomHint],
   );
 
   useEffect(() => {
@@ -981,8 +963,8 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
       if (editingId) return;
       if (e.key === "Escape") {
         // Escape coordination with the page shell (ChapterView). The shell
-        // owns the OUTER stack — step-functions dialog, call-graph popup,
-        // fullscreen — via a capture-phase handler that runs before this
+        // owns the OUTER stack — step-functions dialog, call-graph popup —
+        // via a capture-phase handler that runs before this
         // bubble-phase one. When it peels one of those layers it calls
         // preventDefault(); we then bail so a single Escape doesn't ALSO
         // silently clear the node selection underneath. Selection-clear is
@@ -1012,8 +994,7 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
             Moved out of the top-right corner (founder: "it's on the top
             right in my face") to sit just above the footer status bar. It
             clears the AskPanel edge tab (top-right) and the bottom-centre
-            reveal card. In fullscreen it also hosts the exit-fullscreen
-            control (its right end), so the ONE control cluster owns exit. */}
+            reveal card. */}
         <div className="bpmn-quiet-chrome absolute right-3 z-10" style={{ bottom: 42 }}>
           <Toolbar
             zoom={view.k}
@@ -1031,7 +1012,6 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
               setLabelOffsets(new Map());
               setRevealIndex(1);
             }}
-            onExitFullscreen={onExitFullscreen}
           />
         </div>
 
@@ -1391,10 +1371,8 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
         >
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1.5">
-              <MousePointer2 size={10} />{" "}
-              {onExitFullscreen
-                ? "drag or two-finger swipe to pan · pinch / ⌘+scroll to zoom · F to fit"
-                : "drag to pan · ⌘+scroll to zoom · F to fit"}
+              <MousePointer2 size={10} /> drag to pan · ⌘+scroll to zoom · F to
+              fit
             </span>
           </div>
           <div className="flex items-center gap-3 tabular-nums">
@@ -1442,7 +1420,6 @@ function Toolbar({
   onZoomOut,
   onFit,
   onReset,
-  onExitFullscreen,
 }: {
   zoom: number;
   revealMode: boolean;
@@ -1451,10 +1428,6 @@ function Toolbar({
   onZoomOut: () => void;
   onFit: () => void;
   onReset: () => void;
-  /** In fullscreen only — appends an exit button at the toolbar's right
-   *  end so the exit affordance lives INSIDE this control cluster instead
-   *  of a separate button stacked in the same corner. */
-  onExitFullscreen?: () => void;
 }) {
   const divider = (
     <div
@@ -1508,14 +1481,6 @@ function Toolbar({
       <ToolBtn onClick={onReset} title="Reset view">
         <RotateCcw size={11} />
       </ToolBtn>
-      {onExitFullscreen && (
-        <>
-          {divider}
-          <ToolBtn onClick={onExitFullscreen} title="Exit fullscreen (Esc)">
-            <Minimize2 size={11} />
-          </ToolBtn>
-        </>
-      )}
     </div>
   );
 }
