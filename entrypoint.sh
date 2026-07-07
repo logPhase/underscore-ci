@@ -61,6 +61,28 @@ fi
 # The workspace is mounted with a different owner than the container user.
 git config --global --add safe.directory '*'
 
+# --- Skip source-less PRs (infrastructure-only changes) ----------------------
+# A PR that touches no source files for the selected language (helm, terraform,
+# CI, docs, …) has nothing to analyze — the pipeline would only fail or produce
+# an empty report and redden the check. Skip cleanly instead: exit 0, no PR
+# comment, `skipped` output set, one line in the step summary. Merge-base
+# (three-dot) diff so only the PR's own changes count.
+if [[ "$MODE" == "pr" ]]; then
+  case "$UNDERSCORE_LANG" in
+    java)   SRC_GLOB='*.java' ;;
+    python) SRC_GLOB='*.py' ;;
+    *)      SRC_GLOB='*.cs' ;;
+  esac
+  SRC_CHANGED="$(git -C "$GITHUB_WORKSPACE" diff --name-only "$BASE_SHA...$HEAD_SHA" -- "$SRC_GLOB" 2>/dev/null | head -1 || true)"
+  if [[ -z "$SRC_CHANGED" ]]; then
+    echo "No ${SRC_GLOB} changes between base and head — infrastructure-only PR, skipping Underscore analysis."
+    set_output skipped "true"
+    [[ -n "${GITHUB_STEP_SUMMARY:-}" ]] && \
+      echo "**Underscore:** skipped — this PR changes no \`${SRC_GLOB}\` files (infrastructure-only)." >>"$GITHUB_STEP_SUMMARY"
+    exit 0
+  fi
+fi
+
 # --- PR comment upsert -------------------------------------------------------
 # One comment per PR, found by COMMENT_MARKER in the body and edited in place.
 # Best-effort by design: a failed comment (read-only token on fork PRs, missing

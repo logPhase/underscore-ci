@@ -125,6 +125,12 @@ inputs:
     default: ''
 
 outputs:
+  skipped:
+    description: >-
+      'true' when the PR changed no source files for the selected language
+      (infrastructure-only PR) and analysis was skipped cleanly; empty
+      otherwise.
+    value: ${{ steps.analyze.outputs.skipped }}
   report-file:
     description: >-
       Workspace-relative path to the single-file HTML report
