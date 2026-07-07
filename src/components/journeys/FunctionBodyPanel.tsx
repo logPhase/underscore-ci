@@ -25,8 +25,12 @@ import { getPROverlay } from "@/data/parity-loader";
 import { findReplacement } from "@/lib/callgraph/forest";
 import CodeBlock from "./CodeBlock";
 import DiffBlock from "./DiffBlock";
+import {
+  useCodeView,
+  type CodeSourceView,
+} from "@/components/journeys/code-view-store";
 
-type SourceView = "current" | "previous" | "diff";
+type SourceView = CodeSourceView;
 
 type DockPosition = "bottom" | "right" | "left";
 
@@ -48,18 +52,6 @@ const DOCK_OPTIONS: {
   },
 ];
 
-const SOURCE_VIEW_KEY = "journey-source-view";
-
-function loadSourceView(): SourceView {
-  try {
-    const saved = localStorage.getItem(SOURCE_VIEW_KEY);
-    if (saved === "current" || saved === "previous" || saved === "diff")
-      return saved;
-  } catch (e) {
-    console.error(e);
-  }
-  return "current";
-}
 
 interface FunctionBodyPanelProps {
   chapter: Chapter;
@@ -94,9 +86,8 @@ const PR_STATUS_PILL: Record<
 );
 
 const SOURCE_VIEW_LABEL: Record<SourceView, string> = {
+  diff: "diff vs base",
   current: "current head",
-  previous: "base (previous)",
-  diff: "unified diff",
 };
 
 function shortName(fqn: string): string {
@@ -120,15 +111,11 @@ const FunctionBodyPanel: React.FC<FunctionBodyPanelProps> = ({
   const setActiveFunctionId = useJourneyUIStore(
     (state) => state.setActiveFunctionId
   );
-  const [sourceView, setSourceViewState] = useState<SourceView>(loadSourceView);
-  const setSourceView = useCallback((view: SourceView) => {
-    try {
-      localStorage.setItem(SOURCE_VIEW_KEY, view);
-    } catch (e) {
-      console.error(e);
-    }
-    setSourceViewState(view);
-  }, []);
+  // Shared preference (code-view store): the CODE dock, call-graph panel
+  // and step dialog all follow one choice; DIFF is the default — in a PR
+  // report the change is the content.
+  const sourceView = useCodeView((s) => s.sourceView);
+  const setSourceView = useCodeView((s) => s.setSourceView);
 
   const functionToChapters = useAnalysis(
     (state) => state.transformedData.functionToChapters
@@ -316,11 +303,8 @@ const FunctionBodyPanelContent: React.FC<FunctionBodyPanelContentProps> = ({
   const baseBody = step?.beforeBody || "";
   const canToggle = prStatus === "modified" && !!baseBody && !!headBody;
   const effectiveView: SourceView = canToggle ? sourceView : "current";
-  const displayBody = (() => {
-    if (prStatus === "deleted") return step?.body || ""; // base body stored on step
-    if (effectiveView === "previous") return baseBody || headBody;
-    return headBody;
-  })();
+  const displayBody =
+    prStatus === "deleted" ? step?.body || "" /* base body on the step */ : headBody;
 
   const prPill = prStatus ? PR_STATUS_PILL[prStatus] : null;
 
@@ -592,7 +576,7 @@ const FunctionBodyPanelContent: React.FC<FunctionBodyPanelContentProps> = ({
                 className="flex items-center gap-0.5 rounded-md border bg-zinc-900/60 p-0.5"
                 style={{ borderColor: "hsl(220, 15%, 16%)" }}
               >
-                {(["current", "previous", "diff"] as const).map((view) => {
+                {(["diff", "current"] as const).map((view) => {
                   const active = effectiveView === view;
                   return (
                     <button
@@ -613,17 +597,70 @@ const FunctionBodyPanelContent: React.FC<FunctionBodyPanelContentProps> = ({
               </div>
             )}
           </div>
+          {/* Status framing — the change class is visible at the code
+              itself, not just in the header pill (canonical palette):
+              mint bar = added, rose bar = deleted (base body shown),
+              amber note = modified but the base wasn't carried. */}
+          {prStatus === "added" && (
+            <div
+              className="mb-1.5 border-l-[3px] pl-2 font-mono text-[10.5px]"
+              style={{
+                borderColor: STATUS_STYLES.added.border,
+                color: STATUS_STYLES.added.text,
+              }}
+            >
+              + added in this PR
+            </div>
+          )}
+          {prStatus === "deleted" && (
+            <div
+              className="mb-1.5 border-l-[3px] pl-2 font-mono text-[10.5px]"
+              style={{
+                borderColor: STATUS_STYLES.deleted.border,
+                color: STATUS_STYLES.deleted.text,
+              }}
+            >
+              − removed in this PR — showing the base body
+            </div>
+          )}
+          {prStatus === "modified" && !baseBody && (
+            <div
+              className="mb-1.5 border-l-[3px] pl-2 font-mono text-[10.5px]"
+              style={{
+                borderColor: STATUS_STYLES.modified.border,
+                color: STATUS_STYLES.modified.text,
+              }}
+            >
+              ~ modified in this PR — base version not carried in this report
+            </div>
+          )}
           {canToggle && effectiveView === "diff" ? (
-            <DiffBlock
-              before={baseBody}
-              after={headBody}
-              lang={langFromFile(methodInfo?.filePath || step?.file)}
-            />
+            <div
+              className="border-l-[3px] pl-0.5"
+              style={{ borderColor: STATUS_STYLES.modified.border }}
+            >
+              <DiffBlock
+                before={baseBody}
+                after={headBody}
+                lang={langFromFile(methodInfo?.filePath || step?.file)}
+              />
+            </div>
           ) : displayBody ? (
-            <CodeBlock
-              code={displayBody}
-              lang={langFromFile(methodInfo?.filePath || step?.file)}
-            />
+            <div
+              className={prStatus === "added" || prStatus === "deleted" ? "border-l-[3px] pl-0.5" : undefined}
+              style={
+                prStatus === "added"
+                  ? { borderColor: STATUS_STYLES.added.border }
+                  : prStatus === "deleted"
+                    ? { borderColor: STATUS_STYLES.deleted.border }
+                    : undefined
+              }
+            >
+              <CodeBlock
+                code={displayBody}
+                lang={langFromFile(methodInfo?.filePath || step?.file)}
+              />
+            </div>
           ) : (
             <div
               className="flex flex-col items-center gap-1.5 rounded-lg border px-3 py-6"

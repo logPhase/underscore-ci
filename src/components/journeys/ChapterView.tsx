@@ -645,8 +645,9 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
     >
       <Workflow className="h-3.5 w-3.5" />
       <span className="font-mono text-[11px]">
-        No business-flow diagram for this journey — open the call graph (top
-        right) to explore its code.
+        No flow diagram was composed for this journey — its{" "}
+        {chapter.steps.length} step{chapter.steps.length === 1 ? "" : "s"} and
+        call graph are one click away (top right).
       </span>
     </div>
   );

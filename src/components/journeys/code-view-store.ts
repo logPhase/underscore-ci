@@ -38,11 +38,33 @@ function loadWidth(): number {
 
 export type RightDock = "ask" | "code" | null;
 
+/** How a CHANGED method's source renders: the diff against base (default —
+ * in a PR report the change IS the content) or just the current head body. */
+export type CodeSourceView = "diff" | "current";
+
+const SOURCE_VIEW_KEY = "journey-code-source-view";
+
+function loadSourceView(): CodeSourceView {
+  try {
+    const saved = localStorage.getItem(SOURCE_VIEW_KEY);
+    if (saved === "current" || saved === "diff") return saved;
+    // legacy value from the old three-way toggle
+    if (saved === "previous") return "current";
+  } catch (e) {
+    console.error(e);
+  }
+  return "diff";
+}
+
 interface CodeViewState {
   width: number;
   setWidth: (w: number) => void;
   rightDock: RightDock;
   setRightDock: (dock: RightDock) => void;
+  /** Shared across every code surface (CODE dock, call-graph panel, step
+   * dialog) so the reader's preference sticks as they move around. */
+  sourceView: CodeSourceView;
+  setSourceView: (view: CodeSourceView) => void;
 }
 
 export const useCodeView = create<CodeViewState>()((set) => ({
@@ -58,4 +80,13 @@ export const useCodeView = create<CodeViewState>()((set) => ({
   },
   rightDock: null,
   setRightDock: (rightDock) => set({ rightDock }),
+  sourceView: loadSourceView(),
+  setSourceView: (sourceView) => {
+    try {
+      localStorage.setItem(SOURCE_VIEW_KEY, sourceView);
+    } catch (e) {
+      console.error(e);
+    }
+    set({ sourceView });
+  },
 }));

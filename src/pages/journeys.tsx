@@ -5,6 +5,7 @@ import { motion } from "motion/react";
 import {
   ArrowLeft,
   ChevronDown,
+  Workflow,
   ChevronRight,
   EyeOff,
   GitPullRequest,
@@ -24,11 +25,33 @@ import { useAnalysis } from "@/store/use-analysis-store";
 import { FilterPill } from "@/components/journeys/filter-pill";
 import { Button } from "@/components/ui/button";
 import { impactRank } from "@/lib/transform-data/utils";
+
 import PRSummaryBanner from "@/components/canvas/PRSummaryBanner";
 import {
   deriveJourneyRoute,
   type JourneyRoute,
 } from "@/lib/canvas/journey-route";
+
+/** True when the journey carries a real composed Business-Flow diagram —
+ *  the synthetic call-trace fallback doesn't count (every journey has one). */
+const hasComposedFlow = (ch: Chapter): boolean =>
+  !!ch.bpmn && !(ch.bpmn as { synthetic?: boolean }).synthetic;
+
+/** Tiny mono badge marking diagram-bearing rows on the board. */
+const FlowBadge = ({ chapter }: { chapter: Chapter }) =>
+  hasComposedFlow(chapter) ? (
+    <span
+      className="inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[9.5px] tracking-wider uppercase"
+      style={{
+        color: "var(--bpmn-mint)",
+        borderColor: "color-mix(in srgb, var(--bpmn-mint) 40%, transparent)",
+      }}
+      title="Business-flow diagram available"
+    >
+      <Workflow className="h-3 w-3" />
+      flow
+    </span>
+  ) : null;
 
 // ── Departures board (founder-approved Concept A) ──────────────────────
 // Each journey renders as a transit LINE on a service board: a lettered
@@ -592,7 +615,13 @@ const JourneyPage = () => {
         };
       const imp = filtered
         .filter((ch) => impactRank(ch.prStatus) > 0)
-        .sort((a, b) => impactRank(b.prStatus) - impactRank(a.prStatus));
+        .sort(
+          (a, b) =>
+            impactRank(b.prStatus) - impactRank(a.prStatus) ||
+            // Composed/diagrammed journeys lead within a rank — they're the
+            // richest reading and carry the "flow" badge.
+            Number(hasComposedFlow(b)) - Number(hasComposedFlow(a))
+        );
       const unimp = filtered.filter((ch) => impactRank(ch.prStatus) === 0);
       // Intent-classifier output (optional). Buckets the impacted set into
       // `primary` (directly implements the PR), `secondary` (supporting
@@ -621,9 +650,102 @@ const JourneyPage = () => {
     }, [chapters, searchQuery, hasPR, activeStatuses]);
 
   const [showNoise, setShowNoise] = useState(false);
+  const [foldOpen, setFoldOpen] = useState(false);
 
-  // When no PR overlay, treat all as unimpacted for rendering
-  const filtered = hasPR ? [] : unimpacted;
+  // Founder default: the board LEADS with the composed key flows (the
+  // agent-written 6-12 journeys, the ones carrying a real diagram); every
+  // raw call-graph trace folds beneath one quiet row. Pills/search switch
+  // to the full filtered view — the fold is a default-mode shape only.
+  const defaultMode = activeStatuses.size === 0 && !searchQuery;
+  const {
+    viewImpacted,
+    viewPrimary,
+    viewSecondary,
+    viewNoise,
+    viewQuiet,
+    folded,
+    foldedAffected,
+  } = useMemo(() => {
+    const full = {
+      viewImpacted: impacted,
+      viewPrimary: primary,
+      viewSecondary: secondary,
+      viewNoise: noise,
+      viewQuiet: unimpacted,
+      folded: [] as Chapter[],
+      foldedAffected: 0,
+    };
+    if (!defaultMode) return full;
+    const composedImp = impacted.filter(hasComposedFlow);
+    const composedQuiet = unimpacted.filter(hasComposedFlow);
+    if (composedImp.length + composedQuiet.length === 0) {
+      // No composed set (analyzer skipped/unavailable): affected raws lead,
+      // never-affected raws fold — full-repo mode keeps everything visible.
+      if (!hasPR || impacted.length === 0) return full;
+      return { ...full, viewQuiet: [], folded: unimpacted, foldedAffected: 0 };
+    }
+    const rawImp = impacted.filter((ch) => !hasComposedFlow(ch));
+    const rawQuiet = unimpacted.filter((ch) => !hasComposedFlow(ch));
+    return {
+      viewImpacted: composedImp,
+      viewPrimary: primary.filter(hasComposedFlow),
+      viewSecondary: secondary.filter(hasComposedFlow),
+      viewNoise: noise.filter(hasComposedFlow),
+      viewQuiet: composedQuiet,
+      folded: [...rawImp, ...rawQuiet], // affected raws first inside the fold
+      foldedAffected: rawImp.length,
+    };
+  }, [defaultMode, hasPR, impacted, primary, secondary, noise, unimpacted]);
+
+  // One quiet-row renderer serves the unaffected section AND the fold —
+  // folded affected raws keep their amber Δ identity via `aff`.
+  const renderQuietRow = (chapter: Chapter, i: number, aff: boolean) => (
+    <motion.div
+      key={chapter.id}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: staggerDelay(i, 0.05) }}
+      onClick={() => onSelectChapter(chapter.slug)}
+      className="group journey-card-quiet cursor-pointer rounded-lg border p-4 transition-all duration-200 hover:-translate-y-0.5"
+      data-tour="journey-row"
+      data-chapter-slug={chapter.slug}
+    >
+      <div className="flex items-center gap-5">
+        <LineBadge
+          label={labelById.get(chapter.id) ?? "•"}
+          color={chapter.color}
+          affected={aff}
+        />
+        <div className="min-w-0 flex-1">
+          <h2 className="journey-card-title flex flex-wrap items-center gap-2 text-[19px] font-bold tracking-tight transition-colors">
+            {chapter.title}
+            <FlowBadge chapter={chapter} />
+          </h2>
+          {chapter.entryFqn && <FqnRow fqn={chapter.entryFqn} />}
+          {chapter.summary && (
+            <p
+              className="mt-1 line-clamp-2 text-[13.5px] text-zinc-400"
+              style={{ fontFamily: "var(--reading-font)" }}
+            >
+              {chapter.summary}
+            </p>
+          )}
+          <RouteString
+            route={routesById.get(chapter.id)}
+            color={chapter.color}
+            showDelta={aff}
+          />
+        </div>
+        <RowStats
+          route={routesById.get(chapter.id)}
+          chapter={chapter}
+          affected={aff}
+        />
+        <ChevronRight className="h-4 w-4 shrink-0 text-zinc-600 transition group-hover:translate-x-0.5 group-hover:text-zinc-300" />
+      </div>
+    </motion.div>
+  );
+
   if (!allChapters) {
     return <Navigate to="/home" replace />;
   }
@@ -685,7 +807,7 @@ const JourneyPage = () => {
                   : "No journeys discovered yet."}
             </div>
           )}
-          {!hasPR && filtered.length === 0 && (
+          {!hasPR && viewQuiet.length === 0 && folded.length === 0 && (
             <div className="py-16 text-center text-zinc-600">
               {searchQuery
                 ? `No journeys matching "${searchQuery}"${activeStatuses.size > 0 ? " with the selected filters" : ""}`
@@ -699,7 +821,7 @@ const JourneyPage = () => {
               available (primary / secondary / noise), otherwise a flat
               list as before. */}
           {hasPR &&
-            impacted.length > 0 &&
+            viewImpacted.length > 0 &&
             (() => {
               // Render one impacted card. Extracted so the three intent-buckets
               // and the flat-fallback list share identical structure.
@@ -778,6 +900,7 @@ const JourneyPage = () => {
                       <div className="min-w-0 flex-1">
                         <h2 className="journey-card-title flex flex-wrap items-center gap-2 text-[19px] font-bold tracking-tight transition-colors">
                           {chapter.title}
+                          <FlowBadge chapter={chapter} />
                           <span
                             className={`inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 font-mono text-[10px] ${badgeClass}`}
                           >
@@ -854,7 +977,7 @@ const JourneyPage = () => {
                 return (
                   <div className="mb-6">
                     <div className="space-y-2.5">
-                      {impacted.map((ch, i) => renderCard(ch, i))}
+                      {viewImpacted.map((ch, i) => renderCard(ch, i))}
                     </div>
                   </div>
                 );
@@ -870,27 +993,27 @@ const JourneyPage = () => {
                         "— directly implements PR intent"
                       )}
                       <div className="space-y-2.5">
-                        {primary.map((ch, i) =>
+                        {viewPrimary.map((ch, i) =>
                           renderCard(ch, i, { primary: true })
                         )}
                       </div>
                     </div>
                   )}
-                  {secondary.length > 0 && (
+                  {viewSecondary.length > 0 && (
                     <div>
                       {sectionHeader(
                         "Secondary",
-                        secondary.length,
+                        viewSecondary.length,
                         "— supporting changes (decorator-wrap, scaffolding)"
                       )}
                       <div className="space-y-2.5">
-                        {secondary.map((ch, i) =>
+                        {viewSecondary.map((ch, i) =>
                           renderCard(ch, i, { dim: true })
                         )}
                       </div>
                     </div>
                   )}
-                  {noise.length > 0 && (
+                  {viewNoise.length > 0 && (
                     <div>
                       <button
                         type="button"
@@ -904,7 +1027,7 @@ const JourneyPage = () => {
                           <EyeOff className="h-3.5 w-3.5 text-zinc-500" />
                         )}
                         <span className="font-mono text-xs tracking-wider text-zinc-500 uppercase">
-                          Structural noise · {noise.length}
+                          Structural noise · {viewNoise.length}
                         </span>
                         <span className="text-[11px] text-zinc-600">
                           — flagged by diff, semantically inert (rename / DI /
@@ -916,7 +1039,7 @@ const JourneyPage = () => {
                       </button>
                       {showNoise && (
                         <div className="space-y-2.5">
-                          {noise.map((ch, i) => renderCard(ch, i, { dim: true }))}
+                          {viewNoise.map((ch, i) => renderCard(ch, i, { dim: true }))}
                         </div>
                       )}
                     </div>
@@ -925,64 +1048,75 @@ const JourneyPage = () => {
               );
             })()}
 
-          {/* Unaffected journeys (or all journeys when no PR overlay) */}
-          {(hasPR ? unimpacted : filtered).length > 0 && (
+          {/* Quiet rows: composed-but-unaffected in the default view;
+              unaffected/all matching rows when pills or search are active. */}
+          {viewQuiet.length > 0 && (
             <div>
-              {hasPR && impacted.length > 0 && (
+              {hasPR && viewImpacted.length > 0 && (
                 <div className="mb-3 flex items-center gap-2">
                   <span className="font-mono text-xs tracking-wider text-zinc-600 uppercase">
-                    Unaffected · {unimpacted.length}
+                    Unaffected · {viewQuiet.length}
                   </span>
                   <div className="h-px flex-1" style={{background: "var(--bpmn-border-soft)"}} />
                 </div>
               )}
               <div className="space-y-2.5">
-                {(hasPR ? unimpacted : filtered).map((chapter, i) => (
-                  <motion.div
-                    key={chapter.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: staggerDelay(i, 0.05) }}
-                    onClick={() => onSelectChapter(chapter.slug)}
-                    className="group journey-card-quiet cursor-pointer rounded-lg border p-4 transition-all duration-200 hover:-translate-y-0.5"
-                    data-tour="journey-row"
-                    data-chapter-slug={chapter.slug}
-                  >
-                    <div className="flex items-center gap-5">
-                      <LineBadge
-                        label={labelById.get(chapter.id) ?? "•"}
-                        color={chapter.color}
-                        affected={false}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <h2 className="journey-card-title text-[19px] font-bold tracking-tight transition-colors">
-                          {chapter.title}
-                        </h2>
-                        {chapter.entryFqn && <FqnRow fqn={chapter.entryFqn} />}
-                        {chapter.summary && (
-                          <p
-                            className="mt-1 line-clamp-2 text-[13.5px] text-zinc-400"
-                            style={{ fontFamily: "var(--reading-font)" }}
-                          >
-                            {chapter.summary}
-                          </p>
-                        )}
-                        <RouteString
-                          route={routesById.get(chapter.id)}
-                          color={chapter.color}
-                          showDelta={false}
-                        />
-                      </div>
-                      <RowStats
-                        route={routesById.get(chapter.id)}
-                        chapter={chapter}
-                        affected={false}
-                      />
-                      <ChevronRight className="h-4 w-4 shrink-0 text-zinc-600 transition group-hover:translate-x-0.5 group-hover:text-zinc-300" />
-                    </div>
-                  </motion.div>
-                ))}
+                {viewQuiet.map((chapter, i) => renderQuietRow(chapter, i, false))}
               </div>
+            </div>
+          )}
+
+          {/* THE FOLD — every raw call-graph trace lives here, one quiet row
+              until asked. The composed key flows above are the reading; the
+              raws remain a click away (never-vanish, never-shout). */}
+          {folded.length > 0 && (
+            <div className="mt-4">
+              {!foldOpen ? (
+                <button
+                  onClick={() => setFoldOpen(true)}
+                  className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg border border-dashed px-4 py-3 text-left transition-colors hover:border-solid"
+                  style={{
+                    borderColor: "var(--bpmn-border-soft)",
+                    color: "var(--bpmn-text-dim)",
+                  }}
+                >
+                  <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+                  <span className="font-mono text-[11.5px] tracking-wide">
+                    {folded.length} more journey{folded.length === 1 ? "" : "s"} traced in the
+                    codebase
+                    {foldedAffected > 0
+                      ? ` (${foldedAffected} touched by this PR)`
+                      : ""}{" "}
+                    →
+                  </span>
+                </button>
+              ) : (
+                <div>
+                  <button
+                    onClick={() => setFoldOpen(false)}
+                    className="mb-3 flex w-full cursor-pointer items-center gap-2 text-left"
+                  >
+                    <ChevronDown className="h-3.5 w-3.5 text-zinc-500" />
+                    <span className="font-mono text-xs tracking-wider text-zinc-500 uppercase">
+                      All traced journeys · {folded.length}
+                    </span>
+                    <div
+                      className="h-px flex-1"
+                      style={{ background: "var(--bpmn-border-soft)" }}
+                    />
+                    <span className="text-[11px] text-zinc-500">hide</span>
+                  </button>
+                  <div className="space-y-2.5">
+                    {folded.map((chapter, i) =>
+                      renderQuietRow(
+                        chapter,
+                        i,
+                        impactRank(chapter.prStatus) > 0
+                      )
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
