@@ -114,7 +114,14 @@ const SessionRail = () => {
   const toggleRail = useUIStore((s) => s.toggleRail);
 
   const title = transformedData?.prOverlay?.title ?? "Underscore report";
-  const journeyCount = transformedData?.chapters.length ?? 0;
+  // The board lists only the agent-composed journeys (real diagram, not the
+  // synthetic call-trace fallback) — the badge counts what the board shows.
+  // Structural-only reports (zero composed) fall back to the raw count.
+  const allChapters = transformedData?.chapters ?? [];
+  const composedCount = allChapters.filter(
+    (ch) => !!ch.bpmn && !(ch.bpmn as { synthetic?: boolean }).synthetic
+  ).length;
+  const journeyCount = composedCount > 0 ? composedCount : allChapters.length;
   const specCount = transformedData?.specs?.specs.length ?? 0;
   const hasSpecs = transformedData?.specs != null;
   // OPEN findings only — resolved ones are ledger history (struck on the

@@ -534,11 +534,18 @@ const JourneyPage = () => {
     // No analysis loaded yet → empty list, never a crash (live-test
     // finding: undefined.filter unmounted the whole React tree).
     const all = allChapters ?? [];
-    return prMode
+    const visible = prMode
       ? all
       : all.filter(
           (ch) => ch.prStatus !== "removed" && ch.prStatus !== "demoted"
         );
+    // Founder: the board lists ONLY the agent-composed journeys (the ones
+    // carrying a real business-flow diagram). Raw call-graph traces stay
+    // reachable — canvas lines and chapter connections deep-link into them —
+    // but never as board rows. Structural-only reports (zero composed) keep
+    // the full raw board so non-enriched clients still get a working list.
+    const composed = visible.filter(hasComposedFlow);
+    return composed.length > 0 ? composed : visible;
   }, [allChapters, prMode]);
 
   // PR mode is driven entirely by per-chapter prStatus now — prOverlay only
@@ -650,55 +657,11 @@ const JourneyPage = () => {
     }, [chapters, searchQuery, hasPR, activeStatuses]);
 
   const [showNoise, setShowNoise] = useState(false);
-  const [foldOpen, setFoldOpen] = useState(false);
 
-  // Founder default: the board LEADS with the composed key flows (the
-  // agent-written 6-12 journeys, the ones carrying a real diagram); every
-  // raw call-graph trace folds beneath one quiet row. Pills/search switch
-  // to the full filtered view — the fold is a default-mode shape only.
-  const defaultMode = activeStatuses.size === 0 && !searchQuery;
-  const {
-    viewImpacted,
-    viewPrimary,
-    viewSecondary,
-    viewNoise,
-    viewQuiet,
-    folded,
-    foldedAffected,
-  } = useMemo(() => {
-    const full = {
-      viewImpacted: impacted,
-      viewPrimary: primary,
-      viewSecondary: secondary,
-      viewNoise: noise,
-      viewQuiet: unimpacted,
-      folded: [] as Chapter[],
-      foldedAffected: 0,
-    };
-    if (!defaultMode) return full;
-    const composedImp = impacted.filter(hasComposedFlow);
-    const composedQuiet = unimpacted.filter(hasComposedFlow);
-    if (composedImp.length + composedQuiet.length === 0) {
-      // No composed set (analyzer skipped/unavailable): affected raws lead,
-      // never-affected raws fold — full-repo mode keeps everything visible.
-      if (!hasPR || impacted.length === 0) return full;
-      return { ...full, viewQuiet: [], folded: unimpacted, foldedAffected: 0 };
-    }
-    const rawImp = impacted.filter((ch) => !hasComposedFlow(ch));
-    const rawQuiet = unimpacted.filter((ch) => !hasComposedFlow(ch));
-    return {
-      viewImpacted: composedImp,
-      viewPrimary: primary.filter(hasComposedFlow),
-      viewSecondary: secondary.filter(hasComposedFlow),
-      viewNoise: noise.filter(hasComposedFlow),
-      viewQuiet: composedQuiet,
-      folded: [...rawImp, ...rawQuiet], // affected raws first inside the fold
-      foldedAffected: rawImp.length,
-    };
-  }, [defaultMode, hasPR, impacted, primary, secondary, noise, unimpacted]);
-
-  // One quiet-row renderer serves the unaffected section AND the fold —
-  // folded affected raws keep their amber Δ identity via `aff`.
+  // The board lists ONLY the agent-composed journeys — `chapters` is already
+  // that set (see the memo above; raw traces appear only in the structural-
+  // only fallback). No fold, no second tier: what the agent emitted is the
+  // whole reading.
   const renderQuietRow = (chapter: Chapter, i: number, aff: boolean) => (
     <motion.div
       key={chapter.id}
@@ -807,7 +770,7 @@ const JourneyPage = () => {
                   : "No journeys discovered yet."}
             </div>
           )}
-          {!hasPR && viewQuiet.length === 0 && folded.length === 0 && (
+          {!hasPR && unimpacted.length === 0 && (
             <div className="py-16 text-center text-zinc-600">
               {searchQuery
                 ? `No journeys matching "${searchQuery}"${activeStatuses.size > 0 ? " with the selected filters" : ""}`
@@ -821,7 +784,7 @@ const JourneyPage = () => {
               available (primary / secondary / noise), otherwise a flat
               list as before. */}
           {hasPR &&
-            viewImpacted.length > 0 &&
+            impacted.length > 0 &&
             (() => {
               // Render one impacted card. Extracted so the three intent-buckets
               // and the flat-fallback list share identical structure.
@@ -977,7 +940,7 @@ const JourneyPage = () => {
                 return (
                   <div className="mb-6">
                     <div className="space-y-2.5">
-                      {viewImpacted.map((ch, i) => renderCard(ch, i))}
+                      {impacted.map((ch, i) => renderCard(ch, i))}
                     </div>
                   </div>
                 );
@@ -993,27 +956,27 @@ const JourneyPage = () => {
                         "— directly implements PR intent"
                       )}
                       <div className="space-y-2.5">
-                        {viewPrimary.map((ch, i) =>
+                        {primary.map((ch, i) =>
                           renderCard(ch, i, { primary: true })
                         )}
                       </div>
                     </div>
                   )}
-                  {viewSecondary.length > 0 && (
+                  {secondary.length > 0 && (
                     <div>
                       {sectionHeader(
                         "Secondary",
-                        viewSecondary.length,
+                        secondary.length,
                         "— supporting changes (decorator-wrap, scaffolding)"
                       )}
                       <div className="space-y-2.5">
-                        {viewSecondary.map((ch, i) =>
+                        {secondary.map((ch, i) =>
                           renderCard(ch, i, { dim: true })
                         )}
                       </div>
                     </div>
                   )}
-                  {viewNoise.length > 0 && (
+                  {noise.length > 0 && (
                     <div>
                       <button
                         type="button"
@@ -1027,7 +990,7 @@ const JourneyPage = () => {
                           <EyeOff className="h-3.5 w-3.5 text-zinc-500" />
                         )}
                         <span className="font-mono text-xs tracking-wider text-zinc-500 uppercase">
-                          Structural noise · {viewNoise.length}
+                          Structural noise · {noise.length}
                         </span>
                         <span className="text-[11px] text-zinc-600">
                           — flagged by diff, semantically inert (rename / DI /
@@ -1039,7 +1002,7 @@ const JourneyPage = () => {
                       </button>
                       {showNoise && (
                         <div className="space-y-2.5">
-                          {viewNoise.map((ch, i) => renderCard(ch, i, { dim: true }))}
+                          {noise.map((ch, i) => renderCard(ch, i, { dim: true }))}
                         </div>
                       )}
                     </div>
@@ -1050,73 +1013,19 @@ const JourneyPage = () => {
 
           {/* Quiet rows: composed-but-unaffected in the default view;
               unaffected/all matching rows when pills or search are active. */}
-          {viewQuiet.length > 0 && (
+          {unimpacted.length > 0 && (
             <div>
-              {hasPR && viewImpacted.length > 0 && (
+              {hasPR && impacted.length > 0 && (
                 <div className="mb-3 flex items-center gap-2">
                   <span className="font-mono text-xs tracking-wider text-zinc-600 uppercase">
-                    Unaffected · {viewQuiet.length}
+                    Unaffected · {unimpacted.length}
                   </span>
                   <div className="h-px flex-1" style={{background: "var(--bpmn-border-soft)"}} />
                 </div>
               )}
               <div className="space-y-2.5">
-                {viewQuiet.map((chapter, i) => renderQuietRow(chapter, i, false))}
+                {unimpacted.map((chapter, i) => renderQuietRow(chapter, i, false))}
               </div>
-            </div>
-          )}
-
-          {/* THE FOLD — every raw call-graph trace lives here, one quiet row
-              until asked. The composed key flows above are the reading; the
-              raws remain a click away (never-vanish, never-shout). */}
-          {folded.length > 0 && (
-            <div className="mt-4">
-              {!foldOpen ? (
-                <button
-                  onClick={() => setFoldOpen(true)}
-                  className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg border border-dashed px-4 py-3 text-left transition-colors hover:border-solid"
-                  style={{
-                    borderColor: "var(--bpmn-border-soft)",
-                    color: "var(--bpmn-text-dim)",
-                  }}
-                >
-                  <ChevronRight className="h-3.5 w-3.5 shrink-0" />
-                  <span className="font-mono text-[11.5px] tracking-wide">
-                    {folded.length} more journey{folded.length === 1 ? "" : "s"} traced in the
-                    codebase
-                    {foldedAffected > 0
-                      ? ` (${foldedAffected} touched by this PR)`
-                      : ""}{" "}
-                    →
-                  </span>
-                </button>
-              ) : (
-                <div>
-                  <button
-                    onClick={() => setFoldOpen(false)}
-                    className="mb-3 flex w-full cursor-pointer items-center gap-2 text-left"
-                  >
-                    <ChevronDown className="h-3.5 w-3.5 text-zinc-500" />
-                    <span className="font-mono text-xs tracking-wider text-zinc-500 uppercase">
-                      All traced journeys · {folded.length}
-                    </span>
-                    <div
-                      className="h-px flex-1"
-                      style={{ background: "var(--bpmn-border-soft)" }}
-                    />
-                    <span className="text-[11px] text-zinc-500">hide</span>
-                  </button>
-                  <div className="space-y-2.5">
-                    {folded.map((chapter, i) =>
-                      renderQuietRow(
-                        chapter,
-                        i,
-                        impactRank(chapter.prStatus) > 0
-                      )
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
           )}
         </div>
