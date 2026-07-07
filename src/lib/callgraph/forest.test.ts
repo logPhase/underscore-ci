@@ -88,6 +88,50 @@ describe("findReplacement — deleted methods point at their successor", () => {
     ];
     expect(findReplacement("A.Pub.Send(y)", amb)).toBe("A.Pub.Send(x)");
   });
+
+  it("exact oldFqn lineage WINS over a same-name heuristic candidate", () => {
+    // Heuristic would pick the same-name added step; the backend lineage
+    // says the true successor is a differently-named method.
+    const stepsWithDecoy = [
+      { fqn: "Ns.Decoy.PublishAsync(Evt)", prStatus: "added" },
+      { fqn: "Ns.New.EmitStateAsync(Evt)", prStatus: "added" },
+    ];
+    const snapshots = [
+      {
+        fqn: "Ns.New.EmitStateAsync(Evt)",
+        oldFqn: "Ns.OldPublisher.PublishAsync(Evt)",
+      },
+    ];
+    expect(
+      findReplacement(
+        "Ns.OldPublisher.PublishAsync(Evt)",
+        stepsWithDecoy,
+        null,
+        snapshots
+      )
+    ).toBe("Ns.New.EmitStateAsync(Evt)");
+    // arg-tolerant both ways: argless deleted fqn still matches lineage
+    expect(
+      findReplacement(
+        "Ns.OldPublisher.PublishAsync",
+        stepsWithDecoy,
+        null,
+        snapshots
+      )
+    ).toBe("Ns.New.EmitStateAsync(Evt)");
+  });
+
+  it("absent oldFqn (old payloads) falls back to the heuristic", () => {
+    const snapshots = [{ fqn: "Ns.New.EmitStateAsync(Evt)" }]; // no oldFqn
+    expect(
+      findReplacement(
+        "Ns.OldPublisher.PublishAsync(Evt)",
+        steps,
+        null,
+        snapshots
+      )
+    ).toBe("Ns.NewPublisher.PublishAsync(Evt)");
+  });
 });
 
 describe("normalizeEdges", () => {

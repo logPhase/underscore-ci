@@ -344,6 +344,10 @@ export interface PRSnapshot {
   significance: Significance;
   complexity: number;
   loc: number;
+  /** Full parameterized FQN of the method this one REPLACED — present only
+   * on renamed/moved records (backend rename lineage). Absent on old
+   * payloads; consumers must treat it as optional. */
+  oldFqn?: string | null;
 }
 
 export interface PREdgeDelta {

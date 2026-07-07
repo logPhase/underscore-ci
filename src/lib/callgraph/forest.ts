@@ -139,16 +139,36 @@ export function simpleClass(fqn: string): string {
   return parts.length >= 2 ? parts[parts.length - 2] : "";
 }
 
-/** Heuristic successor for a method REMOVED in this PR: an ADDED step with
- * the same method name — same class strongly preferred, then same file.
- * Returns null when ambiguous or absent (the UI then says so honestly).
- * NOTE: exact rename mapping (`:old-fqn`) exists in the analysis pipeline
- * but is not exported to the payload yet — when it ships, prefer it here. */
+/** A prOverlay snapshot's rename lineage — `oldFqn` is present only on
+ * renamed/moved records (newer payloads). */
+export interface RenameSnapshot {
+  fqn: string;
+  oldFqn?: string | null;
+}
+
+/** Arg-tolerant FQN equality: exact, or equal once parameter lists are
+ * stripped from either side (payload surfaces disagree about args). */
+function fqnEq(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const bare = (f: string) => f.replace(/\(.*$/, "");
+  return bare(a) === bare(b);
+}
+
+/** Successor for a method REMOVED in this PR.
+ * EXACT first: a snapshot whose `oldFqn` names the deleted method (backend
+ * rename lineage — newer payloads). Only then the heuristic: an ADDED step
+ * with the same method name — same class strongly preferred, then same
+ * file. Returns null when neither yields (the UI then says so honestly). */
 export function findReplacement(
   deletedFqn: string,
   steps: { fqn: string; prStatus?: string | null; file?: string | null }[],
-  deletedFile?: string | null
+  deletedFile?: string | null,
+  snapshots?: RenameSnapshot[]
 ): string | null {
+  for (const sn of snapshots || []) {
+    if (sn?.fqn && sn.oldFqn && fqnEq(sn.oldFqn, deletedFqn)) return sn.fqn;
+  }
   const name = simpleName(deletedFqn).toLowerCase();
   const cls = simpleClass(deletedFqn).toLowerCase();
   const added = steps.filter(

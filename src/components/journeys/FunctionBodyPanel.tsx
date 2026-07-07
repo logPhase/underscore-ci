@@ -21,6 +21,7 @@ import {
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { STATUS_STYLES } from "@/lib/status-colors";
+import { getPROverlay } from "@/data/parity-loader";
 import { findReplacement } from "@/lib/callgraph/forest";
 import CodeBlock from "./CodeBlock";
 import DiffBlock from "./DiffBlock";
@@ -328,7 +329,14 @@ const FunctionBodyPanelContent: React.FC<FunctionBodyPanelContentProps> = ({
   // the payload ships the pipeline's exact rename mapping (:old-fqn).
   const replacementFqn =
     prStatus === "deleted"
-      ? findReplacement(activeFunctionId, chapter.steps, step?.file)
+      ? findReplacement(
+          activeFunctionId,
+          chapter.steps,
+          step?.file,
+          // Exact rename lineage (oldFqn) from the PR overlay — newer
+          // payloads; the heuristic inside covers older ones.
+          getPROverlay()?.snapshots
+        )
       : null;
 
   return (
