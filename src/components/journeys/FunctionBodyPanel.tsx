@@ -20,6 +20,8 @@ import {
 } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { STATUS_STYLES } from "@/lib/status-colors";
+import { findReplacement } from "@/lib/callgraph/forest";
 import CodeBlock from "./CodeBlock";
 import DiffBlock from "./DiffBlock";
 
@@ -70,31 +72,25 @@ interface FunctionBodyPanelProps {
 
 // PR status pill styling — kept local to the panel so it can be tuned
 // without dragging in the chart-internal PR_CHANGE_COLORS map.
+// Canonical status palette (src/lib/status-colors.ts) — same hues as the
+// call graph, BPMN nodes, and journey badges.
 const PR_STATUS_PILL: Record<
   string,
-  { label: string; icon: string; cls: string }
-> = {
-  modified: {
-    label: "modified",
-    icon: "~",
-    cls: "bg-amber-500/15 text-amber-300 border-amber-500/40",
-  },
-  added: {
-    label: "added",
-    icon: "+",
-    cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/40",
-  },
-  deleted: {
-    label: "deleted",
-    icon: "−",
-    cls: "bg-red-500/15 text-red-300 border-red-500/40",
-  },
-  disconnected: {
-    label: "disconnected",
-    icon: "⦸",
-    cls: "bg-zinc-500/15 text-zinc-300 border-zinc-500/40",
-  },
-};
+  { label: string; icon: string; style: React.CSSProperties }
+> = Object.fromEntries(
+  (["modified", "added", "deleted", "disconnected"] as const).map((k) => [
+    k,
+    {
+      label: STATUS_STYLES[k].label,
+      icon: STATUS_STYLES[k].icon || "~",
+      style: {
+        background: STATUS_STYLES[k].bg,
+        color: STATUS_STYLES[k].text,
+        borderColor: STATUS_STYLES[k].border,
+      },
+    },
+  ])
+);
 
 const SOURCE_VIEW_LABEL: Record<SourceView, string> = {
   current: "current head",
@@ -327,6 +323,14 @@ const FunctionBodyPanelContent: React.FC<FunctionBodyPanelContentProps> = ({
 
   const prPill = prStatus ? PR_STATUS_PILL[prStatus] : null;
 
+  // Deleted method → surface its successor when determinable (an ADDED step
+  // with the same method name, same class/file preferred). Heuristic until
+  // the payload ships the pipeline's exact rename mapping (:old-fqn).
+  const replacementFqn =
+    prStatus === "deleted"
+      ? findReplacement(activeFunctionId, chapter.steps, step?.file)
+      : null;
+
   return (
     <div
       className="h-full overflow-y-auto"
@@ -348,7 +352,8 @@ const FunctionBodyPanelContent: React.FC<FunctionBodyPanelContentProps> = ({
                 </h2>
                 {prPill && (
                   <span
-                    className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-[10px] ${prPill.cls}`}
+                    className="inline-flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-[10px]"
+                    style={prPill.style}
                     title={`This method is ${prPill.label} in the PR`}
                   >
                     <span className="font-bold">{prPill.icon}</span>
@@ -372,6 +377,29 @@ const FunctionBodyPanelContent: React.FC<FunctionBodyPanelContentProps> = ({
                   <bdi>{activeFunctionId}</bdi>
                 </div>
               </HoverTip>
+              {prStatus === "deleted" && (
+                <div className="mt-1.5 font-mono text-[10.5px]">
+                  {replacementFqn ? (
+                    <button
+                      type="button"
+                      onClick={() => setActiveFunctionId(replacementFqn)}
+                      className="inline-flex cursor-pointer items-center gap-1 rounded border px-1.5 py-0.5"
+                      style={{
+                        color: STATUS_STYLES.added.text,
+                        borderColor: STATUS_STYLES.added.border,
+                        background: STATUS_STYLES.added.bg,
+                      }}
+                      title={replacementFqn}
+                    >
+                      replaced by → {replacementFqn.replace(/\(.*$/, "").split(".").slice(-2).join(".")}
+                    </button>
+                  ) : (
+                    <span style={{ color: "var(--bpmn-text-dim)" }}>
+                      removed in this PR — no direct replacement traced
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
             {/* Dock position controls — separated from the close X with a
                 spacer so they don't read as one cluster. */}

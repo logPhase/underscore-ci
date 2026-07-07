@@ -14,6 +14,7 @@
  * method index → the evidence snippet (verbatim slice) as fallback.
  */
 import { useState } from 'react';
+import { STATUS_PAPER } from "@/lib/status-colors";
 import { Maximize2, Minimize2, X } from 'lucide-react';
 import DiffBlock from './DiffBlock';
 import { LeftResizeHandle, WidthNudgeButtons } from './code-resize';
@@ -32,9 +33,9 @@ const shortName = (fqn: string) => {
 };
 
 // Print tones — this card lives inside the paper business-flow popup.
-const STATUS_COLOR: Record<string, string> = {
-  added: '#2e7d5b', modified: '#9a6217', affected: '#9a6217', removed: '#b04a52',
-};
+// Sourced from the canonical palette (src/lib/status-colors.ts) so hues can
+// never drift from the call graph / BPMN / badges.
+const STATUS_COLOR: Record<string, string> = STATUS_PAPER;
 
 interface FnRef {
   fqn: string;

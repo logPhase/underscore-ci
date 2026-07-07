@@ -7,6 +7,12 @@ import {
 import { stripPRFromChapter } from "@/data/prModeFilter";
 import { getPROverlay, getMethodInfo } from "@/data/parity-loader";
 import { bpmnExportFilename } from "@/lib/exportBpmnPng";
+import {
+  normalizeEdges,
+  deriveRoots,
+  deriveTreeParents,
+} from "@/lib/callgraph/forest";
+import { STATUS_STYLES } from "@/lib/status-colors";
 import { useJourneyUIStore } from "@/store/use-journey-ui-store";
 import { Chapter, ChapterPRStatus } from "@/types/journey";
 import type { BpmnElement } from "@/components/bpmn/types";
@@ -64,22 +70,40 @@ interface ChapterViewProps {
   onBack: () => void;
 }
 
-const STATUS_BADGE: Record<ChapterPRStatus, { label: string; cls: string }> = {
+// Canonical status palette (src/lib/status-colors.ts): amber = touched,
+// green = new, red = removed — consistent with the call graph and BPMN.
+const STATUS_BADGE: Record<ChapterPRStatus, { label: string; style: React.CSSProperties }> = {
   affected: {
     label: "affected",
-    cls: "bg-amber-500/15 text-amber-400 border-amber-500/30",
+    style: {
+      background: STATUS_STYLES.affected.bg,
+      color: STATUS_STYLES.affected.text,
+      borderColor: STATUS_STYLES.affected.border,
+    },
   },
   added: {
     label: "new journey",
-    cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+    style: {
+      background: STATUS_STYLES.added.bg,
+      color: STATUS_STYLES.added.text,
+      borderColor: STATUS_STYLES.added.border,
+    },
   },
   removed: {
     label: "removed",
-    cls: "bg-red-500/15 text-red-400 border-red-500/30",
+    style: {
+      background: STATUS_STYLES.removed.bg,
+      color: STATUS_STYLES.removed.text,
+      borderColor: STATUS_STYLES.removed.border,
+    },
   },
   demoted: {
     label: "demoted",
-    cls: "bg-blue-500/15 text-blue-400 border-blue-500/30",
+    style: {
+      background: STATUS_STYLES.disconnected.bg,
+      color: STATUS_STYLES.disconnected.text,
+      borderColor: STATUS_STYLES.disconnected.border,
+    },
   },
 };
 
@@ -258,36 +282,16 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
   // showing two nodes made the call-graph rail look broken. Unchanged
   // branches stay collapsed so the chunk budget holds.
   const [expanded, setExpanded] = useState<Set<string>>(() => {
-    const edges = chapter.edges.map((e: any) =>
-      typeof e === "object" && "from" in e ? e : { from: e[0], to: e[1] }
-    );
-    const childMap: Record<string, string[]> = {};
-    const seenEdge = new Set<string>();
-    const hasParent = new Set<string>();
-    for (const e of edges) {
-      const key = e.from + " " + e.to;
-      if (seenEdge.has(key)) continue;
-      seenEdge.add(key);
-      (childMap[e.from] ||= []).push(e.to);
-      hasParent.add(e.to);
-    }
-    const root =
-      chapter.functions.find((f) => !hasParent.has(f)) || chapter.functions[0];
-    // Tree-parents via the same DFS the chart renders with.
-    const treeParent = new Map<string, string>();
-    const visited = new Set<string>();
-    (function dfs(n: string) {
-      visited.add(n);
-      for (const c of childMap[n] || []) {
-        if (visited.has(c)) continue;
-        treeParent.set(c, n);
-        dfs(c);
-      }
-    })(root);
-    const seed = new Set([root]);
-    for (const s of chapter.steps) {
-      if (!s.prStatus || !s.fqn) continue;
-      let cur: string | undefined = s.fqn;
+    const edges = normalizeEdges(chapter.edges as unknown[]);
+    // Same forest derivation the chart renders with (shared lib): seed with
+    // EVERY root plus the ancestor chain of each PR-changed step — the
+    // changed path IS the content in a PR review.
+    const roots = deriveRoots(chapter.functions, edges);
+    const treeParent = deriveTreeParents(chapter.functions, edges);
+    const seed = new Set<string>(roots);
+    for (const st of chapter.steps) {
+      if (!st.prStatus || !st.fqn) continue;
+      let cur: string | undefined = st.fqn;
       const guard = new Set<string>();
       while (cur && !guard.has(cur)) {
         guard.add(cur);
@@ -314,52 +318,18 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
   }, [chapter.functions]);
 
   const collapseAll = useCallback(() => {
-    const edges = chapter.edges.map((e: any) =>
-      typeof e === "object" && "from" in e ? e : { from: e[0], to: e[1] }
-    );
-    const hasParent = new Set(edges.map((e: any) => e.to));
-    const root =
-      chapter.functions.find((f) => !hasParent.has(f)) || chapter.functions[0];
-    setExpanded(new Set([root]));
+    const edges = normalizeEdges(chapter.edges as unknown[]);
+    setExpanded(new Set(deriveRoots(chapter.functions, edges)));
   }, [chapter.functions, chapter.edges]);
 
   const expandPath = useCallback(
     (fqn: string) => {
-      const edges = chapter.edges.map((e: any) =>
-        typeof e === "object" && "from" in e ? e : { from: e[0], to: e[1] }
-      );
-      // Mirror buildTree's DFS-from-root to derive each node's actual tree-parent.
-      // A raw "last-edge-wins" parentMap disagreed with the rendered tree when a
-      // node had multiple incoming edges, so expanding its "parent" left the
-      // target hidden under a different branch.
-      const childMap: Record<string, string[]> = {};
-      const seenEdge = new Set<string>();
-      const hasParent = new Set<string>();
-      for (const e of edges) {
-        const key = e.from + " " + e.to;
-        if (seenEdge.has(key)) continue;
-        seenEdge.add(key);
-        if (!childMap[e.from]) childMap[e.from] = [];
-        childMap[e.from].push(e.to);
-        hasParent.add(e.to);
-      }
-      const root =
-        chapter.functions.find((f) => !hasParent.has(f)) ||
-        chapter.functions[0];
-      const treeParent = new Map<string, string>();
-      const visited = new Set<string>();
-      (function dfs(n: string) {
-        visited.add(n);
-        for (const c of childMap[n] || []) {
-          if (visited.has(c)) continue;
-          treeParent.set(c, n);
-          dfs(c);
-        }
-      })(root);
-
+      const edges = normalizeEdges(chapter.edges as unknown[]);
+      // Shared forest derivation — expanding a node's ancestors always
+      // matches the rendered tree, whichever root its component hangs from.
+      const treeParent = deriveTreeParents(chapter.functions, edges);
       setExpanded((prev) => {
         const next = new Set(prev);
-        // Cycle-guarded just in case, though DFS-built treeParent is acyclic.
         const seen = new Set<string>();
         let cur: string | undefined = fqn;
         while (cur && !seen.has(cur)) {
@@ -648,7 +618,8 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
   // Badges the intro's eyebrow row hosts — journey-level status.
   const introBadges = prBadge && (
     <span
-      className={`flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[10px] ${prBadge.cls}`}
+      className="flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[10px]"
+      style={prBadge.style}
       title="PR status — per-step details shown inline in the flow"
     >
       <GitPullRequest className="h-3 w-3" />

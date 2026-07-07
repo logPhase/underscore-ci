@@ -2,6 +2,13 @@ import { useMemo, useRef, useEffect } from "react";
 import { HelpCircle } from "lucide-react";
 import { Chapter, ChapterStep, StepKind, StepPRStatus } from "@/types/journey";
 import { useJourneyUIStore } from "@/store/use-journey-ui-store";
+import {
+  normalizeEdges,
+  buildChildMap,
+  deriveRoots,
+  deriveTreeParents,
+} from "@/lib/callgraph/forest";
+import { STATUS_STYLES } from "@/lib/status-colors";
 
 interface CallFlowChartProps {
   chapter: Chapter;
@@ -34,38 +41,16 @@ interface TreeNode {
   kind?: StepKind;
 }
 
+// ONE canonical status palette (src/lib/status-colors.ts) — founder rule:
+// unchanged neutral, added green, modified amber, deleted red, everywhere.
 const PR_CHANGE_COLORS: Record<
   StepPRStatus,
   { bg: string; border: string; text: string; label: string; icon: string }
 > = {
-  added: {
-    bg: "hsla(145, 50%, 14%, 0.95)",
-    border: "hsl(145, 50%, 38%)",
-    text: "hsl(145, 55%, 62%)",
-    label: "added",
-    icon: "+",
-  },
-  modified: {
-    bg: "hsla(35, 50%, 14%, 0.95)",
-    border: "hsl(35, 55%, 42%)",
-    text: "hsl(35, 60%, 62%)",
-    label: "modified",
-    icon: "~",
-  },
-  deleted: {
-    bg: "hsla(0, 45%, 14%, 0.95)",
-    border: "hsl(0, 50%, 42%)",
-    text: "hsl(0, 55%, 62%)",
-    label: "deleted",
-    icon: "-",
-  },
-  disconnected: {
-    bg: "hsla(220, 15%, 13%, 0.95)",
-    border: "hsl(220, 10%, 38%)",
-    text: "hsl(220, 12%, 65%)",
-    label: "disconnected",
-    icon: "⦸",
-  },
+  added: STATUS_STYLES.added,
+  modified: STATUS_STYLES.modified,
+  deleted: STATUS_STYLES.deleted,
+  disconnected: STATUS_STYLES.disconnected,
 };
 
 /** Styling for interface/abstract contract steps. */
@@ -120,13 +105,18 @@ function isTrivialMethod(name: string, bodyLength: number): boolean {
   return false;
 }
 
-function buildTree(
+/** Build the FOREST covering every function — one tree per root from
+ *  deriveRoots (connected roots first, cycle cover, isolated nodes last).
+ *  The old single-root build silently hid every node unreachable from the
+ *  first parentless function ("1 / 29 shown" on composed journeys whose
+ *  entryFqn participates in no edges). */
+function buildForest(
   functions: string[],
   edges: { from: string; to: string }[],
   steps: ChapterStep[],
   prChanges: Map<string, PRChangeType>
-): TreeNode | null {
-  if (!functions.length) return null;
+): TreeNode[] {
+  if (!functions.length && !edges.length) return [];
 
   const stepByFqn = new Map<string, ChapterStep>();
   const seqMap = new Map<string, number>();
@@ -135,34 +125,18 @@ function buildTree(
     if (!seqMap.has(s.fqn)) seqMap.set(s.fqn, i + 1);
   });
 
-  // childMap is deduped: multiple edges between the same (from, to) pair
-  // (e.g. an interface called on two different code paths in the same body)
-  // must not turn into two tree children, or React keys collide.
-  const childMap: Record<string, string[]> = {};
-  const seenEdge = new Set<string>();
-  const hasParent = new Set<string>();
+  const { childMap } = buildChildMap(edges);
+  const roots = deriveRoots(functions, edges);
 
-  for (const e of edges) {
-    const key = e.from + "\u0000" + e.to;
-    if (seenEdge.has(key)) continue;
-    seenEdge.add(key);
-    if (!childMap[e.from]) childMap[e.from] = [];
-    childMap[e.from].push(e.to);
-    hasParent.add(e.to);
-  }
-
-  const root = functions.find((f) => !hasParent.has(f)) || functions[0];
-
+  // Shared visited set ACROSS roots: a node reachable from two roots renders
+  // once (under the first) — same dedupe rule the single tree used across
+  // siblings, now applied forest-wide so React keys stay unique.
   const visited = new Set<string>();
   function build(fqn: string, depth: number): TreeNode {
     visited.add(fqn);
     const step = stepByFqn.get(fqn);
-    // Check visited inside the loop — the filter-then-map pattern lets later
-    // siblings inherit `visited` additions from earlier siblings' sub-walks,
-    // which is how we keep a child that's reachable via two parents from
-    // being rendered twice (and colliding on React keys).
     const children: TreeNode[] = [];
-    for (const c of childMap[fqn] || []) {
+    for (const c of childMap.get(fqn) || []) {
       if (visited.has(c)) continue;
       children.push(build(c, depth + 1));
     }
@@ -188,7 +162,12 @@ function buildTree(
     return node;
   }
 
-  return build(root, 0);
+  const forest: TreeNode[] = [];
+  for (const r of roots) {
+    if (visited.has(r)) continue;
+    forest.push(build(r, 0));
+  }
+  return forest;
 }
 
 function filterTree(node: TreeNode, expanded: Set<string>): TreeNode {
@@ -305,59 +284,40 @@ const CallFlowChart: React.FC<CallFlowChartProps> = ({
   }, [chapter.functions, prChanges]);
 
   const { tree, flat } = useMemo(() => {
-    const edges = chapter.edges.map((e) =>
-      typeof e === "object" && "from" in e
-        ? e
-        : { from: (e as string[])[0], to: (e as string[])[1] }
-    );
-    const fullTree = buildTree(
+    const edges = normalizeEdges(chapter.edges as unknown[]);
+    const forest = buildForest(
       chapter.functions,
       edges,
       chapter.steps || [],
       prChanges
     );
-    if (!fullTree) return { tree: null, flat: { nodes: [], edges: [] } };
+    if (forest.length === 0)
+      return { tree: null, flat: { nodes: [], edges: [] } };
 
-    const filtered = filterTree(fullTree, expanded);
-    layoutTree(filtered);
-    return { tree: filtered, flat: flattenTree(filtered) };
+    // Filter each root by expansion, then lay the trees out SIDE BY SIDE —
+    // every component of the journey's graph renders, none is silently hidden.
+    const filtered = forest.map((r) => filterTree(r, expanded));
+    let x = 0;
+    for (const r of filtered) {
+      x += layoutTree(r, x) + H_GAP * 2;
+    }
+    const nodes: TreeNode[] = [];
+    const flatEdges: { from: TreeNode; to: TreeNode }[] = [];
+    for (const r of filtered) {
+      const f = flattenTree(r);
+      nodes.push(...f.nodes);
+      flatEdges.push(...f.edges);
+    }
+    return { tree: filtered[0], flat: { nodes, edges: flatEdges } };
   }, [chapter.edges, chapter.functions, chapter.steps, prChanges, expanded]);
 
-  // Ancestry chain from root → activeFunctionId. Used to light up the whole
-  // execution path when cycling through PR changes. Mirrors buildTree's
-  // DFS-from-root so the highlighted path matches the rendered tree (a
-  // last-edge-wins parent map disagreed when nodes had multiple incoming edges).
+  // Ancestry chain root → activeFunctionId, from the SAME forest derivation
+  // the chart renders with (shared lib) — so the lit path always matches.
   const activePath = useMemo(() => {
     const path = new Set<string>();
     if (!activeFunctionId) return path;
-    const edges = chapter.edges.map((e) =>
-      typeof e === "object" && "from" in e
-        ? e
-        : { from: (e as string[])[0], to: (e as string[])[1] }
-    );
-    const childMap: Record<string, string[]> = {};
-    const seenEdge = new Set<string>();
-    const hasParent = new Set<string>();
-    for (const e of edges) {
-      const key = e.from + " " + e.to;
-      if (seenEdge.has(key)) continue;
-      seenEdge.add(key);
-      if (!childMap[e.from]) childMap[e.from] = [];
-      childMap[e.from].push(e.to);
-      hasParent.add(e.to);
-    }
-    const root =
-      chapter.functions.find((f) => !hasParent.has(f)) || chapter.functions[0];
-    const treeParent = new Map<string, string>();
-    const visited = new Set<string>();
-    (function dfs(n: string) {
-      visited.add(n);
-      for (const c of childMap[n] || []) {
-        if (visited.has(c)) continue;
-        treeParent.set(c, n);
-        dfs(c);
-      }
-    })(root);
+    const edges = normalizeEdges(chapter.edges as unknown[]);
+    const treeParent = deriveTreeParents(chapter.functions, edges);
     let cur: string | undefined = activeFunctionId;
     while (cur && !path.has(cur)) {
       path.add(cur);

@@ -23,6 +23,7 @@ import {
 } from "@/store/use-journey-store";
 import { clampCriticality, clampStatus } from "./sanitize";
 import { deriveChapterFunctions, deriveChapterServices } from "./derive-data";
+import { buildArglessIndex, resolveFqns } from "@/lib/callgraph/forest";
 import { synthBpmnFromTrace } from "./synth-bpmn";
 import type { BpmnJourney } from "@/components/bpmn/types";
 
@@ -91,11 +92,36 @@ export function transformChapters(
         for (const f of (el as { code_fqns?: string[] }).code_fqns ?? [])
           fqns.add(f);
       if (fqns.size > 0) {
-        const derived: [string, string][] = [];
+        // BPMN code_fqns arrive WITHOUT parameter lists while calls keys
+        // carry them — a plain calls[f] read resolved NOTHING (observed on
+        // real payloads: 20 code_fqns, 0 edges). Resolve arg-tolerantly,
+        // then BFS two hops so callee subtrees exist in the derived graph.
+        const arglessIdx = buildArglessIndex(Object.keys(calls));
+        const seedFqns = new Set<string>();
         for (const f of fqns)
-          for (const c of calls[f] ?? []) derived.push([f, c]);
+          for (const r of resolveFqns(f, (k) => k in calls, arglessIdx))
+            seedFqns.add(r);
+        const derived: [string, string][] = [];
+        const seenEdge = new Set<string>();
+        let frontier = [...seedFqns];
+        for (let depth = 0; depth < 2 && derived.length < 400; depth++) {
+          const next: string[] = [];
+          for (const f of frontier) {
+            for (const c of calls[f] ?? []) {
+              const key = f + "" + c;
+              if (seenEdge.has(key)) continue;
+              seenEdge.add(key);
+              derived.push([f, c]);
+              next.push(c);
+            }
+          }
+          frontier = next;
+        }
         if (derived.length > 0) edgesRaw = derived;
-        if (rawSteps.length === 0) rawSteps = [...fqns].map((f) => ({ fqn: f }));
+        if (rawSteps.length === 0)
+          rawSteps = [...(seedFqns.size ? seedFqns : fqns)].map((f) => ({
+            fqn: f,
+          }));
       }
     }
     const edges = edgesRaw.map(([from, to]) => ({ from, to }));
