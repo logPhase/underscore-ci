@@ -27,6 +27,50 @@ import { buildArglessIndex, resolveFqns } from "@/lib/callgraph/forest";
 import { synthBpmnFromTrace } from "./synth-bpmn";
 import type { BpmnJourney } from "@/components/bpmn/types";
 
+/** A raw journey title is a bare code identifier (single token, no spaces)
+ *  whenever no BPMN title was synthesized. Upgrade it to "Class · Method"
+ *  from the entry FQN so board rows stay distinguishable — "ParkwayController
+ *  · Exit" instead of four rows all reading "HandleAsync". Titles that
+ *  already read like prose (spaces) pass through untouched. */
+export function readableRawTitle(rawTitle: string, entryFqn: string): string {
+  if (!rawTitle || rawTitle.includes(" ") || rawTitle === "Untitled Chapter") {
+    return rawTitle || "Untitled Chapter";
+  }
+  // Strip the parameter list, then generic argument lists (repeatedly, for
+  // nesting: `Cache<Dict<K, V>>` → `Cache`) so dots inside `<...>` can't
+  // corrupt the segment split.
+  let noArgs = entryFqn.replace(/\(.*$/, "");
+  for (let i = 0; i < 4 && noArgs.includes("<"); i++) {
+    noArgs = noArgs.replace(/<[^<>]*>/g, "");
+  }
+  const segs = noArgs.split(".").filter(Boolean);
+  if (segs.length < 2) return rawTitle;
+  const method = segs[segs.length - 1];
+  const cls = segs[segs.length - 2];
+  // Only decorate when the title IS the entry method (the bare-name case) —
+  // a hand-written single-word title on some other basis stays as-is.
+  if (method !== rawTitle || !cls) return rawTitle;
+  // Strip generic-arity noise like `TracedKafkaProcessor\`2`.
+  const cleanCls = cls.replace(/`\d+$/, "").trim();
+  if (!cleanCls) return rawTitle;
+  return `${cleanCls} · ${method}`;
+}
+
+/** A summary that merely echoes the title back ("HandleAsync —",
+ *  "HandleAsync — HandleAsync", or the title verbatim) carries no
+ *  information — treat it as absent so real fallbacks run. */
+function dropTitleEcho(
+  summary: string | undefined,
+  rawTitle: string,
+  displayTitle: string
+): string {
+  const s = (summary || "").trim();
+  if (!s) return "";
+  const stripped = s.replace(/[\s—–-]+$/, "").trim();
+  if (stripped === rawTitle || stripped === displayTitle) return "";
+  return s;
+}
+
 /** Hydrate a chapter step by resolving FQN against the methods registry,
  *  carrying the step's own per-step PR fields through. Per-step PR state
  *  is journey-contextual (the same FQN can be deleted in one journey and
@@ -161,18 +205,23 @@ export function transformChapters(
     // Prefer the agent's business-meaningful BPMN title over the raw entry
     // method name. "ProcessMessageAsync" is useless to a non-engineer;
     // "Route and process incoming VAS Kafka message" is the actual flow.
-    // Falls back to the journey title (entry FQN basename) when no BPMN
-    // diagram has been produced for this journey yet.
+    // Falls back to the journey title — but a bare method-name title
+    // ("Exit", "HandleAsync") is upgraded to "Class · Method" from the
+    // entry FQN: with a hundred raw journeys on the board, four rows all
+    // titled "HandleAsync" read as broken.
     const bpmnTitle = (j.bpmn as { title?: string } | undefined)?.title;
     const rawTitle = j.title || "Untitled Chapter";
     const displayTitle =
-      bpmnTitle && bpmnTitle.trim().length > 0 ? bpmnTitle : rawTitle;
+      bpmnTitle && bpmnTitle.trim().length > 0
+        ? bpmnTitle
+        : readableRawTitle(rawTitle, j.entryFqn || "");
     // When we replaced title with the BPMN title, surface the raw entry
     // method name in the summary so the original method-name lookup
-    // (search, debugging) still works.
+    // (search, debugging) still works. A summary that is just the title
+    // echoed back ("HandleAsync —") is noise, not information — drop it.
     const summary =
-      j.summary ||
-      (bpmnTitle
+      dropTitleEcho(j.summary, rawTitle, displayTitle) ||
+      (bpmnTitle && globalNarrative
         ? `${rawTitle} — ${globalNarrative.slice(0, 100)}`
         : globalNarrative.slice(0, 120)) ||
       (phases[0]?.narrative || "").slice(0, 120);

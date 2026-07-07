@@ -760,7 +760,23 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
                   >
                     {chapter.bpmnValidation.verdict === "ok"
                       ? "✓ verified"
-                      : `${chapter.bpmnValidation.issues.length} ${chapter.bpmnValidation.verdict}`}
+                      : // Honest severity split: "15 errors" when 14 of them
+                        // are warnings misrepresents the diagram's health.
+                        (() => {
+                          const issues = chapter.bpmnValidation.issues;
+                          const errs = issues.filter(
+                            (i) => i.severity === "error"
+                          ).length;
+                          const warns = issues.length - errs;
+                          const parts = [];
+                          if (errs > 0)
+                            parts.push(`${errs} error${errs === 1 ? "" : "s"}`);
+                          if (warns > 0)
+                            parts.push(
+                              `${warns} warning${warns === 1 ? "" : "s"}`
+                            );
+                          return parts.join(" · ");
+                        })()}
                   </span>
                 )}
                 <button

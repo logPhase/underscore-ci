@@ -331,7 +331,10 @@ const JourneyHeader = ({
           style={{ fontFamily: "var(--reading-font)", fontStyle: "italic" }}
         >
           {hasPR
-            ? `${chapters.length} line${chapters.length === 1 ? "" : "s"} run through this change.`
+            ? // The headline claims what the CHANGE touches — that's the
+              // impacted count, not the whole codebase's journey total
+              // ("121 lines run through this change" on a 28-line PR lies).
+              `${impacted.length} line${impacted.length === 1 ? "" : "s"} run through this change.`
             : `${chapters.length} journey${chapters.length === 1 ? "" : "s"} through the codebase.`}
         </h1>
         {hasPR ? (
