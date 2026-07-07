@@ -123,18 +123,21 @@ export function transformChapters(
     const id = j.id || `chapter-${idx}`;
     let edgesRaw = j.edges || [];
     let rawSteps = j.steps || [];
-    // Composed (synth-…) journeys ship the BPMN diagram but NO steps/edges:
-    // the analyzer's /bpmn "replace raw with composed" path carries only the
-    // diagram, dropping the desktop trace's call graph. Rebuild it from the
-    // diagram's `code_fqns` + the global call graph (intact in `calls`) so the
-    // call-graph view + step list still render. Fallback only — real
-    // backend-emitted edges always win.
-    if (edgesRaw.length === 0) {
+    // Composed (synth-…) journeys ship the BPMN diagram but a STARVED call
+    // graph: the analyzer's compose path carries the diagram and steps while
+    // dropping (or keeping only a sliver of) the desktop trace's edges — a
+    // 5-step journey arriving with 1 edge rendered a 2-node "call graph"
+    // (founder repro, pr-593 CQRS chapter). Rebuild/ENRICH from the diagram's
+    // `code_fqns` + the journey's own step FQNs + the global call graph
+    // (intact in `calls`) whenever the edge set is impoverished relative to
+    // the steps. Real backend edges always survive — derived ones merge in.
+    if (edgesRaw.length < rawSteps.length) {
       const els = (j.bpmn as BpmnJourney | undefined)?.elements ?? [];
       const fqns = new Set<string>();
       for (const el of els)
         for (const f of (el as { code_fqns?: string[] }).code_fqns ?? [])
           fqns.add(f);
+      for (const s of rawSteps) if (s.fqn) fqns.add(s.fqn);
       if (fqns.size > 0) {
         // BPMN code_fqns arrive WITHOUT parameter lists while calls keys
         // carry them — a plain calls[f] read resolved NOTHING (observed on
@@ -161,7 +164,13 @@ export function transformChapters(
           }
           frontier = next;
         }
-        if (derived.length > 0) edgesRaw = derived;
+        if (derived.length > 0) {
+          // MERGE — the sliver of real edges stays authoritative, derived
+          // edges fill the starved remainder (dedup by endpoint pair).
+          const have = new Set(edgesRaw.map(([f, t]) => f + "" + t));
+          for (const [f, t] of derived)
+            if (!have.has(f + "" + t)) edgesRaw = [...edgesRaw, [f, t]];
+        }
         if (rawSteps.length === 0)
           rawSteps = [...(seedFqns.size ? seedFqns : fqns)].map((f) => ({
             fqn: f,
@@ -175,7 +184,13 @@ export function transformChapters(
       fqns: [...(p.fqns || [])],
     }));
 
+    // Functions = edge endpoints ∪ entry ∪ STEP FQNS — a step must always be
+    // a node in the chapter's graph even when no edge reaches it (the forest
+    // renders isolated nodes; dropping them hid 3 of 5 steps on the founder's
+    // CQRS repro).
     const functions = deriveChapterFunctions(edgesRaw, j.entryFqn);
+    for (const s of rawSteps)
+      if (s.fqn && !functions.includes(s.fqn)) functions.push(s.fqn);
     const services = deriveChapterServices(rawSteps, methods, files);
 
     const chapterSteps: ChapterStep[] = rawSteps.map((s) =>
