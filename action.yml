@@ -258,3 +258,20 @@ runs:
         GH_TOKEN: ${{ github.token }}
       run: |
         bash "$GITHUB_ACTION_PATH/scripts/publish-report.sh"
+
+    # Infra-only PRs are skipped by the analysis step. If a PREVIOUS revision
+    # of this PR had C# and left a published report, retire it now — a PR that
+    # currently changes no source must not keep showing a stale analysis on
+    # the dashboard. No-op when nothing was ever published.
+    - name: Retire stale report for infra-only PR
+      if: inputs.publish == 'branch' && steps.analyze.outputs.skipped == 'true'
+      shell: bash
+      env:
+        REPORTS_BRANCH: ${{ inputs.reports-branch }}
+        REPORTS_REPO: ${{ inputs.reports-repo }}
+        REPORTS_DEPLOY_KEY: ${{ inputs.reports-deploy-key }}
+        REPO_SLUG: ${{ github.repository }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        bash "$GITHUB_ACTION_PATH/scripts/retire-report.sh"
