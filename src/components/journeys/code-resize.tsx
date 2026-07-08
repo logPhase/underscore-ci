@@ -1,50 +1,13 @@
 import { useCallback } from "react";
-import { Minus, Plus } from "lucide-react";
-import { CODE_WIDTH_STEP, useCodeView } from "./code-view-store";
+import { useCodeView } from "./code-view-store";
 
 /**
- * Shared width affordances for the code surfaces (right-docked CODE panel
- * and the centered step-functions dialog). Both write the same shared
- * `width` in the code-view store, so the two surfaces stay in sync and the
- * choice persists across steps.
+ * Drag-to-resize handle for the code surfaces (right-docked CODE panel and
+ * the centered step-functions dialog). Both write the same shared `width`
+ * in the code-view store, so the two surfaces stay in sync and the choice
+ * persists across steps. (The old +/- nudge buttons were removed — drag is
+ * the single, direct way to size a panel; collapse handles the rest.)
  */
-
-/** A quick narrower/wider button pair for a panel header. Each click reads
- *  the live width from the store (not a subscribed snapshot) so a rapid
- *  burst of clicks advances one step each, without stale-closure batching. */
-export function WidthNudgeButtons() {
-  const setWidth = useCodeView((s) => s.setWidth);
-  return (
-    <div
-      className="flex items-center overflow-hidden rounded-md border"
-      style={{ borderColor: "var(--bpmn-border-soft)" }}
-    >
-      <button
-        type="button"
-        onClick={() => setWidth(useCodeView.getState().width - CODE_WIDTH_STEP)}
-        title="Narrower"
-        aria-label="Make the code panel narrower"
-        className="p-1 opacity-70 transition-opacity hover:opacity-100"
-        style={{ color: "var(--bpmn-text-muted)" }}
-      >
-        <Minus className="h-3.5 w-3.5" />
-      </button>
-      <button
-        type="button"
-        onClick={() => setWidth(useCodeView.getState().width + CODE_WIDTH_STEP)}
-        title="Wider"
-        aria-label="Make the code panel wider"
-        className="p-1 opacity-70 transition-opacity hover:opacity-100"
-        style={{
-          color: "var(--bpmn-text-muted)",
-          borderLeft: "1px solid var(--bpmn-border-soft)",
-        }}
-      >
-        <Plus className="h-3.5 w-3.5" />
-      </button>
-    </div>
-  );
-}
 
 /**
  * A drag handle pinned to the LEFT edge of a code surface. Dragging left

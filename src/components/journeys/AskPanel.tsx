@@ -2,10 +2,7 @@ import { useRef, useState } from "react";
 import { MessageCircleQuestion, SendHorizontal, PanelRightClose } from "lucide-react";
 import { Markdown } from "@/components/ui/Markdown";
 import { useCodeView } from "@/components/journeys/code-view-store";
-import {
-  LeftResizeHandle,
-  WidthNudgeButtons,
-} from "@/components/journeys/code-resize";
+import { LeftResizeHandle } from "@/components/journeys/code-resize";
 import { askEndpointHref, bpmnAsk } from "@/lib/ask-endpoint";
 import {
   buildAskRequest,
@@ -187,7 +184,6 @@ export function AskPanel({
             about {context}
           </div>
         </div>
-        <WidthNudgeButtons />
         <button
           onClick={() => setOpen(false)}
           title="Minimize"

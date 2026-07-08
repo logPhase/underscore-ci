@@ -2,7 +2,7 @@ import { Code2, PanelRightClose } from "lucide-react";
 import type { BpmnElement } from "@/components/bpmn/types";
 import type { Chapter } from "@/types/journey";
 import { BpmnStepFunctions } from "./BpmnStepFunctions";
-import { LeftResizeHandle, WidthNudgeButtons } from "./code-resize";
+import { LeftResizeHandle } from "./code-resize";
 import { useCodeView } from "./code-view-store";
 import { askAvailable } from "./AskPanel";
 
@@ -105,7 +105,6 @@ export function CodePanel({
             {shortLabel}
           </div>
         </div>
-        <WidthNudgeButtons />
         <button
           onClick={() => setRightDock(null)}
           title="Minimize"

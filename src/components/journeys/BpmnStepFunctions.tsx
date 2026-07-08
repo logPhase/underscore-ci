@@ -14,10 +14,10 @@
  * method index → the evidence snippet (verbatim slice) as fallback.
  */
 import { useState } from 'react';
-import { STATUS_PAPER } from "@/lib/status-colors";
+import { STATUS_STYLES, type ChangeStatus } from "@/lib/status-colors";
 import { Maximize2, Minimize2, X } from 'lucide-react';
 import DiffBlock from './DiffBlock';
-import { LeftResizeHandle, WidthNudgeButtons } from './code-resize';
+import { LeftResizeHandle } from './code-resize';
 // Desktop adaptation: journeyTypes is split — Chapter from types/journey,
 // BpmnElement from the renderer's types module; data getters come from
 // the parity-loader (store-backed, same signatures as the webapp).
@@ -32,10 +32,12 @@ const shortName = (fqn: string) => {
   return parts.slice(-2).join('.');
 };
 
-// Print tones — this card lives inside the paper business-flow popup.
-// Sourced from the canonical palette (src/lib/status-colors.ts) so hues can
-// never drift from the call graph / BPMN / badges.
-const STATUS_COLOR: Record<string, string> = STATUS_PAPER;
+// Status accent — the theme-aware brand token (var(--bpmn-mint|amber|rose)),
+// so a modified strip is amber/brown and an added one green in BOTH dark and
+// paper, matching the call graph and BPMN element accents. (Was hardcoded to
+// the paper-only tones, which looked muted/wrong in the dark theme.)
+const statusSolid = (s?: string | null): string =>
+  (s && STATUS_STYLES[s as ChangeStatus]?.solid) || 'var(--bpmn-text-dim)';
 
 interface FnRef {
   fqn: string;
@@ -97,7 +99,7 @@ function FunctionStrip({ fn, chapter, onOpenCallGraph, defaultOpen }: {
         // CHANGED functions are why the reviewer is here — give the
         // strip itself the status accent, not just the chip.
         borderLeft: changed
-          ? `3px solid ${STATUS_COLOR[prStatus!] || 'var(--bpmn-border-em)'}`
+          ? `3px solid ${statusSolid(prStatus)}`
           : '1px solid var(--bpmn-border-soft)',
       }}
     >
@@ -109,7 +111,7 @@ function FunctionStrip({ fn, chapter, onOpenCallGraph, defaultOpen }: {
         title={body ? (open ? 'Collapse source' : 'Show this function') : 'No source available'}
       >
         {prStatus && (
-          <span style={{ color: STATUS_COLOR[prStatus] || 'var(--bpmn-text-dim)' }}>{prStatus}</span>
+          <span style={{ color: statusSolid(prStatus) }}>{prStatus}</span>
         )}
         <span style={{ color: 'var(--bpmn-cyan)' }}>{shortName(fn.fqn)}</span>
         {fn.file && <span className="truncate" style={{ color: 'var(--bpmn-text-dim)' }}>{fn.file}</span>}
@@ -245,7 +247,7 @@ export function BpmnStepFunctions({ element, chapter, onClose, onOpenCallGraph, 
       {!hideHeader && <LeftResizeHandle factor={2} />}
       {/* header — step identity + width controls + dismiss */}
       {!hideHeader && <div
-        className="flex items-start gap-2.5 px-3.5 pt-3 pb-2.5"
+        className="shrink-0 flex items-start gap-2.5 px-3.5 pt-3 pb-2.5"
         style={{ borderBottom: '1px solid var(--bpmn-border-soft)' }}
       >
         <div className="min-w-0 flex-1">
@@ -268,11 +270,6 @@ export function BpmnStepFunctions({ element, chapter, onClose, onOpenCallGraph, 
             {element.label}
           </div>
         </div>
-        {/* Width control — nudge the shared code width (drag the left edge
-            for finer control). Persists across steps. */}
-        <div className="shrink-0 self-center">
-          <WidthNudgeButtons />
-        </div>
         {onClose && (
           <button
             onClick={onClose}
@@ -287,8 +284,11 @@ export function BpmnStepFunctions({ element, chapter, onClose, onOpenCallGraph, 
           </button>
         )}
       </div>}
-      {/* body — the lens strips, code on demand */}
-      <div className="overflow-auto px-3 pb-3">
+      {/* body — the lens strips, code on demand. flex-1 + min-h-0 makes THIS
+          the bounded scroll region (was unconstrained → content clipped by
+          the parent's overflow-hidden and only the scrollbar could move it;
+          now a two-finger/wheel scroll moves the whole list). */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-3">
         {fns.length === 0 && (
           <div className="mt-2.5 px-0.5 text-[10.5px] font-mono leading-relaxed" style={{ color: 'var(--bpmn-text-dim)' }}>
             No functions cited on this element — start/end events carry none.
