@@ -51,7 +51,7 @@ interface Box {
 type Drag =
   | { kind: "node"; id: string; pointerId: number; start: XY; pointer: XY; moved: boolean }
   | { kind: "wp"; id: string; pointerId: number; start: XY; pointer: XY; moved: boolean }
-  | { kind: "pan"; pointerId: number; pointer: XY; startView: XY };
+  | { kind: "pan"; pointerId: number; pointer: XY; startView: XY; moved: boolean };
 
 const MIN_K = 0.3;
 const MAX_K = 2.5;
@@ -346,13 +346,17 @@ const ArchitectureCanvas = ({ nodes, edges, layers, storageKey }: Props) => {
   const onBgPointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
     if (e.target !== e.currentTarget) return; // node/waypoint handled their own
     userNavRef.current = true;
-    setSel(null);
+    // Don't clear the selection here — a reader often grabs empty space to PAN
+    // toward an off-screen neighbour of the selected node, and the highlight
+    // must survive that drag. Selection is cleared on pointer-up only when the
+    // background gesture didn't move (an explicit "click outside").
     const v = viewRef.current;
     setDrag({
       kind: "pan",
       pointerId: e.pointerId,
       pointer: { x: e.clientX, y: e.clientY },
       startView: { x: v.x, y: v.y },
+      moved: false,
     });
     e.currentTarget.setPointerCapture(e.pointerId);
   };
@@ -406,6 +410,9 @@ const ArchitectureCanvas = ({ nodes, edges, layers, storageKey }: Props) => {
     const d = dragRef.current;
     if (!d) return;
     if (d.kind === "pan") {
+      if (!d.moved && Math.hypot(e.clientX - d.pointer.x, e.clientY - d.pointer.y) >= 4) {
+        dragRef.current = { ...d, moved: true };
+      }
       setView((v) => ({
         ...v,
         x: d.startView.x + (e.clientX - d.pointer.x),
@@ -440,6 +447,9 @@ const ArchitectureCanvas = ({ nodes, edges, layers, storageKey }: Props) => {
       } catch {
         /* ignore */
       }
+      // A background press that never moved is a "click outside" — that, and
+      // only that, dismisses the current selection.
+      if (d.kind === "pan" && !d.moved) setSel(null);
     }
     setDrag(null);
   };

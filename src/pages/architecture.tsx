@@ -4,6 +4,8 @@ import type { ArchNodeKind } from "@/types/architecture";
 import { Boxes, Cloud, Database, Network, Radio, Server } from "lucide-react";
 import { useMemo } from "react";
 import { Navigate } from "react-router-dom";
+// Note: the "memory consulted" provenance block was intentionally removed from
+// the diagram — provenance stays in the payload but is no longer surfaced here.
 
 /**
  * ArchitecturePage — the repository's system-design view: components,
@@ -13,9 +15,9 @@ import { Navigate } from "react-router-dom";
  * structure is a stable map you learn once; a PR only tints the parts it
  * actually shifts (green added, brown modified, red retired).
  *
- * This page is the shell — header, PR-change framing, legend, memory footer.
- * The diagram itself is an interactive SVG canvas (draggable boxes + editable
- * connector routing, infrastructure de-emphasised and toggleable).
+ * This page is the shell — header, PR-change framing, legend. The diagram
+ * itself is an interactive SVG canvas (draggable boxes + editable connector
+ * routing, infrastructure de-emphasised and toggleable).
  *
  * Payload-driven like specs/findings — deep links without the payload bounce
  * to /journeys.
@@ -32,9 +34,6 @@ const KIND_META: Record<
   topic: { icon: Radio, label: "topic", accent: "hsl(265 55% 68%)" },
 };
 
-const isUrl = (s: string | null | undefined) =>
-  /^https?:\/\//i.test((s || "").trim());
-
 const ArchitecturePage = () => {
   const payload = useAnalysis((s) => s.transformedData?.architecture);
   const repoId = useAnalysis((s) => s.transformedData?.analyzerRepoId);
@@ -43,7 +42,6 @@ const ArchitecturePage = () => {
   const nodes = payload?.nodes ?? [];
   const edges = payload?.edges ?? [];
   const layers = payload?.layers ?? [];
-  const consulted = payload?.consulted ?? [];
   const storageKey = payload?.repo || repoId || "default";
 
   const changed = useMemo(() => {
@@ -93,7 +91,7 @@ const ArchitecturePage = () => {
       </header>
 
       {nodes.length === 0 ? (
-        <EmptyState consulted={consulted} />
+        <EmptyState />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col">
           {/* Framing line */}
@@ -117,8 +115,6 @@ const ArchitecturePage = () => {
               storageKey={storageKey}
             />
           </div>
-
-          <ConsultedFooter consulted={consulted} />
         </div>
       )}
     </section>
@@ -162,55 +158,7 @@ const Legend = () => (
   </div>
 );
 
-const ConsultedFooter = ({
-  consulted,
-}: {
-  consulted: { title: string; ref?: string | null }[];
-}) => {
-  if (consulted.length === 0) return null;
-  return (
-    <footer
-      className="shrink-0 border-t px-6 py-3"
-      style={{ borderColor: "var(--bpmn-border-soft)" }}
-    >
-      <span
-        className="font-mono text-[9px] tracking-[0.18em] uppercase"
-        style={{ color: "var(--bpmn-text-dim)" }}
-      >
-        Memory consulted
-      </span>
-      <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
-        {consulted.map((d, i) => (
-          <li
-            key={i}
-            className="font-mono text-[11px]"
-            style={{ color: "var(--bpmn-text-dim)" }}
-          >
-            {isUrl(d.ref) ? (
-              <a
-                href={d.ref ?? undefined}
-                target="_blank"
-                rel="noreferrer"
-                className="hover:underline"
-                style={{ color: "var(--bpmn-text-muted)" }}
-              >
-                {d.title} ↗
-              </a>
-            ) : (
-              d.title
-            )}
-          </li>
-        ))}
-      </ul>
-    </footer>
-  );
-};
-
-const EmptyState = ({
-  consulted,
-}: {
-  consulted: { title: string; ref?: string | null }[];
-}) => (
+const EmptyState = () => (
   <div className="flex flex-1 flex-col items-center justify-center gap-2 px-8 text-center">
     <Network className="h-6 w-6" style={{ color: "var(--bpmn-text-dim)" }} />
     <p
@@ -223,10 +171,9 @@ const EmptyState = ({
       className="max-w-md font-mono text-[11px]"
       style={{ color: "var(--bpmn-text-dim)" }}
     >
-      The analyzer draws the component architecture after it has enough
-      structure to describe — it fills in as the repository is analyzed.
+      The analyzer draws the architecture after it has enough structure to
+      describe — it fills in as the repository is analyzed.
     </p>
-    {consulted.length > 0 && <ConsultedFooter consulted={consulted} />}
   </div>
 );
 
