@@ -25,6 +25,17 @@ export type ArchNodeKind =
  *  `dependency` = code-level import/use. */
 export type ArchEdgeKind = "sync" | "async" | "data" | "dependency";
 
+/** Architectural EMPHASIS, classified by role (never by name/technology).
+ *  `primary` = a business capability, an external interface/endpoint, a
+ *  business communication channel, or an external system another team cares
+ *  about. `infrastructure` = a cross-cutting technical mechanism that merely
+ *  serves the primary elements (persistence/DB-access, cache, serializer,
+ *  crypto, DI/wiring/hosting, migration, generic logging, a bus/transport
+ *  ADAPTER that only moves bytes). Absent → treated as `primary` (absence of
+ *  emphasis must never hide an element). Drives visual weight + the
+ *  infrastructure toggle in the canvas. */
+export type ArchTier = "primary" | "infrastructure";
+
 /** PR-change marker — only the parts a PR actually touched carry one; the
  *  rest are the stable backdrop. Nodes never "remove" (a removed component
  *  just leaves the diagram); an edge can be removed (integration retired). */
@@ -35,6 +46,8 @@ export interface ArchNode {
   id: string;
   name: string;
   kind: ArchNodeKind;
+  /** Architectural emphasis (see `ArchTier`). Absent → `primary`. */
+  tier?: ArchTier;
   /** Layer/domain grouping id (see `ArchitecturePayload.layers`). */
   layer?: string | null;
   description?: string | null;

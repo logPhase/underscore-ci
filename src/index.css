@@ -393,6 +393,23 @@ input[type="range"]::-webkit-slider-thumb {
   }
 }
 
+/* Architecture canvas — a focused connector's dashes "flow" toward the arrow
+   (marching ants), so hovering a box makes its through-lines legible as a
+   direction. Static dashes otherwise; off entirely under reduced motion. */
+@keyframes arch-dash-flow {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+.arch-edge-flow {
+  animation: arch-dash-flow 0.9s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .arch-edge-flow {
+    animation: none;
+  }
+}
+
 /* Left-edge drag handle for the code surfaces (the docked CODE panel and
    the centered step-functions dialog). A thin invisible grab strip that
    reveals a mint guide-line on hover / drag. Pointer-driven, no animation
