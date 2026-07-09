@@ -221,6 +221,11 @@ on_analysis_failure() {
 if [[ -n "${INTENT_DRIFT_TOKEN:-}" ]]; then
   if [[ "$MODE" == "pr" ]]; then
     export FLOW_ENABLED=1 FLOW_ANALYZER=1 OVERVIEW_ENABLED=1
+    # Repository architecture diagram — a durable per-repo artifact the
+    # analyzer maintains in the memory store and updates surgically (no agent
+    # run unless the structure drifts), so it's near-free on most PRs. On by
+    # default when enrichment is available.
+    export ARCHITECTURE_ENABLED=1
     # Correctness findings are OPT-IN (findings: 'on') — a dedicated agent
     # run per unique change set, so the default spends nothing.
     if [[ "${FINDINGS:-off}" == "on" ]]; then

@@ -259,6 +259,8 @@ export interface RawAnalysisJSON {
   specs?: import("./specs").SpecsPayload;
   /** Correctness-audit findings from the analyzer's review agent, baked in. */
   findings?: import("./findings").FindingsPayload;
+  /** Repository architecture diagram (component/integration graph), baked in. */
+  architecture?: import("./architecture").ArchitecturePayload;
 }
 // ── Global method index ───────────────────────────────────────────
 // Provides cross-file method lookup by FQN (the method's `id` field).
@@ -320,6 +322,9 @@ export interface TransformedData extends AnalysisData {
   specs?: import("./specs").SpecsPayload | null;
   /** Correctness-audit findings; null = the run had no review enrichment. */
   findings?: import("./findings").FindingsPayload | null;
+  /** Repository architecture diagram; null = the run had no architecture
+   *  enrichment (no analyzer token, or the feature disabled). */
+  architecture?: import("./architecture").ArchitecturePayload | null;
 
   packages?: Map<string, PackageData[]>; //serviceId:packageData
   anomalies: Anomaly[];

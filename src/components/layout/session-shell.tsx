@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   HelpCircle,
   Map as MapIcon,
+  Network,
   PanelLeftClose,
   PanelLeftOpen,
   Route,
@@ -137,6 +138,20 @@ const SessionRail = () => {
     : findingItems.length > 0
       ? "var(--bpmn-amber)"
       : "var(--bpmn-text-dim)";
+  // Architecture — a repo-level diagram; badge counts what THIS PR shifted
+  // (added/modified/removed nodes+edges), colored by the loudest change.
+  const architecture = transformedData?.architecture;
+  const hasArchitecture = architecture != null;
+  const archChanged =
+    (architecture?.nodes ?? []).filter((n) => n.prStatus).length +
+    (architecture?.edges ?? []).filter((e) => e.prStatus).length;
+  const archBadgeColor = (architecture?.edges ?? []).some(
+    (e) => e.prStatus === "removed"
+  )
+    ? "var(--bpmn-rose)"
+    : archChanged > 0
+      ? "var(--bpmn-amber)"
+      : "var(--bpmn-text-dim)";
   const indexHref = sessionsIndexHref();
 
   return (
@@ -229,6 +244,16 @@ const SessionRail = () => {
         data-tour="rail-nav"
       >
         <RailNavItem to="/canvas" icon={MapIcon} label="Canvas" collapsed={collapsed} />
+        {hasArchitecture && (
+          <RailNavItem
+            to="/architecture"
+            icon={Network}
+            label="Architecture"
+            badge={archChanged > 0 ? String(archChanged) : null}
+            badgeColor={archBadgeColor}
+            collapsed={collapsed}
+          />
+        )}
         <RailNavItem
           to="/journeys"
           icon={Route}

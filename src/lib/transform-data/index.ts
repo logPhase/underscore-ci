@@ -170,6 +170,7 @@ export function transformToFrontendFormat(
   transformedData.analyzerRepoId = raw.analyzerRepoId ?? null;
   transformedData.specs = raw.specs ?? null;
   transformedData.findings = raw.findings ?? null;
+  transformedData.architecture = raw.architecture ?? null;
 
   if (journeys.length > 0) {
     const {

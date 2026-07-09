@@ -8,6 +8,7 @@ import { CanvasWorldPage } from "./pages/canvas-world";
 import ChapterPage from "./pages/chapter";
 import JourneyPage from "./pages/journeys";
 import FindingsPage from "./pages/findings";
+import ArchitecturePage from "./pages/architecture";
 import ReportLoader from "./pages/report-loader";
 import SpecsPage from "./pages/specs";
 
@@ -26,6 +27,7 @@ const App = () => {
               is loaded. */}
           <Route element={<SessionShell />}>
             <Route path="/canvas" element={<CanvasWorldPage />} />
+            <Route path="/architecture" element={<ArchitecturePage />} />
             <Route path="/journeys" element={<JourneyPage />} />
             <Route path="/journeys/:chapterSlug" element={<ChapterPage />} />
             <Route path="/specs" element={<SpecsPage />} />
