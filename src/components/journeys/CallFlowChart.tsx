@@ -263,6 +263,67 @@ const CallFlowChart: React.FC<CallFlowChartProps> = ({
   const svgRef = useRef<SVGSVGElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
+  // The chart is wide but short (deep forests grow sideways), so it usually
+  // overflows horizontally with no vertical overflow — a plain mouse wheel
+  // then does nothing here and scrolls the page instead. Remap vertical
+  // wheel to horizontal scroll in that case. Non-passive listener so
+  // preventDefault actually stops the page from scrolling underneath.
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (e.deltaX !== 0) return; // trackpad already scrolls horizontally
+      const canX = el.scrollWidth > el.clientWidth;
+      const canY = el.scrollHeight > el.clientHeight;
+      if (canX && !canY) {
+        el.scrollLeft += e.deltaY;
+        e.preventDefault();
+      }
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
+
+  // Drag-to-pan, like the BPMN canvas: grab empty space and the viewport
+  // follows the cursor. Gated to the background — a press on a node
+  // (`[data-fqn]`) is left alone so clicks/expand still work. Pointer
+  // capture keeps the drag alive when the cursor leaves the container.
+  const panRef = useRef<{ x: number; y: number; sl: number; st: number } | null>(
+    null
+  );
+  const onPanPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    if ((e.target as Element).closest("[data-fqn]")) return;
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    panRef.current = { x: e.clientX, y: e.clientY, sl: el.scrollLeft, st: el.scrollTop };
+    el.style.cursor = "grabbing";
+    try {
+      el.setPointerCapture(e.pointerId);
+    } catch {
+      /* no active pointer (e.g. synthetic event) */
+    }
+  };
+  const onPanPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const p = panRef.current;
+    const el = scrollContainerRef.current;
+    if (!p || !el) return;
+    el.scrollLeft = p.sl - (e.clientX - p.x);
+    el.scrollTop = p.st - (e.clientY - p.y);
+  };
+  const endPan = (e: React.PointerEvent<HTMLDivElement>) => {
+    const el = scrollContainerRef.current;
+    if (panRef.current && el) {
+      try {
+        el.releasePointerCapture(e.pointerId);
+      } catch {
+        /* pointer already released */
+      }
+      el.style.cursor = "";
+    }
+    panRef.current = null;
+  };
+
   const toggleExpand = onToggleExpand;
   const expandAll = onExpandAll;
   const collapseAll = onCollapseAll;
@@ -577,8 +638,12 @@ const CallFlowChart: React.FC<CallFlowChartProps> = ({
       {/* SVG chart */}
       <div
         ref={scrollContainerRef}
-        className="min-h-0 flex-1 overflow-auto"
+        className="min-h-0 flex-1 cursor-grab overflow-auto"
         style={{ background: "var(--bpmn-bg-deep)" }}
+        onPointerDown={onPanPointerDown}
+        onPointerMove={onPanPointerMove}
+        onPointerUp={endPan}
+        onPointerCancel={endPan}
       >
         <svg
           ref={svgRef}
