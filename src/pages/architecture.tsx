@@ -82,13 +82,13 @@ const KIND_META: Record<
   ArchNodeKind,
   { icon: typeof Boxes; label: string; accent: string }
 > = {
-  component: { icon: Boxes, label: "component", accent: "var(--bpmn-cyan)" },
-  service: { icon: Server, label: "service", accent: "var(--bpmn-cyan)" },
-  datastore: { icon: Database, label: "data store", accent: "var(--bpmn-mint)" },
-  external: { icon: Cloud, label: "external", accent: "var(--bpmn-text-dim)" },
-  topic: { icon: Radio, label: "topic", accent: "hsl(265 55% 68%)" },
-  person: { icon: User, label: "actor", accent: "var(--bpmn-amber)" },
-  system: { icon: Box, label: "system", accent: "var(--bpmn-cyan)" },
+  component: { icon: Boxes, label: "component", accent: "#8b9fe8" },
+  service: { icon: Server, label: "service", accent: "#5ec6d6" },
+  datastore: { icon: Database, label: "data store", accent: "#63d9a6" },
+  external: { icon: Cloud, label: "external", accent: "#9aa7c7" },
+  topic: { icon: Radio, label: "topic", accent: "#c39ae0" },
+  person: { icon: User, label: "actor", accent: "#e6b978" },
+  system: { icon: Box, label: "system", accent: "#57c8f5" },
 };
 
 const ArchitecturePage = () => {

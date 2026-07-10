@@ -56,23 +56,25 @@ type Drag =
 const MIN_K = 0.3;
 const MAX_K = 2.5;
 
+// A clear, distinct colour per kind — the diagram is COLOUR-CODED by what each
+// box is, and every node renders at full clarity (no default fading).
 const KIND_META: Record<ArchNodeKind, { label: string; accent: string }> = {
-  component: { label: "component", accent: "var(--bpmn-cyan)" },
-  service: { label: "service", accent: "var(--bpmn-cyan)" },
-  datastore: { label: "data store", accent: "var(--bpmn-mint)" },
-  external: { label: "external system", accent: "var(--bpmn-text-dim)" },
-  topic: { label: "topic", accent: "hsl(265 55% 68%)" },
-  person: { label: "actor", accent: "var(--bpmn-amber)" },
-  system: { label: "system", accent: "var(--bpmn-cyan)" },
+  component: { label: "component", accent: "#8b9fe8" }, // periwinkle
+  service: { label: "service", accent: "#5ec6d6" }, // teal
+  datastore: { label: "data store", accent: "#63d9a6" }, // mint
+  external: { label: "external system", accent: "#9aa7c7" }, // slate
+  topic: { label: "topic", accent: "#c39ae0" }, // lavender
+  person: { label: "actor", accent: "#e6b978" }, // amber
+  system: { label: "system", accent: "#57c8f5" }, // cyan
 };
 
 /** Dash/width per integration kind — everything is a dotted/dashed connector
  *  (the flowchart look), the pattern keeps the kind legible. */
-const EDGE_KIND: Record<ArchEdgeKind, { dash: string; width: number }> = {
-  sync: { dash: "7 5", width: 1.7 },
-  async: { dash: "2 5", width: 1.7 },
-  data: { dash: "6 5", width: 1.3 },
-  dependency: { dash: "1 5", width: 1.2 },
+const EDGE_KIND: Record<ArchEdgeKind, { dash: string; width: number; color: string }> = {
+  sync: { dash: "7 5", width: 1.8, color: "#5ec6d6" }, // teal — request/response
+  async: { dash: "2 5", width: 1.8, color: "#c39ae0" }, // lavender — pub/sub
+  data: { dash: "6 5", width: 1.5, color: "#63d9a6" }, // mint — reads/writes a store
+  dependency: { dash: "1 5", width: 1.3, color: "#9aa7c7" }, // slate — code dependency
 };
 
 const tierOf = (n: ArchNode) => n.tier ?? "primary";
@@ -615,7 +617,7 @@ const ArchitectureCanvas = ({ nodes, edges, layers, storageKey }: Props) => {
             const st = edge.prStatus ? statusStyle(edge.prStatus).solid : null;
             const removed = edge.prStatus === "removed";
             const base = EDGE_KIND[edge.kind] ?? EDGE_KIND.sync;
-            const stroke = st ?? (on ? "var(--bpmn-cyan)" : "var(--bpmn-border-em)");
+            const stroke = st ?? (on ? "#ffffff" : base.color);
             const marker = edge.prStatus
               ? `url(#arch-arrow-${edge.prStatus})`
               : on
@@ -643,7 +645,7 @@ const ArchitectureCanvas = ({ nodes, edges, layers, storageKey }: Props) => {
                   strokeWidth={base.width + (on ? 0.8 : 0) - (removed ? 0.4 : 0)}
                   strokeDasharray={removed ? "3 4" : base.dash}
                   strokeLinecap="round"
-                  opacity={removed ? 0.6 : st ? 1 : on ? 1 : 0.8}
+                  opacity={removed ? 0.6 : st ? 1 : on ? 1 : 0.9}
                   markerEnd={marker}
                   className={on ? "arch-edge-flow" : undefined}
                   pointerEvents="none"
@@ -851,22 +853,15 @@ function NodeGroup({
   const isPerson = kind === "person";
   const isSystem = kind === "system";
   const isExternal = kind === "external";
-  const border = st
-    ? st.solid
-    : focused
-      ? "var(--bpmn-cyan)"
-      : isSystem
-        ? "var(--bpmn-cyan)"
-        : "var(--bpmn-border-em)";
-  const strokeWidth = focused || st || isSystem ? 1.8 : 1;
+  // Colour-code every box by kind: a tinted fill + a matching saturated border.
+  const border = st ? st.solid : focused ? "#ffffff" : accent;
+  const strokeWidth = focused || st ? 2.2 : isSystem ? 2 : 1.5;
   const fill = st
-    ? tint(st.solid, 12)
-    : isSystem
-      ? tint("hsl(199 89% 74%)", 12)
-      : isTopic
-        ? tint(meta.accent, 10)
-        : "var(--bpmn-surface)";
-  const opacity = faint && !focused && !st ? 0.5 : dimmed ? 0.4 : 1;
+    ? tint(st.solid, 18)
+    : `color-mix(in srgb, ${accent} ${isSystem ? 22 : 16}%, var(--bpmn-surface))`;
+  // Clear by DEFAULT — no infrastructure fade. `dimmed` is only the transient
+  // focus/hover de-emphasis of unrelated boxes.
+  const opacity = dimmed ? 0.4 : 1;
 
   // The shape silhouette dispatched by kind.
   let shape: React.ReactNode;
@@ -885,7 +880,7 @@ function NodeGroup({
         stroke={border}
         strokeWidth={strokeWidth}
         strokeDasharray={isExternal ? "5 3" : undefined}
-        filter={faint ? undefined : "url(#arch-card-shadow)"}
+        filter="url(#arch-card-shadow)"
       />
     );
 
