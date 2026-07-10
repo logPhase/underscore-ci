@@ -293,13 +293,11 @@ function Scene({ model, selectedId, hoveredId, activeRoute, routeStep, prMode, o
       .map((b) => new THREE.Vector3(b.x, 0.4, b.z));
   }, [activeRoute, model]);
 
-  // In PR mode, show only touched buildings (+ ghosts) — the density fix; when
-  // a PR journey is picked, also reveal the buildings along its route so the
-  // overlay draws through the city.
-  const visible = useMemo(
-    () => (prMode ? buildings.filter((b) => b.prStatus || routeSet.has(b.id)) : buildings),
-    [prMode, buildings, routeSet]
-  );
+  // Always render the (already thinned) city; PR mode DIMS the untouched
+  // buildings to ghosts rather than hiding them, so the changed buildings pop
+  // with their neighbourhood around them — the reference's PR-review look, and
+  // far better than a handful of specks scattered across empty platforms.
+  const visible = buildings;
 
   const routeFocusId = activeRoute && routeStep >= 0 ? activeRoute.buildingIds[routeStep] : null;
   const activeDistrict = useMemo(() => {
@@ -312,13 +310,15 @@ function Scene({ model, selectedId, hoveredId, activeRoute, routeStep, prMode, o
       b ? { center: [b.x, b.height / 2 + 1, b.z], dist: Math.max(12, b.height * 2 + 10) } : null;
     if (routeFocusId) { const f = at(model.buildingById.get(routeFocusId)); if (f) return f; }
     if (selectedId) { const f = at(model.buildingById.get(selectedId)); if (f) return f; }
-    if (prMode && visible.length > 0) {
-      // frame the changed buildings' bounding box
-      let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-      for (const b of visible) { minX = Math.min(minX, b.x); maxX = Math.max(maxX, b.x); minZ = Math.min(minZ, b.z); maxZ = Math.max(maxZ, b.z); }
-      const cx = (minX + maxX) / 2, cz = (minZ + maxZ) / 2;
-      const span = Math.max(maxX - minX, maxZ - minZ, 8);
-      return { center: [cx, 1, cz], dist: span * 1.6 + 14 };
+    if (prMode) {
+      const changed = buildings.filter((b) => b.prStatus === "modified" || b.prStatus === "added" || b.prStatus === "deleted");
+      if (changed.length > 0) {
+        let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+        for (const b of changed) { minX = Math.min(minX, b.x); maxX = Math.max(maxX, b.x); minZ = Math.min(minZ, b.z); maxZ = Math.max(maxZ, b.z); }
+        const cx = (minX + maxX) / 2, cz = (minZ + maxZ) / 2;
+        const span = Math.max(maxX - minX, maxZ - minZ, 10);
+        return { center: [cx, 1, cz], dist: span * 1.5 + 16 };
+      }
     }
     return { center: [0, 0, 0], dist: extent * 2.3 + 16 };
   }, [routeFocusId, selectedId, prMode, visible, model, extent]);
@@ -355,11 +355,14 @@ function Scene({ model, selectedId, hoveredId, activeRoute, routeStep, prMode, o
 
       {visible.map((b) => {
         const inRoute = routeSet.has(b.id);
+        const focused = b.id === selectedId || b.id === hoveredId || inRoute;
         const emphasis: Emphasis =
           b.id === selectedId ? "selected" : b.id === routeFocusId || inRoute ? "route" : b.id === hoveredId ? "hover" : "idle";
+        // Dim: untouched buildings in PR mode, and off-route buildings while a
+        // route is active. Changed / focused buildings always stay lit.
         const dim =
-          (!!activeRoute && !inRoute && b.id !== selectedId && b.id !== hoveredId) ||
-          (prMode && b.prStatus === "ghost" && b.id !== selectedId);
+          !focused &&
+          ((prMode && !b.prStatus) || (!!activeRoute && !inRoute && !prMode));
         return (
           <Building key={b.id} b={b} emphasis={emphasis} dim={dim} prMode={prMode} onSelect={onSelect} onHover={onHover} />
         );
