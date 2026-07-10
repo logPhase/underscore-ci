@@ -1566,3 +1566,13 @@ html.reading-paper, html.reading-paper body { background: #faf7f0; }
     animation: none;
   }
 }
+
+/* Frosted-glass overlays for the Code City HUD (journeys panel, stepper,
+   selection chip) — floats over the 3D canvas without stealing focus from it. */
+.glass-panel {
+  background: hsla(228, 30%, 8%, 0.66);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-color: var(--bpmn-border-soft);
+  box-shadow: 0 8px 30px hsla(220, 40%, 3%, 0.5);
+}
