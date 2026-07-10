@@ -60,8 +60,10 @@ const KIND_META: Record<ArchNodeKind, { label: string; accent: string }> = {
   component: { label: "component", accent: "var(--bpmn-cyan)" },
   service: { label: "service", accent: "var(--bpmn-cyan)" },
   datastore: { label: "data store", accent: "var(--bpmn-mint)" },
-  external: { label: "external", accent: "var(--bpmn-text-dim)" },
+  external: { label: "external system", accent: "var(--bpmn-text-dim)" },
   topic: { label: "topic", accent: "hsl(265 55% 68%)" },
+  person: { label: "actor", accent: "var(--bpmn-amber)" },
+  system: { label: "system", accent: "var(--bpmn-cyan)" },
 };
 
 /** Dash/width per integration kind — everything is a dotted/dashed connector
@@ -773,6 +775,55 @@ function EdgeLabel({
   );
 }
 
+// ─── arc42/C4 node silhouettes ──────────────────────────────────────────────
+/** Data store — a database cylinder. The cap is intentionally pronounced so a
+ *  wide, short store box still reads unmistakably as a cylinder, not a rect. */
+function CylinderShape({ w, h, fill, stroke, sw }: { w: number; h: number; fill: string; stroke: string; sw: number }) {
+  const rx = w / 2;
+  const cap = Math.max(8, Math.min(15, h * 0.34));
+  return (
+    <>
+      <path
+        d={`M 0,${cap} L 0,${h - cap} A ${rx},${cap} 0 0 0 ${w},${h - cap} L ${w},${cap} Z`}
+        fill={fill}
+        stroke={stroke}
+        strokeWidth={sw}
+      />
+      {/* top cap: a touch lighter so the ellipse rim is unmistakable */}
+      <ellipse cx={rx} cy={cap} rx={rx} ry={cap} fill={`color-mix(in srgb, ${stroke} 10%, ${fill})`} stroke={stroke} strokeWidth={sw} />
+    </>
+  );
+}
+/** Message topic / Kafka stream — a horizontal log (lying cylinder). */
+function TopicShape({ w, h, fill, stroke, sw }: { w: number; h: number; fill: string; stroke: string; sw: number }) {
+  const ry = h / 2;
+  const cap = Math.min(9, w * 0.09);
+  return (
+    <>
+      <path
+        d={`M ${cap},0 L ${w - cap},0 A ${cap},${ry} 0 0 1 ${w - cap},${h} L ${cap},${h} A ${cap},${ry} 0 0 1 ${cap},0 Z`}
+        fill={fill}
+        stroke={stroke}
+        strokeWidth={sw}
+      />
+      <ellipse cx={cap} cy={ry} rx={cap} ry={ry} fill={fill} stroke={stroke} strokeWidth={sw} />
+    </>
+  );
+}
+/** Human actor / role — a C4 person glyph (head + shoulders). */
+function PersonShape({ w, h, fill, stroke, sw }: { w: number; h: number; fill: string; stroke: string; sw: number }) {
+  const cx = w / 2;
+  const headR = Math.max(7, Math.min(w, h) * 0.16);
+  const headCy = headR + 3;
+  const bodyTop = headCy + headR + 1;
+  return (
+    <>
+      <rect x={w * 0.16} y={bodyTop} width={w * 0.68} height={h - bodyTop - 3} rx={(h - bodyTop) * 0.4} fill={fill} stroke={stroke} strokeWidth={sw} />
+      <circle cx={cx} cy={headCy} r={headR} fill={fill} stroke={stroke} strokeWidth={sw} />
+    </>
+  );
+}
+
 function NodeGroup({
   box,
   focused,
@@ -791,18 +842,64 @@ function NodeGroup({
   onLeave: () => void;
 }) {
   const { node, x, y, w, h } = box;
-  const meta = KIND_META[node.kind] ?? KIND_META.component;
-  const topic = node.kind === "topic";
-  const external = node.kind === "external";
+  const kind = node.kind;
+  const meta = KIND_META[kind] ?? KIND_META.component;
   const st = node.prStatus ? statusStyle(node.prStatus) : null;
-  const border = st ? st.solid : focused ? "var(--bpmn-cyan)" : "var(--bpmn-border-em)";
-  const fill = st ? tint(st.solid, 12) : topic ? tint(meta.accent, 10) : "var(--bpmn-surface)";
-  // Infrastructure recedes; focus/PR-change always pull it back to full weight.
+  const accent = st ? st.solid : meta.accent;
+  const isDb = kind === "datastore";
+  const isTopic = kind === "topic";
+  const isPerson = kind === "person";
+  const isSystem = kind === "system";
+  const isExternal = kind === "external";
+  const border = st
+    ? st.solid
+    : focused
+      ? "var(--bpmn-cyan)"
+      : isSystem
+        ? "var(--bpmn-cyan)"
+        : "var(--bpmn-border-em)";
+  const strokeWidth = focused || st || isSystem ? 1.8 : 1;
+  const fill = st
+    ? tint(st.solid, 12)
+    : isSystem
+      ? tint("hsl(199 89% 74%)", 12)
+      : isTopic
+        ? tint(meta.accent, 10)
+        : "var(--bpmn-surface)";
   const opacity = faint && !focused && !st ? 0.5 : dimmed ? 0.4 : 1;
 
+  // The shape silhouette dispatched by kind.
+  let shape: React.ReactNode;
+  if (isDb) shape = <CylinderShape w={w} h={h} fill={fill} stroke={border} sw={strokeWidth} />;
+  else if (isTopic) shape = <TopicShape w={w} h={h} fill={fill} stroke={border} sw={strokeWidth} />;
+  else if (isPerson) shape = <PersonShape w={w} h={h} fill={fill} stroke={border} sw={strokeWidth} />;
+  else
+    shape = (
+      <rect
+        x={0}
+        y={0}
+        width={w}
+        height={h}
+        rx={10}
+        fill={fill}
+        stroke={border}
+        strokeWidth={strokeWidth}
+        strokeDasharray={isExternal ? "5 3" : undefined}
+        filter={faint ? undefined : "url(#arch-card-shadow)"}
+      />
+    );
+
+  const cap = Math.max(8, Math.min(15, h * 0.34));
   const nameChars = Math.floor((w - 24) / 7.2);
   const descChars = Math.floor((w - 22) / 5.4);
-  const descLines = !topic && node.description ? wrap(node.description, descChars, 2) : [];
+  // Only the roomy container/system/external boxes carry a description.
+  const showDesc = !isTopic && !isPerson && !isDb;
+  const descLines = showDesc && node.description ? wrap(node.description, descChars, 2) : [];
+  // The shaped nodes (topic log, person, database cylinder) centre their name;
+  // the box kinds label from the top-left.
+  const centered = isTopic || isPerson || isDb;
+  const kindY = 20;
+  const nameY = 40;
 
   return (
     <g
@@ -813,56 +910,43 @@ function NodeGroup({
       onPointerEnter={onEnter}
       onPointerLeave={onLeave}
     >
-      <rect
-        x={0}
-        y={0}
-        width={w}
-        height={h}
-        rx={topic ? h / 2 : 10}
-        fill={fill}
-        stroke={border}
-        strokeWidth={focused || st ? 1.8 : 1}
-        strokeDasharray={external ? "5 3" : undefined}
-        filter={faint || topic ? undefined : "url(#arch-card-shadow)"}
-      />
-      {/* kind accent dot */}
-      <circle cx={14} cy={topic ? h / 2 : 17} r={3} fill={st ? st.solid : meta.accent} />
+      {shape}
 
-      {topic ? (
+      {centered ? (
         <text
-          x={26}
-          y={h / 2}
-          dominantBaseline="central"
+          x={w / 2}
+          y={isPerson ? h - 8 : isDb ? (cap + h) / 2 + 1 : h / 2}
+          textAnchor="middle"
+          dominantBaseline={isPerson ? "auto" : "central"}
           fontFamily="var(--bpmn-font-mono)"
-          fontSize={12}
+          fontSize={isPerson ? 10.5 : 11.5}
           fontWeight={600}
           fill="var(--bpmn-text)"
         >
-          {truncate(node.name, Math.floor((w - 34) / 7.2))}
+          {truncate(node.name, Math.floor((w - 16) / (isPerson ? 6.2 : 7.2)))}
         </text>
       ) : (
         <>
+          <circle cx={14} cy={kindY - 3} r={3} fill={accent} />
           <text
             x={24}
-            y={20}
+            y={kindY}
             fontFamily="var(--bpmn-font-mono)"
             fontSize={8.5}
-            letterSpacing={1.4}
+            letterSpacing={1.2}
             fill="var(--bpmn-text-dim)"
             style={{ textTransform: "uppercase" }}
           >
             {meta.label.toUpperCase()}
           </text>
-          {st && (
-            <StatusBadge x={w - 8} y={16} color={st.solid} label={st.label} />
-          )}
+          {st && <StatusBadge x={w - 8} y={kindY - 4} color={st.solid} label={st.label} />}
           <text
             x={12}
-            y={40}
+            y={nameY}
             fontFamily="var(--bpmn-font-mono)"
-            fontSize={12.5}
-            fontWeight={600}
-            fill={external ? "var(--bpmn-text-muted)" : "var(--bpmn-text)"}
+            fontSize={isSystem ? 13.5 : 12.5}
+            fontWeight={isSystem ? 700 : 600}
+            fill={isExternal ? "var(--bpmn-text-muted)" : "var(--bpmn-text)"}
           >
             {truncate(node.name, nameChars)}
           </text>
@@ -870,7 +954,7 @@ function NodeGroup({
             <text
               key={i}
               x={12}
-              y={56 + i * 13}
+              y={nameY + 16 + i * 13}
               fontFamily="var(--reading-font)"
               fontSize={10.5}
               fill="var(--bpmn-text-muted)"

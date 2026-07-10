@@ -1,9 +1,64 @@
 import { useAnalysis } from "@/store/use-analysis-store";
 import ArchitectureCanvas from "@/components/architecture/ArchitectureCanvas";
 import type { ArchNodeKind } from "@/types/architecture";
-import { Boxes, Cloud, Database, Network, Radio, Server } from "lucide-react";
-import { useMemo } from "react";
+import type { ArchEdge, ArchLayer, ArchNode } from "@/types/architecture";
+import { Box, Boxes, Cloud, Database, Layers, Network, Radio, Server, User } from "lucide-react";
+import { useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
+
+/**
+ * Collapse the container-level diagram into a C4 SYSTEM CONTEXT view: the
+ * subject system as one box, the people/actors and external systems it talks
+ * to around it, and every internal↔external integration aggregated onto the
+ * system boundary. A stopgap derivation from existing data — the agent will
+ * later author a richer context (with named human actors) directly.
+ */
+const CONTEXT_OUTER = new Set(["external", "person", "system"]);
+function deriveContext(
+  nodes: ArchNode[],
+  edges: ArchEdge[],
+  systemName: string
+): { nodes: ArchNode[]; edges: ArchEdge[]; layers: ArchLayer[] } | null {
+  const outer = nodes.filter((n) => CONTEXT_OUTER.has(n.kind));
+  if (outer.filter((n) => n.kind !== "system").length === 0) return null; // nothing to contextualise
+
+  const existingSystem = nodes.find((n) => n.kind === "system");
+  const sysId = existingSystem?.id ?? "__system__";
+  const systemNode: ArchNode =
+    existingSystem ?? { id: sysId, name: systemName, kind: "system", layer: "system", description: null };
+
+  const outerIds = new Set(outer.map((n) => n.id));
+  const seen = new Set<string>();
+  const ctxEdges: ArchEdge[] = [];
+  for (const e of edges) {
+    const fromOuter = outerIds.has(e.from);
+    const toOuter = outerIds.has(e.to);
+    if (fromOuter && toOuter) {
+      if (!seen.has(e.id)) { seen.add(e.id); ctxEdges.push(e); }
+      continue;
+    }
+    if (!fromOuter && !toOuter) continue; // wholly internal — hidden at context level
+    const from = fromOuter ? e.from : sysId;
+    const to = toOuter ? e.to : sysId;
+    const key = `${from}->${to}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    ctxEdges.push({ id: `ctx-${key}`, from, to, kind: e.kind, label: e.label ?? null, prStatus: e.prStatus ?? null });
+  }
+
+  const ctxNodes: ArchNode[] = [
+    systemNode.layer ? systemNode : { ...systemNode, layer: "system" },
+    ...outer
+      .filter((n) => n.kind !== "system")
+      .map((n) => ({ ...n, layer: n.kind === "person" ? "actors" : "external" })),
+  ];
+  const layers: ArchLayer[] = [
+    { id: "actors", name: "People" },
+    { id: "system", name: "System" },
+    { id: "external", name: "External Systems" },
+  ];
+  return { nodes: ctxNodes, edges: ctxEdges, layers };
+}
 // Note: the "memory consulted" provenance block was intentionally removed from
 // the diagram — provenance stays in the payload but is no longer surfaced here.
 
@@ -32,6 +87,8 @@ const KIND_META: Record<
   datastore: { icon: Database, label: "data store", accent: "var(--bpmn-mint)" },
   external: { icon: Cloud, label: "external", accent: "var(--bpmn-text-dim)" },
   topic: { icon: Radio, label: "topic", accent: "hsl(265 55% 68%)" },
+  person: { icon: User, label: "actor", accent: "var(--bpmn-amber)" },
+  system: { icon: Box, label: "system", accent: "var(--bpmn-cyan)" },
 };
 
 const ArchitecturePage = () => {
@@ -42,13 +99,21 @@ const ArchitecturePage = () => {
   const nodes = payload?.nodes ?? [];
   const edges = payload?.edges ?? [];
   const layers = payload?.layers ?? [];
-  const storageKey = payload?.repo || repoId || "default";
+  const systemName = (payload?.repo || repoId || "This System").split(/[/\-.]/).pop() || "This System";
+
+  const [level, setLevel] = useState<"context" | "container">("container");
+  const context = useMemo(
+    () => deriveContext(nodes, edges, systemName),
+    [nodes, edges, systemName]
+  );
+  const active = level === "context" && context ? context : { nodes, edges, layers };
+  const storageKey = `${payload?.repo || repoId || "default"}:${level}`;
 
   const changed = useMemo(() => {
-    const cn = nodes.filter((n) => n.prStatus).length;
-    const ce = edges.filter((e) => e.prStatus).length;
+    const cn = active.nodes.filter((n) => n.prStatus).length;
+    const ce = active.edges.filter((e) => e.prStatus).length;
     return { cn, ce };
-  }, [nodes, edges]);
+  }, [active]);
 
   // The rail hides this tab without an architecture payload, but guard deep
   // links too.
@@ -77,20 +142,18 @@ const ArchitecturePage = () => {
         >
           Architecture
         </h1>
-        {repoId && (
-          <span
-            className="hidden truncate font-mono text-[11px] md:block"
-            style={{ color: "var(--bpmn-text-dim)" }}
-            title={`Analyzer repo: ${repoId}`}
-          >
-            {repoId}
-          </span>
+        {/* C4 level toggle — Context (system + externals) / Container. */}
+        {context && (
+          <div className="flex items-center overflow-hidden rounded-md border" style={{ borderColor: "var(--bpmn-border-em)" }}>
+            <LevelBtn active={level === "context"} onClick={() => setLevel("context")} icon={<Network className="h-3 w-3" />}>Context</LevelBtn>
+            <LevelBtn active={level === "container"} onClick={() => setLevel("container")} icon={<Layers className="h-3 w-3" />}>Container</LevelBtn>
+          </div>
         )}
         <span className="ml-auto" />
         <Legend />
       </header>
 
-      {nodes.length === 0 ? (
+      {active.nodes.length === 0 ? (
         <EmptyState />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col">
@@ -103,15 +166,19 @@ const ArchitecturePage = () => {
               color: "var(--bpmn-text)",
             }}
           >
-            {hasPR ? framing(changed.cn, changed.ce) : structureLine(nodes.length)}
+            {level === "context"
+              ? "System context — the people and external systems this system talks to."
+              : hasPR
+                ? framing(changed.cn, changed.ce)
+                : structureLine(active.nodes.length)}
           </p>
 
           {/* Interactive canvas — fills the remaining space. */}
           <div className="min-h-0 flex-1">
             <ArchitectureCanvas
-              nodes={nodes}
-              edges={edges}
-              layers={layers}
+              nodes={active.nodes}
+              edges={active.edges}
+              layers={active.layers}
               storageKey={storageKey}
             />
           </div>
@@ -120,6 +187,12 @@ const ArchitecturePage = () => {
     </section>
   );
 };
+
+const LevelBtn = ({ active, onClick, icon, children }: { active: boolean; onClick: () => void; icon: React.ReactNode; children: React.ReactNode }) => (
+  <button type="button" onClick={onClick} className="flex items-center gap-1.5 px-2.5 py-1 font-mono text-[10px] tracking-wide transition-colors" style={{ background: active ? "var(--bpmn-surface-hi)" : "transparent", color: active ? "var(--bpmn-text)" : "var(--bpmn-text-dim)" }}>
+    {icon}{children}
+  </button>
+);
 
 const framing = (cn: number, ce: number): string => {
   if (cn === 0 && ce === 0)

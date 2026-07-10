@@ -10,15 +10,20 @@
  *  the analyzer half is built in parallel and older payloads simply omit it.
  */
 
-/** What a box IS. `component`/`service` are first-class code the repo owns;
- *  `datastore` a persistence store; `external` a third-party/other system;
- *  `topic` a message-bus subject (Kafka/ServiceBus). */
+/** What a box IS (drives its arc42/C4 SHAPE). `component`/`service` are
+ *  first-class code the repo owns (container boxes); `datastore` a persistence
+ *  store (cylinder); `external` a third-party/other system (bounded box);
+ *  `topic` a message-bus subject/Kafka stream (partitioned-log shape);
+ *  `person` a human actor/role (person glyph — C4 Context); `system` the
+ *  subject software system as one box (C4 Context). */
 export type ArchNodeKind =
   | "component"
   | "service"
   | "datastore"
   | "external"
-  | "topic";
+  | "topic"
+  | "person"
+  | "system";
 
 /** How two boxes connect. `sync` = request/response (gRPC/HTTP), `async` =
  *  message/event (publish/subscribe), `data` = reads/writes a store,
