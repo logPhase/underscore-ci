@@ -106,7 +106,15 @@ const ArchitecturePage = () => {
     () => deriveContext(nodes, edges, systemName),
     [nodes, edges, systemName]
   );
-  const active = level === "context" && context ? context : { nodes, edges, layers };
+  // Container level shows what the system is MADE OF — not the context-only
+  // actors/subject-system boxes (those live in the Context view).
+  const container = useMemo(() => {
+    const cn = nodes.filter((n) => n.kind !== "person" && n.kind !== "system");
+    const ids = new Set(cn.map((n) => n.id));
+    const ce = edges.filter((e) => ids.has(e.from) && ids.has(e.to));
+    return { nodes: cn, edges: ce, layers };
+  }, [nodes, edges, layers]);
+  const active = level === "context" && context ? context : container;
   const storageKey = `${payload?.repo || repoId || "default"}:${level}`;
 
   const changed = useMemo(() => {
