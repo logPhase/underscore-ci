@@ -98,7 +98,7 @@ const byId = <T extends { id: string }>(a: T, b: T) =>
 /** Building height from lines — sqrt-compressed, reference-scaled (short-ish,
  *  so footprints and heights stay in the reference's proportion). */
 function heightForLines(lines: number): number {
-  return Math.min(9, 0.5 + Math.sqrt(Math.max(0, lines)) * 0.3);
+  return Math.min(11, 0.7 + Math.sqrt(Math.max(0, lines)) * 0.38);
 }
 
 /** A landmark's archetype from the file's nature — for varied silhouettes
@@ -128,24 +128,32 @@ export function buildCity(districtInputs: CityDistrictInput[]): CityLayout {
     side: Math.min(30, Math.max(7, 4 + Math.sqrt(d.files.length) * 2.3)),
   }));
 
-  const GAP = 8; // street width between district islands
-  const cols = Math.ceil(Math.sqrt(sized.length));
-  const rows = Math.ceil(sized.length / cols);
-  const cell = Math.max(...sized.map((s) => s.side)) + GAP;
-  const gridW = cols * cell;
-  const gridD = rows * cell;
+  // Shelf-pack districts left→right, wrapping rows — a COMPACT city with thin
+  // streets, not a sparse grid of huge uniform cells. Compactness matters: a PR
+  // that touches many districts must still frame tight, not zoom out to a field
+  // of specks. Deterministic (districts already sorted by id).
+  const GAP = 2.5; // street width between district islands
+  const areaSum = sized.reduce((s, x) => s + x.side * x.side, 0);
+  const targetW = Math.max(Math.max(...sized.map((s) => s.side)), Math.sqrt(areaSum) * 1.35);
+  const packed: { d: CityDistrictInput; side: number; px: number; pz: number }[] = [];
+  let curX = 0, curZ = 0, rowDepth = 0, maxX = 0;
+  for (const { d, side } of sized) {
+    if (curX > 0 && curX + side > targetW) { curZ += rowDepth + GAP; curX = 0; rowDepth = 0; }
+    packed.push({ d, side, px: curX, pz: curZ });
+    curX += side + GAP;
+    rowDepth = Math.max(rowDepth, side);
+    maxX = Math.max(maxX, curX - GAP);
+  }
+  const totalW = maxX;
+  const totalD = curZ + rowDepth;
 
   const outDistricts: CityDistrict[] = [];
   const outBuildings: CityBuilding[] = [];
   let extent = 0;
 
-  sized.forEach(({ d, side }, i) => {
-    const col = i % cols;
-    const row = Math.floor(i / cols);
-    const cellCx = col * cell + cell / 2 - gridW / 2;
-    const cellCz = row * cell + cell / 2 - gridD / 2;
-    const dx = cellCx - side / 2; // district top-left
-    const dz = cellCz - side / 2;
+  packed.forEach(({ d, side, px, pz }, i) => {
+    const dx = px - totalW / 2; // district top-left, whole city centred on origin
+    const dz = pz - totalD / 2;
 
     const totalLines = d.files.reduce((s, f) => s + Math.max(1, f.lines), 0);
     outDistricts.push({
@@ -188,8 +196,8 @@ export function buildCity(districtInputs: CityDistrictInput[]): CityLayout {
       const br = Math.floor(j / bcols);
       const cx = dx + margin + bc * cellW + cellW / 2;
       const cz = dz + margin + br * cellD + cellD / 2;
-      const maxFoot = Math.min(cellW, cellD) * 0.72;
-      const foot = Math.max(0.5, Math.min(maxFoot, 0.5 + Math.sqrt(Math.max(1, f.lines) / 500) * 1.3));
+      const maxFoot = Math.min(cellW, cellD) * 0.78;
+      const foot = Math.max(0.7, Math.min(maxFoot, 0.7 + Math.sqrt(Math.max(1, f.lines) / 500) * 1.5));
       const isLandmark = f.id === landmarkId;
       const height = heightForLines(f.lines) * (isLandmark ? 1.45 : 1);
       outBuildings.push({

@@ -76,10 +76,13 @@ function Building({
   useFrame(() => {
     const m = matRef.current;
     if (!m) return;
-    const targetO = dim ? 0.12 : isPRNew ? 0.7 : 1;
+    const targetO = dim ? 0.22 : isPRNew ? 0.7 : 1;
     m.opacity += (targetO - m.opacity) * 0.1;
+    // A faint base glow keeps our muted palette legible (dimmed neighbours stay
+    // visible as a lived-in city rather than going black); it climbs on
+    // hover / select / route.
     const targetE =
-      emphasis === "route" ? 0.55 : emphasis === "selected" ? 0.4 : emphasis === "hover" ? 0.25 : 0;
+      emphasis === "route" ? 0.6 : emphasis === "selected" ? 0.45 : emphasis === "hover" ? 0.3 : dim ? 0.05 : 0.12;
     m.emissiveIntensity += (targetE - m.emissiveIntensity) * 0.15;
   });
 

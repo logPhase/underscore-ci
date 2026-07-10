@@ -59,7 +59,7 @@ interface TransformedLike {
 /** Full city never shows every file — only the ~this-many most important, so a
  *  600-file repo reads as a legible skyline. Affected + entry-point + on-journey
  *  files are always kept on top of this budget. */
-const CITY_BUILDING_BUDGET = 150;
+const CITY_BUILDING_BUDGET = 200;
 
 /** A journey drawn as an ordered path of buildings through the city. */
 export interface CityRoute {
