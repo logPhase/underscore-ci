@@ -4,7 +4,6 @@ import { useAnalysis } from "@/store/use-analysis-store";
 import { useUIStore } from "@/store/use-ui-store";
 import {
   ArrowLeft,
-  Building2,
   HelpCircle,
   Map as MapIcon,
   Network,
@@ -143,9 +142,6 @@ const SessionRail = () => {
   // (added/modified/removed nodes+edges), colored by the loudest change.
   const architecture = transformedData?.architecture;
   const hasArchitecture = architecture != null;
-  // Code City — a 3D city of the repo's files; present whenever there are files
-  // to build it from.
-  const hasCity = Object.keys(transformedData?.files ?? {}).length > 0;
   const archChanged =
     (architecture?.nodes ?? []).filter((n) => n.prStatus).length +
     (architecture?.edges ?? []).filter((e) => e.prStatus).length;
@@ -248,9 +244,6 @@ const SessionRail = () => {
         data-tour="rail-nav"
       >
         <RailNavItem to="/canvas" icon={MapIcon} label="Canvas" collapsed={collapsed} />
-        {hasCity && (
-          <RailNavItem to="/city" icon={Building2} label="Code City" collapsed={collapsed} />
-        )}
         {hasArchitecture && (
           <RailNavItem
             to="/architecture"
