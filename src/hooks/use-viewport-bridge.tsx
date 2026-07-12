@@ -17,7 +17,7 @@ import {
   type Viewport,
 } from "@xyflow/react";
 import { useViewportStore } from "@/store/use-viewport-store";
-import { toSemanticLevel } from "@/lib/canvas/utils";
+import { nextSemanticLevel, toSemanticLevel } from "@/lib/canvas/utils";
 export function ViewportBridge() {
   const rf = useReactFlow();
   const patched = useRef(false);
@@ -61,7 +61,13 @@ export function ViewportBridge() {
   // ── 2. RF → store: mirror every viewport change into zustand ──
   useOnViewportChange({
     onChange: ({ x, y, zoom }: Viewport) => {
-      const level = toSemanticLevel(zoom);
+      // Hysteresis, not the bare thresholds: this fires every frame while
+      // zooming, and jitter on a threshold strobes the level's layer
+      // (remounts replay the fadeInBand stagger — visible flicker).
+      const level = nextSemanticLevel(
+        useViewportStore.getState().semanticZoomLevel,
+        zoom
+      );
       useViewportStore.setState({
         pan: { x, y },
         zoom,
