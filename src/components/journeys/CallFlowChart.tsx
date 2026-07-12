@@ -263,6 +263,47 @@ const CallFlowChart: React.FC<CallFlowChartProps> = ({
   const svgRef = useRef<SVGSVGElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
+  // Drag-to-pan the background (nodes are left alone so clicks/expand work).
+  // Horizontal nav is otherwise scrollbars + native Shift+wheel — no wheel
+  // remap, which would flip axis depending on vertical overflow.
+  const panRef = useRef<{ x: number; y: number; sl: number; st: number } | null>(
+    null
+  );
+  const onPanPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    if ((e.target as Element).closest("[data-fqn]")) return;
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    panRef.current = { x: e.clientX, y: e.clientY, sl: el.scrollLeft, st: el.scrollTop };
+    el.style.cursor = "grabbing";
+    el.style.userSelect = "none"; // no label smear while panning
+    try {
+      el.setPointerCapture(e.pointerId);
+    } catch {
+      /* no active pointer */
+    }
+  };
+  const onPanPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const p = panRef.current;
+    const el = scrollContainerRef.current;
+    if (!p || !el) return;
+    el.scrollLeft = p.sl - (e.clientX - p.x);
+    el.scrollTop = p.st - (e.clientY - p.y);
+  };
+  const endPan = (e: React.PointerEvent<HTMLDivElement>) => {
+    const el = scrollContainerRef.current;
+    if (panRef.current && el) {
+      try {
+        el.releasePointerCapture(e.pointerId);
+      } catch {
+        /* pointer already released */
+      }
+      el.style.cursor = "";
+      el.style.userSelect = "";
+    }
+    panRef.current = null;
+  };
+
   const toggleExpand = onToggleExpand;
   const expandAll = onExpandAll;
   const collapseAll = onCollapseAll;
@@ -577,8 +618,12 @@ const CallFlowChart: React.FC<CallFlowChartProps> = ({
       {/* SVG chart */}
       <div
         ref={scrollContainerRef}
-        className="min-h-0 flex-1 overflow-auto"
+        className="min-h-0 flex-1 cursor-grab overflow-auto"
         style={{ background: "var(--bpmn-bg-deep)" }}
+        onPointerDown={onPanPointerDown}
+        onPointerMove={onPanPointerMove}
+        onPointerUp={endPan}
+        onPointerCancel={endPan}
       >
         <svg
           ref={svgRef}

@@ -23,18 +23,15 @@ import {
   Download,
   GitPullRequest,
   Info,
-  Maximize2,
-  Minimize2,
   RotateCw,
   Sparkles,
   Workflow,
-  X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useLocation } from "react-router-dom";
 import { BpmnEditor, type BpmnCanvasHandle } from "./BpmnEditor";
 import { BpmnStepFunctions } from "./BpmnStepFunctions";
 import CallFlowChart from "./CallFlowChart";
+import { ExpandableFrame } from "./ExpandableFrame";
 import { JourneyIntro } from "./JourneyIntro";
 import { useUIStore } from "@/store/use-ui-store";
 import { useAnalysis } from "@/store/use-analysis-store";
@@ -114,28 +111,10 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
   onBack,
 }) => {
   const activeFunctionId = useJourneyUIStore((state) => state.activeFunctionId);
-  const location = useLocation();
+  // Page reads top-to-bottom: intro, business-flow diagram, call graph —
+  // both diagrams inline (no popup). Each can expand to fill the screen.
   const [dockPosition, setDockPositionState] =
     useState<DockPosition>(loadDockPosition);
-  // The journey page reads top-to-bottom: intro (description +
-  // connections), then the framed diagram. `view` governs only the
-  // call-graph POPUP layered over that base:
-  //   - "detail" — the page (default)
-  //   - "flow"   — the call-graph popup is open over it
-  //
-  // Deep link: ?view=flow opens the call graph. (?view=bpmn — the old
-  // fullscreen diagram — is retired; such links simply land on the page,
-  // whose diagram is already the centerpiece.)
-  //
-  // Desktop adaptation: under HashRouter the query string lives INSIDE
-  // the hash (#/journeys/slug?view=flow), so window.location.search is
-  // always empty — react-router's location.search is the hash-aware
-  // source. One-shot read on mount (useState initializer).
-  const [view, setView] = useState<"detail" | "flow">(() => {
-    const wanted = new URLSearchParams(location.search).get("view");
-    if (wanted === "flow") return "flow";
-    return "detail";
-  });
   const scrollRequestRef = useRef<string | null>(null);
   const bpmnCanvasRef = useRef<BpmnCanvasHandle | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -191,6 +170,7 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
   // as the same object.
   const [frameExpanded, setFrameExpanded] = useState(false);
   const frameRef = useRef<HTMLElement | null>(null);
+  const [cgExpanded, setCgExpanded] = useState(false);
 
   // While expanded there is no page to scroll — but a plain wheel that
   // BpmnCanvas lets through (zoom is ⌘+scroll) would scroll the page
@@ -288,8 +268,8 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
         // don't let Esc fall through to onBack while a panel is open.
         setRightDock(null);
         e.preventDefault();
-      } else if (view === "flow") {
-        setView("detail"); // close call-graph popup — keep selection
+      } else if (cgExpanded) {
+        setCgExpanded(false); // collapse the expanded call graph
         e.preventDefault();
       } else if (frameExpanded) {
         setFrameExpanded(false); // collapse the expanded frame — keep selection
@@ -305,7 +285,7 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
   }, [
     stepFnsOpen,
     bpmnElement,
-    view,
+    cgExpanded,
     frameExpanded,
     onBack,
     rightDock,
@@ -392,10 +372,9 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
     });
   }, []);
 
-  // Code surfaces in the docked panel in the call-graph popup only. The
-  // Overview page is a reading surface — no code references there. In
-  // the business flow, code lives in the step-functions rail (on demand).
-  const codePaneVisible = !!activeFunctionId && view === "flow";
+  // Code docks in the call graph on selection; the business flow uses the
+  // step-functions rail instead.
+  const codePaneVisible = !!activeFunctionId;
   const prStatus = chapter.prStatus;
   const prBadge = prStatus ? STATUS_BADGE[prStatus] : null;
   const changedStepCount = useMemo(
@@ -488,14 +467,10 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
   const onJumpToFlowStep = useCallback((element: BpmnElement) => {
     setBpmnElement(element);
     setStepFnsOpen(true);
-    setView("detail");
   }, []);
 
-  // Forward link: from a step's function strip, "call graph beneath" —
-  // SWAP contexts instead of stacking a third popup: close the step
-  // dialog, open the call-graph popup with the function's subtree
-  // expanded, scrolled to, and its source open below. The code panel's
-  // "step:" chip is the symmetric way back.
+  // From a step's function strip: focus the inline call graph on that
+  // function (expand, scroll to it, open its source). "step:" chip is the way back.
   const onOpenCallGraphAt = useCallback(
     (fqn: string) => {
       setStepFnsOpen(false);
@@ -503,7 +478,6 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
       expandPath(fqn);
       scrollRequestRef.current = fqn;
       selectFunction(fqn);
-      setView("flow");
     },
     [expandPath, selectFunction, setRightDock]
   );
@@ -667,12 +641,8 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
     </span>
   );
 
-  // READING ORDER (founder ask): the journey's description and its
-  // connections come FIRST; below them the diagram sits inside a hard
-  // boundary — a framed, browsable window with its own header strip. The
-  // page scrolls normally around the frame; the diagram pans/zooms inside
-  // it (plain wheel scrolls the page, ⌘+scroll zooms). A thunk (not a
-  // const element) because it closes over flowPopup, declared later.
+  // Intro first, then the framed diagrams. A thunk, not a const element:
+  // it closes over flowDockLayout, declared later.
   const pageBody = () => (
     <div
       className="relative h-full overflow-hidden"
@@ -683,164 +653,135 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
           <JourneyIntro chapter={chapter} badges={introBadges} />
 
           {chapter.bpmn ? (
-            <>
-              {/* Dim the page while the frame is expanded — the overlay
-                  reads as the same frame grown, floating above. Click
-                  outside collapses (Esc too). */}
-              {frameExpanded && (
-                <div
-                  aria-hidden
-                  className="fixed inset-0 z-[55]"
-                  style={{
-                    background: "rgba(0, 0, 0, 0.5)",
-                    backdropFilter: "blur(2px)",
-                  }}
-                  onClick={() => setFrameExpanded(false)}
-                />
-              )}
-              <section
-                ref={frameRef}
-                className={
-                  frameExpanded
-                    ? "frame-overlay-enter fixed z-[60] flex flex-col overflow-hidden rounded-xl"
-                    : "overflow-hidden rounded-xl"
-                }
-                style={{
-                  border: "1px solid var(--bpmn-border-em)",
-                  background: "var(--bpmn-bg)",
-                  boxShadow: frameExpanded
-                    ? "0 24px 80px rgb(0 0 0 / 0.5)"
-                    : "0 1px 3px rgb(0 0 0 / 0.18), 0 18px 44px rgb(0 0 0 / 0.22)",
-                  ...(frameExpanded ? { inset: 12 } : {}),
-                }}
-              >
-              {/* The frame's header strip — diagram-level identity and
-                  controls only (the journey identity lives in the intro). */}
-              <div
-                className="flex shrink-0 items-center gap-2.5 px-4 py-2.5"
-                style={{
-                  borderBottom: "1px solid var(--bpmn-border-soft)",
-                  background: "var(--bpmn-bg-deep)",
-                }}
-              >
-                <Workflow
-                  className="h-3 w-3"
-                  style={{ color: "var(--bpmn-mint)" }}
-                />
-                <span
-                  className="font-mono text-[9.5px] uppercase"
-                  style={{ color: "var(--bpmn-mint)", letterSpacing: 3 }}
-                >
-                  business flow
-                </span>
-                <span style={{ color: "var(--bpmn-border-em)" }}>·</span>
-                <span
-                  className="font-mono text-[9.5px] tabular-nums"
-                  style={{ color: "var(--bpmn-text-dim)" }}
-                >
-                  {chapter.bpmn.elements?.length ?? 0} steps ·{" "}
-                  {chapter.bpmn.flows?.length ?? 0} paths
-                </span>
-                <span className="flex-1" />
-                {chapter.bpmnValidation && (
+            <ExpandableFrame
+              sectionRef={frameRef}
+              expanded={frameExpanded}
+              onToggle={() => setFrameExpanded((v) => !v)}
+              label="flow"
+              background="var(--bpmn-bg)"
+              header={
+                <>
+                  <Workflow
+                    className="h-3 w-3"
+                    style={{ color: "var(--bpmn-mint)" }}
+                  />
                   <span
-                    className={`flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-0.5 font-mono text-[10px] ${
-                      chapter.bpmnValidation.verdict === "errors"
-                        ? "border-red-500/30 bg-red-500/10 text-red-400"
-                        : chapter.bpmnValidation.verdict === "warnings"
-                          ? "border-amber-500/30 bg-amber-500/10 text-amber-400"
-                          : "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
-                    }`}
-                    title={
-                      chapter.bpmnValidation.issues.length === 0
-                        ? "BPMN verified — every claim cross-checked against source."
-                        : chapter.bpmnValidation.issues
-                            .map((i) => `${i.severity}: ${i.claim}`)
-                            .join("\n")
-                    }
+                    className="font-mono text-[9.5px] uppercase"
+                    style={{ color: "var(--bpmn-mint)", letterSpacing: 3 }}
                   >
-                    {chapter.bpmnValidation.verdict === "ok"
-                      ? "✓ verified"
-                      : // Honest severity split: "15 errors" when 14 of them
-                        // are warnings misrepresents the diagram's health.
-                        (() => {
-                          const issues = chapter.bpmnValidation.issues;
-                          const errs = issues.filter(
-                            (i) => i.severity === "error"
-                          ).length;
-                          const warns = issues.length - errs;
-                          const parts = [];
-                          if (errs > 0)
-                            parts.push(`${errs} error${errs === 1 ? "" : "s"}`);
-                          if (warns > 0)
-                            parts.push(
-                              `${warns} warning${warns === 1 ? "" : "s"}`
-                            );
-                          return parts.join(" · ");
-                        })()}
+                    business flow
                   </span>
-                )}
-                <button
-                  onClick={onExportBpmn}
-                  disabled={exporting}
-                  title="Download as PNG (engineering-paper export)"
-                  className="shrink-0 rounded-md p-1.5 transition-colors disabled:cursor-wait disabled:opacity-50"
-                  style={{ color: "var(--bpmn-text-dim)" }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = "var(--bpmn-text)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = "var(--bpmn-text-dim)";
-                  }}
-                >
-                  <Download className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  onClick={() => setFrameExpanded((v) => !v)}
-                  title={
-                    frameExpanded
-                      ? "Exit expanded view (Esc)"
-                      : "Expand the flow to fill the screen"
-                  }
-                  aria-label={
-                    frameExpanded ? "Exit expanded view" : "Expand the flow"
-                  }
-                  className="shrink-0 rounded-md p-1.5 transition-colors"
-                  style={{ color: "var(--bpmn-text-dim)" }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = "var(--bpmn-text)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = "var(--bpmn-text-dim)";
-                  }}
-                >
-                  {frameExpanded ? (
-                    <Minimize2 className="h-3.5 w-3.5" />
-                  ) : (
-                    <Maximize2 className="h-3.5 w-3.5" />
+                  <span style={{ color: "var(--bpmn-border-em)" }}>·</span>
+                  <span
+                    className="font-mono text-[9.5px] tabular-nums"
+                    style={{ color: "var(--bpmn-text-dim)" }}
+                  >
+                    {chapter.bpmn.elements?.length ?? 0} steps ·{" "}
+                    {chapter.bpmn.flows?.length ?? 0} paths
+                  </span>
+                </>
+              }
+              actions={
+                <>
+                  {chapter.bpmnValidation && (
+                    <span
+                      className={`flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-0.5 font-mono text-[10px] ${
+                        chapter.bpmnValidation.verdict === "errors"
+                          ? "border-red-500/30 bg-red-500/10 text-red-400"
+                          : chapter.bpmnValidation.verdict === "warnings"
+                            ? "border-amber-500/30 bg-amber-500/10 text-amber-400"
+                            : "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                      }`}
+                      title={
+                        chapter.bpmnValidation.issues.length === 0
+                          ? "BPMN verified — every claim cross-checked against source."
+                          : chapter.bpmnValidation.issues
+                              .map((i) => `${i.severity}: ${i.claim}`)
+                              .join("\n")
+                      }
+                    >
+                      {chapter.bpmnValidation.verdict === "ok"
+                        ? "✓ verified"
+                        : // Honest severity split: "15 errors" when 14 of them
+                          // are warnings misrepresents the diagram's health.
+                          (() => {
+                            const issues = chapter.bpmnValidation.issues;
+                            const errs = issues.filter(
+                              (i) => i.severity === "error"
+                            ).length;
+                            const warns = issues.length - errs;
+                            const parts = [];
+                            if (errs > 0)
+                              parts.push(`${errs} error${errs === 1 ? "" : "s"}`);
+                            if (warns > 0)
+                              parts.push(
+                                `${warns} warning${warns === 1 ? "" : "s"}`
+                              );
+                            return parts.join(" · ");
+                          })()}
+                    </span>
                   )}
-                </button>
-              </div>
-              {/* The window into the diagram — generous fixed height in the
-                  page flow, the remaining overlay height when expanded; the
-                  canvas pans and zooms INSIDE it either way. */}
-              <div
-                className={
-                  frameExpanded ? "relative min-h-0 w-full flex-1" : "relative w-full"
-                }
-                style={frameExpanded ? {} : { height: "70vh", minHeight: 480 }}
-              >
-                {inlineBpmn()}
-              </div>
-              </section>
-            </>
+                  <button
+                    onClick={onExportBpmn}
+                    disabled={exporting}
+                    title="Download as PNG (engineering-paper export)"
+                    className="shrink-0 rounded-md p-1.5 transition-colors disabled:cursor-wait disabled:opacity-50"
+                    style={{ color: "var(--bpmn-text-dim)" }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.color = "var(--bpmn-text)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.color = "var(--bpmn-text-dim)";
+                    }}
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                  </button>
+                </>
+              }
+            >
+              {inlineBpmn()}
+            </ExpandableFrame>
           ) : (
             noDiagram
           )}
+
+          {/* Call graph, inline below the business flow (chart + code dock). */}
+          <div data-tour="call-graph">
+          <ExpandableFrame
+            expanded={cgExpanded}
+            onToggle={() => setCgExpanded((v) => !v)}
+            label="call graph"
+            background="var(--bpmn-bg-deep)"
+            collapsedClassName="mt-6 flex flex-col"
+            header={
+              <>
+                <span
+                  aria-hidden
+                  className="text-[12px] leading-none"
+                  style={{ color: "var(--bpmn-cyan)" }}
+                >
+                  ⌁
+                </span>
+                <span
+                  className="font-mono text-[11px]"
+                  style={{ color: "var(--bpmn-cyan)" }}
+                >
+                  call graph
+                </span>
+                <span
+                  className="min-w-0 truncate font-mono text-[11px]"
+                  style={{ color: "var(--bpmn-text-dim)" }}
+                >
+                  {chapter.title}
+                </span>
+              </>
+            }
+          >
+            {flowDockLayout()}
+          </ExpandableFrame>
+          </div>
         </div>
       </div>
-
-      {flowPopup()}
     </div>
   );
 
@@ -857,10 +798,8 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
     </div>
   );
 
-  // The call-graph chart + the docked code pane, INSIDE the call-graph
-  // popup. key={dockPosition} remounts the group cleanly when dock
-  // direction changes; stable panel ids keep react-resizable-panels
-  // tracking the canvas across the codePane toggle.
+  // key={dockPosition} remounts the group when dock direction changes;
+  // stable panel ids keep react-resizable-panels tracking across codePane toggle.
   const flowChart = () => (
     <CallFlowChart
       chapter={chapter}
@@ -925,75 +864,6 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
   // The call-graph POPUP, layered over whatever the base surface is
   // (the inline summary, or the fullscreen diagram). Self-contained so
   // both bases can mount it.
-  const flowPopup = () =>
-    view === "flow" && (
-      <div
-        className="absolute inset-0 z-30 flex items-center justify-center p-4"
-        role="dialog"
-        aria-modal="true"
-        aria-label={`Call graph: ${chapter.title}`}
-        style={{
-          background: "rgba(0, 0, 0, 0.55)",
-          backdropFilter: "blur(3px)",
-        }}
-        onClick={() => setView("detail")}
-      >
-        {/* Tokenized — follows paper/dark with everything else. */}
-        <div
-          className="code-drawer-enter relative flex flex-col overflow-hidden rounded-xl"
-          style={{
-            width: "96%",
-            height: "94%",
-            background: "var(--bpmn-bg-deep)",
-            border: "1px solid var(--bpmn-border-em)",
-            boxShadow: "0 24px 70px rgb(0 0 0 / 0.35)",
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div
-            className="flex shrink-0 items-center gap-2.5 px-4 py-2.5"
-            style={{ borderBottom: "1px solid var(--bpmn-border-soft)" }}
-          >
-            <span
-              aria-hidden
-              className="text-[12px] leading-none"
-              style={{ color: "var(--bpmn-cyan)" }}
-            >
-              ⌁
-            </span>
-            <span
-              className="font-mono text-[11px]"
-              style={{ color: "var(--bpmn-cyan)" }}
-            >
-              call graph
-            </span>
-            <span
-              className="truncate font-mono text-[11px]"
-              style={{ color: "var(--bpmn-text-dim)" }}
-            >
-              {chapter.title}
-            </span>
-            <button
-              onClick={() => setView("detail")}
-              aria-label="Close call graph"
-              title="Close (Esc)"
-              className="ml-auto rounded-md p-1.5 transition-colors"
-              style={{ color: "var(--bpmn-text-dim)" }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = "var(--bpmn-text)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = "var(--bpmn-text-dim)";
-              }}
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
-          <div className="min-h-0 flex-1">{flowDockLayout()}</div>
-        </div>
-      </div>
-    );
-
   return (
     <div
       className="flex h-full flex-col"
@@ -1043,11 +913,8 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
             {chapter.reviewSummary.risk} risk
           </span>
         )}
-        {/* Step-through navs — call-graph concerns only (they expand the
-            graph and open code). One bordered pill each, horizontal ‹ ›
-            so they read as back/forward. Hidden on overview + flow views
-            where they have nothing to drive. */}
-        {view === "flow" && findingFqns.length > 0 && (
+        {/* Step-through navs (findings / PR changes) — expand the graph and open code. */}
+        {findingFqns.length > 0 && (
           <div
             className="ml-1 flex items-center overflow-hidden rounded-md border"
             style={{ borderColor: "rgba(245,158,11,0.25)" }}
@@ -1075,7 +942,7 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
             </button>
           </div>
         )}
-        {view === "flow" && prChangedFqns.length > 0 && (
+        {prChangedFqns.length > 0 && (
           <div
             className="ml-1 flex items-center overflow-hidden rounded-md border border-zinc-800"
             title="Step through this PR's changed methods"
@@ -1102,41 +969,6 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
             </button>
           </div>
         )}
-        {/* Call graph — the diagram is the inline base; the call graph is
-            its sibling POPUP, one labeled click away from the page header
-            (the overview's "code map" button now lives in the collapsed
-            narrative below). When open, this becomes a breadcrumb. */}
-        {view === "flow" ? (
-          <div className="ml-1 flex items-center gap-1.5">
-            <button
-              onClick={() => setView("detail")}
-              title="Back to the business-flow diagram"
-              className="flex items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900/70 px-2.5 py-1 font-mono text-[11px] text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200"
-            >
-              <ArrowLeft className="h-3 w-3" />
-              diagram
-            </button>
-            <span className="flex items-center gap-1.5 font-mono text-[11px] text-emerald-300/90">
-              <span aria-hidden className="text-[11px] leading-none">
-                ⌁
-              </span>{" "}
-              call graph
-            </span>
-          </div>
-        ) : (
-          <button
-            onClick={() => setView("flow")}
-            title="The code map — every call this journey makes, with source"
-            className="ml-1 flex items-center gap-1.5 rounded-md border border-zinc-800 px-2.5 py-1 font-mono text-[11px] text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200"
-          >
-            <span aria-hidden className="text-[12px] leading-none">
-              ⌁
-            </span>
-            call graph
-          </button>
-        )}
-        {/* Fullscreen/expand is retired (founder: "get rid of that") — the
-            diagram lives in a framed, browsable container on the page. */}
       </div>
 
       {/* Intent banner — surfaces the AI classifier's reasoning for this
@@ -1274,11 +1106,8 @@ const ChapterView: React.FC<ChapterViewProps> = ({ chapterSlug, onBack }) => {
     );
   }
 
-  // Keyed by journey id: the inner view's one-shot state (?view= deep
-  // link read, expanded-node seeding, BPMN selection) must re-initialize
-  // when the user crosses to ANOTHER journey via the overview's neighbor
-  // cards — otherwise `?view=bpmn` deep links land on a stale view and
-  // the call-graph seed belongs to the previous chapter.
+  // Keyed by journey id so one-shot state re-initializes when crossing to
+  // another journey via the overview's neighbor cards.
   return <ChapterViewInner key={chapter.id} chapter={chapter} onBack={onBack} />;
 };
 

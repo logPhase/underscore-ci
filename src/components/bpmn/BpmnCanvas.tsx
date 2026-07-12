@@ -856,11 +856,15 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
       });
       return;
     }
-    if (!panRef.current) return;
+    // Read into locals: the setView updater can run after onBgPointerUp has
+    // nulled panRef, so referencing panRef.current inside it would throw.
+    const p = panRef.current;
+    if (!p) return;
+    const { clientX, clientY } = e;
     setView((v) => ({
       ...v,
-      x: panRef.current!.ox + (e.clientX - panRef.current!.startX),
-      y: panRef.current!.oy + (e.clientY - panRef.current!.startY),
+      x: p.ox + (clientX - p.startX),
+      y: p.oy + (clientY - p.startY),
     }));
   };
   const onBgPointerUp = (e: React.PointerEvent<SVGSVGElement>) => {
