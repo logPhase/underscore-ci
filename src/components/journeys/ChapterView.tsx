@@ -746,6 +746,7 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
           )}
 
           {/* Call graph, inline below the business flow (chart + code dock). */}
+          <div data-tour="call-graph">
           <ExpandableFrame
             expanded={cgExpanded}
             onToggle={() => setCgExpanded((v) => !v)}
@@ -778,6 +779,7 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
           >
             {flowDockLayout()}
           </ExpandableFrame>
+          </div>
         </div>
       </div>
     </div>

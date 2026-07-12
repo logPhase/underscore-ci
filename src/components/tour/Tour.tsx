@@ -111,6 +111,22 @@ export const Tour = () => {
       const el = document.querySelector(current.target);
       if (el) {
         const r = el.getBoundingClientRect();
+        // First sighting of a below/above-the-fold target: bring it into view.
+        // Only when it isn't already visible, so on-screen anchors don't jump.
+        // The poll re-measures as the scroll animates, so the spotlight tracks.
+        if (
+          !found &&
+          (r.top < 0 ||
+            r.bottom > window.innerHeight ||
+            r.left < 0 ||
+            r.right > window.innerWidth)
+        ) {
+          el.scrollIntoView({
+            block: "center",
+            inline: "nearest",
+            behavior: reduceMotion ? "auto" : "smooth",
+          });
+        }
         setCutout({ x: r.left, y: r.top, w: r.width, h: r.height });
         found = true;
         setSettled(true);

@@ -77,6 +77,18 @@ export function buildTourSteps(ctx: TourContext): TourStep[] {
       : null,
     ctx.firstChapterPath
       ? {
+          id: "call-graph",
+          route: ctx.firstChapterPath,
+          target: '[data-tour="call-graph"]',
+          placement: "top",
+          title: "The code beneath the flow",
+          body:
+            "Below the diagram, the call graph traces every function this journey " +
+            "calls. Drag to pan it; click any node to read its source alongside.",
+        }
+      : null,
+    ctx.firstChapterPath
+      ? {
           id: "ask",
           route: ctx.firstChapterPath,
           target: '[data-tour="ask-ai"]',
