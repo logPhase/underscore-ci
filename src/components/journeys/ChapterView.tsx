@@ -23,8 +23,6 @@ import {
   Download,
   GitPullRequest,
   Info,
-  Maximize2,
-  Minimize2,
   RotateCw,
   Sparkles,
   Workflow,
@@ -33,6 +31,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BpmnEditor, type BpmnCanvasHandle } from "./BpmnEditor";
 import { BpmnStepFunctions } from "./BpmnStepFunctions";
 import CallFlowChart from "./CallFlowChart";
+import { ExpandableFrame } from "./ExpandableFrame";
 import { JourneyIntro } from "./JourneyIntro";
 import { useUIStore } from "@/store/use-ui-store";
 import { useAnalysis } from "@/store/use-analysis-store";
@@ -666,253 +665,136 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
           <JourneyIntro chapter={chapter} badges={introBadges} />
 
           {chapter.bpmn ? (
-            <>
-              {/* Dim the page while the frame is expanded — the overlay
-                  reads as the same frame grown, floating above. Click
-                  outside collapses (Esc too). */}
-              {frameExpanded && (
-                <div
-                  aria-hidden
-                  className="fixed inset-0 z-[55]"
-                  style={{
-                    background: "rgba(0, 0, 0, 0.5)",
-                    backdropFilter: "blur(2px)",
-                  }}
-                  onClick={() => setFrameExpanded(false)}
-                />
-              )}
-              <section
-                ref={frameRef}
-                className={
-                  frameExpanded
-                    ? "frame-overlay-enter fixed z-[60] flex flex-col overflow-hidden rounded-xl"
-                    : "overflow-hidden rounded-xl"
-                }
-                style={{
-                  border: "1px solid var(--bpmn-border-em)",
-                  background: "var(--bpmn-bg)",
-                  boxShadow: frameExpanded
-                    ? "0 24px 80px rgb(0 0 0 / 0.5)"
-                    : "0 1px 3px rgb(0 0 0 / 0.18), 0 18px 44px rgb(0 0 0 / 0.22)",
-                  ...(frameExpanded ? { inset: 12 } : {}),
-                }}
-              >
-              {/* The frame's header strip — diagram-level identity and
-                  controls only (the journey identity lives in the intro). */}
-              <div
-                className="flex shrink-0 items-center gap-2.5 px-4 py-2.5"
-                style={{
-                  borderBottom: "1px solid var(--bpmn-border-soft)",
-                  background: "var(--bpmn-bg-deep)",
-                }}
-              >
-                <Workflow
-                  className="h-3 w-3"
-                  style={{ color: "var(--bpmn-mint)" }}
-                />
-                <span
-                  className="font-mono text-[9.5px] uppercase"
-                  style={{ color: "var(--bpmn-mint)", letterSpacing: 3 }}
-                >
-                  business flow
-                </span>
-                <span style={{ color: "var(--bpmn-border-em)" }}>·</span>
-                <span
-                  className="font-mono text-[9.5px] tabular-nums"
-                  style={{ color: "var(--bpmn-text-dim)" }}
-                >
-                  {chapter.bpmn.elements?.length ?? 0} steps ·{" "}
-                  {chapter.bpmn.flows?.length ?? 0} paths
-                </span>
-                <span className="flex-1" />
-                {chapter.bpmnValidation && (
+            <ExpandableFrame
+              sectionRef={frameRef}
+              expanded={frameExpanded}
+              onToggle={() => setFrameExpanded((v) => !v)}
+              label="flow"
+              background="var(--bpmn-bg)"
+              /* Diagram-level identity and controls only (the journey
+                 identity lives in the intro above). */
+              header={
+                <>
+                  <Workflow
+                    className="h-3 w-3"
+                    style={{ color: "var(--bpmn-mint)" }}
+                  />
                   <span
-                    className={`flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-0.5 font-mono text-[10px] ${
-                      chapter.bpmnValidation.verdict === "errors"
-                        ? "border-red-500/30 bg-red-500/10 text-red-400"
-                        : chapter.bpmnValidation.verdict === "warnings"
-                          ? "border-amber-500/30 bg-amber-500/10 text-amber-400"
-                          : "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
-                    }`}
-                    title={
-                      chapter.bpmnValidation.issues.length === 0
-                        ? "BPMN verified — every claim cross-checked against source."
-                        : chapter.bpmnValidation.issues
-                            .map((i) => `${i.severity}: ${i.claim}`)
-                            .join("\n")
-                    }
+                    className="font-mono text-[9.5px] uppercase"
+                    style={{ color: "var(--bpmn-mint)", letterSpacing: 3 }}
                   >
-                    {chapter.bpmnValidation.verdict === "ok"
-                      ? "✓ verified"
-                      : // Honest severity split: "15 errors" when 14 of them
-                        // are warnings misrepresents the diagram's health.
-                        (() => {
-                          const issues = chapter.bpmnValidation.issues;
-                          const errs = issues.filter(
-                            (i) => i.severity === "error"
-                          ).length;
-                          const warns = issues.length - errs;
-                          const parts = [];
-                          if (errs > 0)
-                            parts.push(`${errs} error${errs === 1 ? "" : "s"}`);
-                          if (warns > 0)
-                            parts.push(
-                              `${warns} warning${warns === 1 ? "" : "s"}`
-                            );
-                          return parts.join(" · ");
-                        })()}
+                    business flow
                   </span>
-                )}
-                <button
-                  onClick={onExportBpmn}
-                  disabled={exporting}
-                  title="Download as PNG (engineering-paper export)"
-                  className="shrink-0 rounded-md p-1.5 transition-colors disabled:cursor-wait disabled:opacity-50"
-                  style={{ color: "var(--bpmn-text-dim)" }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = "var(--bpmn-text)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = "var(--bpmn-text-dim)";
-                  }}
-                >
-                  <Download className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  onClick={() => setFrameExpanded((v) => !v)}
-                  title={
-                    frameExpanded
-                      ? "Exit expanded view (Esc)"
-                      : "Expand the flow to fill the screen"
-                  }
-                  aria-label={
-                    frameExpanded ? "Exit expanded view" : "Expand the flow"
-                  }
-                  className="shrink-0 rounded-md p-1.5 transition-colors"
-                  style={{ color: "var(--bpmn-text-dim)" }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = "var(--bpmn-text)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = "var(--bpmn-text-dim)";
-                  }}
-                >
-                  {frameExpanded ? (
-                    <Minimize2 className="h-3.5 w-3.5" />
-                  ) : (
-                    <Maximize2 className="h-3.5 w-3.5" />
+                  <span style={{ color: "var(--bpmn-border-em)" }}>·</span>
+                  <span
+                    className="font-mono text-[9.5px] tabular-nums"
+                    style={{ color: "var(--bpmn-text-dim)" }}
+                  >
+                    {chapter.bpmn.elements?.length ?? 0} steps ·{" "}
+                    {chapter.bpmn.flows?.length ?? 0} paths
+                  </span>
+                </>
+              }
+              actions={
+                <>
+                  {chapter.bpmnValidation && (
+                    <span
+                      className={`flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-0.5 font-mono text-[10px] ${
+                        chapter.bpmnValidation.verdict === "errors"
+                          ? "border-red-500/30 bg-red-500/10 text-red-400"
+                          : chapter.bpmnValidation.verdict === "warnings"
+                            ? "border-amber-500/30 bg-amber-500/10 text-amber-400"
+                            : "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                      }`}
+                      title={
+                        chapter.bpmnValidation.issues.length === 0
+                          ? "BPMN verified — every claim cross-checked against source."
+                          : chapter.bpmnValidation.issues
+                              .map((i) => `${i.severity}: ${i.claim}`)
+                              .join("\n")
+                      }
+                    >
+                      {chapter.bpmnValidation.verdict === "ok"
+                        ? "✓ verified"
+                        : // Honest severity split: "15 errors" when 14 of them
+                          // are warnings misrepresents the diagram's health.
+                          (() => {
+                            const issues = chapter.bpmnValidation.issues;
+                            const errs = issues.filter(
+                              (i) => i.severity === "error"
+                            ).length;
+                            const warns = issues.length - errs;
+                            const parts = [];
+                            if (errs > 0)
+                              parts.push(`${errs} error${errs === 1 ? "" : "s"}`);
+                            if (warns > 0)
+                              parts.push(
+                                `${warns} warning${warns === 1 ? "" : "s"}`
+                              );
+                            return parts.join(" · ");
+                          })()}
+                    </span>
                   )}
-                </button>
-              </div>
-              {/* The window into the diagram — generous fixed height in the
-                  page flow, the remaining overlay height when expanded; the
-                  canvas pans and zooms INSIDE it either way. */}
-              <div
-                className={
-                  frameExpanded ? "relative min-h-0 w-full flex-1" : "relative w-full"
-                }
-                style={frameExpanded ? {} : { height: "70vh", minHeight: 480 }}
-              >
-                {inlineBpmn()}
-              </div>
-              </section>
-            </>
+                  <button
+                    onClick={onExportBpmn}
+                    disabled={exporting}
+                    title="Download as PNG (engineering-paper export)"
+                    className="shrink-0 rounded-md p-1.5 transition-colors disabled:cursor-wait disabled:opacity-50"
+                    style={{ color: "var(--bpmn-text-dim)" }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.color = "var(--bpmn-text)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.color = "var(--bpmn-text-dim)";
+                    }}
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                  </button>
+                </>
+              }
+            >
+              {inlineBpmn()}
+            </ExpandableFrame>
           ) : (
             noDiagram
           )}
 
-          {/* Dim the page while the call graph is expanded — same treatment
-              the business-flow frame gets. Click-out (or Esc) collapses. */}
-          {cgExpanded && (
-            <div
-              aria-hidden
-              className="fixed inset-0 z-[55]"
-              style={{
-                background: "rgba(0, 0, 0, 0.5)",
-                backdropFilter: "blur(2px)",
-              }}
-              onClick={() => setCgExpanded(false)}
-            />
-          )}
-
-          {/* Call graph — the same window the popup used (header strip +
+          {/* Call graph — the framed window the popup used (header strip +
               flowDockLayout: the chart with its selection-gated code dock),
-              now living inline below the business flow at the same size.
-              The expand button blows it up to a fixed-inset overlay, the
-              affordance the business-flow frame has. */}
-          <section
-            className={
-              cgExpanded
-                ? "frame-overlay-enter fixed z-[60] flex flex-col overflow-hidden rounded-xl"
-                : "mt-6 flex flex-col overflow-hidden rounded-xl"
+              now living inline below the business flow. Expand blows it up to
+              a fixed-inset overlay, the same affordance the business flow has. */}
+          <ExpandableFrame
+            expanded={cgExpanded}
+            onToggle={() => setCgExpanded((v) => !v)}
+            label="call graph"
+            background="var(--bpmn-bg-deep)"
+            collapsedClassName="mt-6 flex flex-col"
+            header={
+              <>
+                <span
+                  aria-hidden
+                  className="text-[12px] leading-none"
+                  style={{ color: "var(--bpmn-cyan)" }}
+                >
+                  ⌁
+                </span>
+                <span
+                  className="font-mono text-[11px]"
+                  style={{ color: "var(--bpmn-cyan)" }}
+                >
+                  call graph
+                </span>
+                <span
+                  className="min-w-0 truncate font-mono text-[11px]"
+                  style={{ color: "var(--bpmn-text-dim)" }}
+                >
+                  {chapter.title}
+                </span>
+              </>
             }
-            style={{
-              border: "1px solid var(--bpmn-border-em)",
-              background: "var(--bpmn-bg-deep)",
-              boxShadow: cgExpanded
-                ? "0 24px 80px rgb(0 0 0 / 0.5)"
-                : "0 1px 3px rgb(0 0 0 / 0.18), 0 18px 44px rgb(0 0 0 / 0.22)",
-              ...(cgExpanded ? { inset: 12 } : {}),
-            }}
           >
-            <div
-              className="flex shrink-0 items-center gap-2.5 px-4 py-2.5"
-              style={{ borderBottom: "1px solid var(--bpmn-border-soft)" }}
-            >
-              <span
-                aria-hidden
-                className="text-[12px] leading-none"
-                style={{ color: "var(--bpmn-cyan)" }}
-              >
-                ⌁
-              </span>
-              <span
-                className="font-mono text-[11px]"
-                style={{ color: "var(--bpmn-cyan)" }}
-              >
-                call graph
-              </span>
-              <span
-                className="truncate font-mono text-[11px]"
-                style={{ color: "var(--bpmn-text-dim)" }}
-              >
-                {chapter.title}
-              </span>
-              <button
-                onClick={() => setCgExpanded((v) => !v)}
-                title={
-                  cgExpanded
-                    ? "Exit expanded view (Esc)"
-                    : "Expand the call graph to fill the screen"
-                }
-                aria-label={
-                  cgExpanded ? "Exit expanded view" : "Expand the call graph"
-                }
-                className="ml-auto shrink-0 rounded-md p-1.5 transition-colors"
-                style={{ color: "var(--bpmn-text-dim)" }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.color = "var(--bpmn-text)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.color = "var(--bpmn-text-dim)";
-                }}
-              >
-                {cgExpanded ? (
-                  <Minimize2 className="h-3.5 w-3.5" />
-                ) : (
-                  <Maximize2 className="h-3.5 w-3.5" />
-                )}
-              </button>
-            </div>
-            <div
-              className={
-                cgExpanded ? "relative min-h-0 w-full flex-1" : "relative w-full"
-              }
-              style={cgExpanded ? {} : { height: "70vh", minHeight: 480 }}
-            >
-              {flowDockLayout()}
-            </div>
-          </section>
+            {flowDockLayout()}
+          </ExpandableFrame>
         </div>
       </div>
     </div>

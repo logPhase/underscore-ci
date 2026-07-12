@@ -263,26 +263,12 @@ const CallFlowChart: React.FC<CallFlowChartProps> = ({
   const svgRef = useRef<SVGSVGElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // The chart is wide but short (deep forests grow sideways), so it usually
-  // overflows horizontally with no vertical overflow — a plain mouse wheel
-  // then does nothing here and scrolls the page instead. Remap vertical
-  // wheel to horizontal scroll in that case. Non-passive listener so
-  // preventDefault actually stops the page from scrolling underneath.
-  useEffect(() => {
-    const el = scrollContainerRef.current;
-    if (!el) return;
-    const onWheel = (e: WheelEvent) => {
-      if (e.deltaX !== 0) return; // trackpad already scrolls horizontally
-      const canX = el.scrollWidth > el.clientWidth;
-      const canY = el.scrollHeight > el.clientHeight;
-      if (canX && !canY) {
-        el.scrollLeft += e.deltaY;
-        e.preventDefault();
-      }
-    };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, []);
+  // Horizontal navigation of a wide/short graph is handled by drag-to-pan
+  // (below), the always-present scrollbars, and the browser-native
+  // Shift+wheel — all predictable. We deliberately do NOT remap a plain
+  // vertical wheel to horizontal: that flips behaviour based on whether the
+  // graph currently overflows vertically (i.e. changes under the user when a
+  // node is expanded), which reads as the scroll "breaking".
 
   // Drag-to-pan, like the BPMN canvas: grab empty space and the viewport
   // follows the cursor. Gated to the background — a press on a node
@@ -298,6 +284,9 @@ const CallFlowChart: React.FC<CallFlowChartProps> = ({
     if (!el) return;
     panRef.current = { x: e.clientX, y: e.clientY, sl: el.scrollLeft, st: el.scrollTop };
     el.style.cursor = "grabbing";
+    // Suppress the drag-select smear on node labels — only while a pan is
+    // actively in progress, so labels stay selectable/copyable otherwise.
+    el.style.userSelect = "none";
     try {
       el.setPointerCapture(e.pointerId);
     } catch {
@@ -320,6 +309,7 @@ const CallFlowChart: React.FC<CallFlowChartProps> = ({
         /* pointer already released */
       }
       el.style.cursor = "";
+      el.style.userSelect = "";
     }
     panRef.current = null;
   };
