@@ -2,32 +2,19 @@ import { cn } from "@/lib/misc-utils";
 import { Maximize2, Minimize2 } from "lucide-react";
 import type { ReactNode, Ref } from "react";
 
-/**
- * A framed, browsable window with a header strip and an expand-to-fill-screen
- * affordance — the shared chrome behind both the business-flow frame and the
- * inline call graph on the journey page.
- *
- * Collapsed: a bordered card sitting in the page flow at a fixed height.
- * Expanded: a fixed-inset overlay with a dimmed backdrop; click-out toggles
- * it closed (Esc is wired up by the caller's keydown handler).
- *
- * The caller owns the `expanded` state and the body; this component owns the
- * overlay, the section shell, the toggle button, and the body's sizing.
- */
+// Shared chrome behind the business-flow frame and the inline call graph:
+// a bordered card in the page flow that expands to a fixed-inset overlay.
+// The caller owns `expanded` and the body; this owns the shell and sizing.
 export type ExpandableFrameProps = {
   expanded: boolean;
   onToggle: () => void;
   /** Noun for the toggle's title/aria text, e.g. "flow" or "call graph". */
   label: string;
-  /** Section background token (both states). */
   background: string;
-  /** Left-aligned header content, before the flex spacer. */
+  /** Header content left of the spacer; actions sit right, before the toggle. */
   header: ReactNode;
-  /** Right-aligned header actions, after the spacer and before the toggle. */
   actions?: ReactNode;
-  /** Extra classes on the collapsed section (e.g. `mt-6` layout margins). */
   collapsedClassName?: string;
-  /** Forwarded to the <section> — used to swallow wheel while expanded. */
   sectionRef?: Ref<HTMLElement>;
   children: ReactNode;
 };
@@ -45,8 +32,7 @@ export function ExpandableFrame({
 }: ExpandableFrameProps) {
   return (
     <>
-      {/* Dim the page while expanded — the overlay reads as the frame grown,
-          floating above. Click outside collapses (Esc too, via the caller). */}
+      {/* Click-out backdrop while expanded (Esc handled by the caller). */}
       {expanded && (
         <div
           aria-hidden
@@ -108,8 +94,6 @@ export function ExpandableFrame({
             )}
           </button>
         </div>
-        {/* Generous fixed height in the page flow; the remaining overlay
-            height when expanded. The body pans/scrolls INSIDE it either way. */}
         <div
           className={
             expanded ? "relative min-h-0 w-full flex-1" : "relative w-full"

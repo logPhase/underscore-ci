@@ -111,11 +111,8 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
   onBack,
 }) => {
   const activeFunctionId = useJourneyUIStore((state) => state.activeFunctionId);
-  // The journey page reads top-to-bottom: intro (description +
-  // connections), the framed business-flow diagram, then the call graph —
-  // both diagrams sit inline on the page, no popup/view toggle. The call
-  // graph can expand to fill the screen (cgExpanded), the same affordance
-  // the business-flow frame has (frameExpanded).
+  // Page reads top-to-bottom: intro, business-flow diagram, call graph —
+  // both diagrams inline (no popup). Each can expand to fill the screen.
   const [dockPosition, setDockPositionState] =
     useState<DockPosition>(loadDockPosition);
   const scrollRequestRef = useRef<string | null>(null);
@@ -173,8 +170,6 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
   // as the same object.
   const [frameExpanded, setFrameExpanded] = useState(false);
   const frameRef = useRef<HTMLElement | null>(null);
-  // The inline call graph gets the same expand-to-fill-screen affordance
-  // as the business-flow frame, on its own independent state.
   const [cgExpanded, setCgExpanded] = useState(false);
 
   // While expanded there is no page to scroll — but a plain wheel that
@@ -377,9 +372,8 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
     });
   }, []);
 
-  // Code surfaces in the call graph's docked panel whenever a function is
-  // selected. In the business flow, code lives in the step-functions rail
-  // (on demand) instead.
+  // Code docks in the call graph on selection; the business flow uses the
+  // step-functions rail instead.
   const codePaneVisible = !!activeFunctionId;
   const prStatus = chapter.prStatus;
   const prBadge = prStatus ? STATUS_BADGE[prStatus] : null;
@@ -475,10 +469,8 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
     setStepFnsOpen(true);
   }, []);
 
-  // Forward link: from a step's function strip, "call graph beneath" —
-  // close the step dialog and focus the inline call graph on that
-  // function: expand its subtree, scroll to it, open its source in the
-  // docked code panel. The code panel's "step:" chip is the way back.
+  // From a step's function strip: focus the inline call graph on that
+  // function (expand, scroll to it, open its source). "step:" chip is the way back.
   const onOpenCallGraphAt = useCallback(
     (fqn: string) => {
       setStepFnsOpen(false);
@@ -649,12 +641,8 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
     </span>
   );
 
-  // READING ORDER (founder ask): the journey's description and its
-  // connections come FIRST; below them the diagram sits inside a hard
-  // boundary — a framed, browsable window with its own header strip. The
-  // page scrolls normally around the frame; the diagram pans/zooms inside
-  // it (plain wheel scrolls the page, ⌘+scroll zooms). A thunk (not a
-  // const element) because it closes over flowDockLayout, declared later.
+  // Intro first, then the framed diagrams. A thunk, not a const element:
+  // it closes over flowDockLayout, declared later.
   const pageBody = () => (
     <div
       className="relative h-full overflow-hidden"
@@ -671,8 +659,6 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
               onToggle={() => setFrameExpanded((v) => !v)}
               label="flow"
               background="var(--bpmn-bg)"
-              /* Diagram-level identity and controls only (the journey
-                 identity lives in the intro above). */
               header={
                 <>
                   <Workflow
@@ -759,10 +745,7 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
             noDiagram
           )}
 
-          {/* Call graph — the framed window the popup used (header strip +
-              flowDockLayout: the chart with its selection-gated code dock),
-              now living inline below the business flow. Expand blows it up to
-              a fixed-inset overlay, the same affordance the business flow has. */}
+          {/* Call graph, inline below the business flow (chart + code dock). */}
           <ExpandableFrame
             expanded={cgExpanded}
             onToggle={() => setCgExpanded((v) => !v)}
@@ -813,10 +796,8 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
     </div>
   );
 
-  // The call-graph chart + the docked code pane, inside the inline
-  // call-graph section. key={dockPosition} remounts the group cleanly when
-  // dock direction changes; stable panel ids keep react-resizable-panels
-  // tracking the canvas across the codePane toggle.
+  // key={dockPosition} remounts the group when dock direction changes;
+  // stable panel ids keep react-resizable-panels tracking across codePane toggle.
   const flowChart = () => (
     <CallFlowChart
       chapter={chapter}
@@ -930,10 +911,7 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
             {chapter.reviewSummary.risk} risk
           </span>
         )}
-        {/* Step-through navs — call-graph concerns (they expand the graph
-            and open code). One bordered pill each, horizontal ‹ › so they
-            read as back/forward. Shown only when there's something to
-            drive (findings / PR changes). */}
+        {/* Step-through navs (findings / PR changes) — expand the graph and open code. */}
         {findingFqns.length > 0 && (
           <div
             className="ml-1 flex items-center overflow-hidden rounded-md border"
@@ -989,8 +967,6 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
             </button>
           </div>
         )}
-        {/* The call graph is no longer a popup toggled from here — it sits
-            inline on the page below the business flow (see pageBody). */}
       </div>
 
       {/* Intent banner — surfaces the AI classifier's reasoning for this
@@ -1128,10 +1104,8 @@ const ChapterView: React.FC<ChapterViewProps> = ({ chapterSlug, onBack }) => {
     );
   }
 
-  // Keyed by journey id: the inner view's one-shot state (expanded-node
-  // seeding, BPMN selection, fullscreen) must re-initialize when the user
-  // crosses to ANOTHER journey via the overview's neighbor cards —
-  // otherwise the call-graph seed belongs to the previous chapter.
+  // Keyed by journey id so one-shot state re-initializes when crossing to
+  // another journey via the overview's neighbor cards.
   return <ChapterViewInner key={chapter.id} chapter={chapter} onBack={onBack} />;
 };
 

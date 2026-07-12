@@ -263,17 +263,9 @@ const CallFlowChart: React.FC<CallFlowChartProps> = ({
   const svgRef = useRef<SVGSVGElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // Horizontal navigation of a wide/short graph is handled by drag-to-pan
-  // (below), the always-present scrollbars, and the browser-native
-  // Shift+wheel — all predictable. We deliberately do NOT remap a plain
-  // vertical wheel to horizontal: that flips behaviour based on whether the
-  // graph currently overflows vertically (i.e. changes under the user when a
-  // node is expanded), which reads as the scroll "breaking".
-
-  // Drag-to-pan, like the BPMN canvas: grab empty space and the viewport
-  // follows the cursor. Gated to the background — a press on a node
-  // (`[data-fqn]`) is left alone so clicks/expand still work. Pointer
-  // capture keeps the drag alive when the cursor leaves the container.
+  // Drag-to-pan the background (nodes are left alone so clicks/expand work).
+  // Horizontal nav is otherwise scrollbars + native Shift+wheel — no wheel
+  // remap, which would flip axis depending on vertical overflow.
   const panRef = useRef<{ x: number; y: number; sl: number; st: number } | null>(
     null
   );
@@ -284,13 +276,11 @@ const CallFlowChart: React.FC<CallFlowChartProps> = ({
     if (!el) return;
     panRef.current = { x: e.clientX, y: e.clientY, sl: el.scrollLeft, st: el.scrollTop };
     el.style.cursor = "grabbing";
-    // Suppress the drag-select smear on node labels — only while a pan is
-    // actively in progress, so labels stay selectable/copyable otherwise.
-    el.style.userSelect = "none";
+    el.style.userSelect = "none"; // no label smear while panning
     try {
       el.setPointerCapture(e.pointerId);
     } catch {
-      /* no active pointer (e.g. synthetic event) */
+      /* no active pointer */
     }
   };
   const onPanPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {

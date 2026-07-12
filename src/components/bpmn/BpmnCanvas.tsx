@@ -856,11 +856,8 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
       });
       return;
     }
-    // Capture the pan origin (and pointer position) into locals: the setView
-    // updater below can run AFTER onBgPointerUp has cleared panRef to null
-    // (React may defer the updater past commit), so reading panRef.current
-    // inside it would throw "Cannot read properties of null". The guard alone
-    // isn't enough — it runs now, the updater runs later.
+    // Read into locals: the setView updater can run after onBgPointerUp has
+    // nulled panRef, so referencing panRef.current inside it would throw.
     const p = panRef.current;
     if (!p) return;
     const { clientX, clientY } = e;
