@@ -59,7 +59,10 @@ function BiologicalWorld() {
         nodes={nodes}
         nodeTypes={nodeTypes}
         defaultViewport={defaultViewport}
-        minZoom={0.05}
+        // 0.005, not 0.05: fitView clamps at minZoom, so a big monorepo map
+        // (jellyfin: 182 services across 7 group hulls) could never fit the
+        // viewport — the initial camera stranded mid-map with Zoom Out disabled.
+        minZoom={0.005}
         maxZoom={12}
         nodesDraggable={false}
         selectionOnDrag={false}
