@@ -44,10 +44,12 @@ ENV PATH="${DOTNET_ROOT}:${PATH}"
 ENV UNDERSCORE_MODE=container \
     UNDERSCORE_IN_CONTAINER=1 \
     UNDERSCORE_ROSLYN_CLI=/opt/underscore/roslyn-cli/RoslynCli.dll \
+    UNDERSCORE_KOTLIN_ANALYZER=/opt/underscore/kotlin-parser/kotlin-parser.jar \
     UNDERSCORE_RUNS_DIR=/tmp/underscore/runs
 
 COPY .docker-context/underscore-cli.jar /opt/underscore/underscore-cli.jar
 COPY .docker-context/roslyn-cli/ /opt/underscore/roslyn-cli/
+COPY .docker-context/kotlin-parser/ /opt/underscore/kotlin-parser/
 COPY .docker-context/report-dist/ /opt/underscore/report-dist/
 COPY .docker-context/underscore-report.template.html /opt/underscore/underscore-report.template.html
 COPY scripts/inject-report-data.mjs /opt/underscore/scripts/inject-report-data.mjs

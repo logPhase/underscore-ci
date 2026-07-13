@@ -71,6 +71,7 @@ if [[ "$MODE" == "pr" ]]; then
   case "$UNDERSCORE_LANG" in
     java)   SRC_GLOB='*.java' ;;
     python) SRC_GLOB='*.py' ;;
+    kotlin) SRC_GLOB='*.kt' ;;
     *)      SRC_GLOB='*.cs' ;;
   esac
   SRC_CHANGED="$(git -C "$GITHUB_WORKSPACE" diff --name-only "$BASE_SHA...$HEAD_SHA" -- "$SRC_GLOB" 2>/dev/null | head -1 || true)"

@@ -5,6 +5,22 @@ import { ViewType } from "@/types/store";
 export const toSemanticLevel = (zoom: number) =>
   zoom < 1.2 ? 0 : zoom < 2.8 ? 1 : zoom < 5.5 ? 2 : 3;
 
+// Hysteresis for live zoom: a level is ENTERED at LEVEL_UP[i] but only LEFT
+// below LEVEL_DOWN[i]. Without the gap, zoom jitter on a bare threshold flips
+// the level every frame — each flip remounts that level's layer and replays
+// its fadeInBand stagger (visible flicker at class/function zoom). DOWN values
+// sit above the zoomTo presets (5 → level 2, 2.2 → level 1) so preset
+// navigation still lands on the level it was tuned for.
+const LEVEL_UP = [1.2, 2.8, 5.5];
+const LEVEL_DOWN = [1.05, 2.5, 5.1];
+
+export const nextSemanticLevel = (prev: number, zoom: number): number => {
+  let level = prev;
+  while (level < 3 && zoom >= LEVEL_UP[level]) level++;
+  while (level > 0 && zoom < LEVEL_DOWN[level - 1]) level--;
+  return level;
+};
+
 export function pr(seed: number): number {
   const x = Math.sin(seed * 127.1 + 311.7) * 43758.5453;
   return x - Math.floor(x);

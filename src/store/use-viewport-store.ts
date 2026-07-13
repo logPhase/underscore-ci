@@ -1,4 +1,4 @@
-import { toSemanticLevel } from "@/lib/canvas/utils";
+import { nextSemanticLevel } from "@/lib/canvas/utils";
 import { create } from "zustand";
 
 // ─── 1. Viewport slice ───────────────────────────────────────────────────────
@@ -26,7 +26,7 @@ interface ViewportSlice {
   ) => void;
 }
 
-export const useViewportStore = create<ViewportSlice>()((set) => ({
+export const useViewportStore = create<ViewportSlice>()((set, get) => ({
   pan: { x: 0, y: 0 },
   zoom: 0.55,
   animating: false,
@@ -36,7 +36,10 @@ export const useViewportStore = create<ViewportSlice>()((set) => ({
 
   setZoom: (zoom) => {
     const clamped = Math.max(0.1, Math.min(12, zoom));
-    set({ zoom: clamped, semanticZoomLevel: toSemanticLevel(clamped) });
+    set({
+      zoom: clamped,
+      semanticZoomLevel: nextSemanticLevel(get().semanticZoomLevel, clamped),
+    });
   },
 
   setAnimating: (animating) => set({ animating }),
@@ -46,7 +49,7 @@ export const useViewportStore = create<ViewportSlice>()((set) => ({
     set({
       animating: true,
       zoom: clamped,
-      semanticZoomLevel: toSemanticLevel(clamped),
+      semanticZoomLevel: nextSemanticLevel(get().semanticZoomLevel, clamped),
       pan: {
         x: viewportW / 2 - cx * clamped,
         y: viewportH / 2 - cy * clamped,

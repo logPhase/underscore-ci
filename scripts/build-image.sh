@@ -38,6 +38,13 @@ dotnet publish "$DESKTOP_DIR/backend/tools/roslyn-cli/RoslynCli.csproj" \
   -c Release -o "$CTX/roslyn-cli"
 [[ -f "$CTX/roslyn-cli/RoslynCli.dll" ]] || { echo "RoslynCli.dll missing after publish" >&2; exit 1; }
 
+echo "==> Kotlin parser JAR (mvnw package)"
+(cd "$DESKTOP_DIR/backend/tools/kotlin-parser" && ./mvnw -q -DskipTests package)
+KJAR="$DESKTOP_DIR/backend/tools/kotlin-parser/target/kotlin-parser-1.0-SNAPSHOT.jar"
+[[ -f "$KJAR" ]] || { echo "kotlin-parser jar not found after build" >&2; exit 1; }
+mkdir -p "$CTX/kotlin-parser"
+cp "$KJAR" "$CTX/kotlin-parser/kotlin-parser.jar"
+
 echo "==> Report build (pnpm build + build:singlefile)"
 (cd "$CI_DIR" && pnpm install --frozen-lockfile && pnpm build && pnpm build:singlefile)
 [[ -d "$CI_DIR/report-dist" ]] || { echo "report-dist/ missing — did 'pnpm build' run?" >&2; exit 1; }
