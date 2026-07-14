@@ -115,24 +115,36 @@ export function lookupPrChange(fqn: string): PrChange | null {
   return m.get(fqn) ?? m.get(stripArgs(fqn)) ?? null;
 }
 
-/** Pick the most prominent change among multiple FQNs.
- *  added > modified > deleted > none. */
-const PR_CHANGE_RANK: Record<PrChange, number> = {
-  added: 3,
-  modified: 2,
-  deleted: 1,
-};
+/** Aggregate per-FQN changes into ONE element-level status.
+ *
+ *  A BPMN element cites MANY grounding FQNs — often a whole call chain —
+ *  and unchanged methods never appear in the change map, so "any cited FQN
+ *  added → element added" painted reused pipelines green whenever the PR
+ *  added one thin wrapper into them (bahmni PR#180: a task labeled
+ *  "existing, unchanged data pipeline" rendered as newly added). Honest
+ *  rule, counting unmatched FQNs as unchanged evidence:
+ *    - ALL matches added AND a majority of cited → 'added' (genuinely new)
+ *    - all matches deleted (and majority)        → 'deleted'
+ *    - any other mix of changes                  → 'modified' (touched)
+ *    - no matches at all                         → null      (untouched) */
+export function aggregateElementChange(
+  changes: readonly (PrChange | null)[],
+): PrChange | null {
+  const n = changes.length;
+  const matched = changes.filter((c): c is PrChange => c != null);
+  if (matched.length === 0) return null;
+  const added = matched.filter((c) => c === 'added').length;
+  const deleted = matched.filter((c) => c === 'deleted').length;
+  if (added === matched.length && added * 2 > n) return 'added';
+  if (deleted === matched.length && deleted * 2 > n) return 'deleted';
+  return 'modified';
+}
+
 export function mostProminentChange(
   fqns: string[] | null | undefined,
 ): PrChange | null {
   if (!fqns || fqns.length === 0) return null;
-  let best: PrChange | null = null;
-  for (const f of fqns) {
-    const c = lookupPrChange(f);
-    if (!c) continue;
-    if (!best || PR_CHANGE_RANK[c] > PR_CHANGE_RANK[best]) best = c;
-  }
-  return best;
+  return aggregateElementChange(fqns.map((f) => lookupPrChange(f)));
 }
 
 // ── PR Overview (journey-connection agent) ───────────────────────────
