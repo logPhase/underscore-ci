@@ -1,5 +1,6 @@
 import { useAnalysis } from "@/store/use-analysis-store";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { WheelEvent as ReactWheelEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { buildTourSteps, type TourStep } from "./tour-steps";
 import { tourSeen, useTour } from "./tour-store";
@@ -77,7 +78,10 @@ export const Tour = () => {
   const autoTried = useRef(false);
   useEffect(() => {
     if (autoTried.current || active || tourSeen() || !transformedData) return;
-    if (!location.pathname.startsWith("/journeys")) return;
+    // The BOARD only — a deep-linked journey view (/journeys/<slug>) must
+    // not be hijacked: the tour's first step navigates(replace) to the
+    // board, silently discarding the link the visitor was sent.
+    if (location.pathname !== "/journeys") return;
     autoTried.current = true;
     const t = window.setTimeout(() => start(), 800);
     return () => window.clearTimeout(t);
@@ -204,12 +208,37 @@ export const Tour = () => {
 
   const last = step === steps.length - 1;
 
+  /** The fixed backdrop otherwise makes the whole page wheel-dead (its
+   *  scroll chain ends at the overflow-hidden body) — two-finger scrolling
+   *  "stops working" the moment the tour opens. Forward the gesture to
+   *  whatever scrolls BENEATH the pointer; the spotlight re-measures on its
+   *  slow loop, so the cutout follows the content. */
+  const onBackdropWheel = (e: ReactWheelEvent<HTMLDivElement>) => {
+    const root = e.currentTarget;
+    const below = document
+      .elementsFromPoint(e.clientX, e.clientY)
+      .find((el) => !root.contains(el));
+    let el: Element | null = below ?? null;
+    while (el && el !== document.body) {
+      const cs = getComputedStyle(el);
+      if (
+        (cs.overflowY === "auto" || cs.overflowY === "scroll") &&
+        el.scrollHeight > el.clientHeight
+      ) {
+        el.scrollBy({ top: e.deltaY, left: e.deltaX });
+        return;
+      }
+      el = el.parentElement;
+    }
+  };
+
   return (
     <div
       className="fixed inset-0 z-[120]"
       role="dialog"
       aria-modal="true"
       aria-label="Report tour"
+      onWheel={onBackdropWheel}
     >
       {/* Backdrop — four panes around the cutout (or one full pane). They
           swallow clicks so a stray click can't lose the user's place; Skip
