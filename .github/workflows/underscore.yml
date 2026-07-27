@@ -44,6 +44,14 @@ on:
         type: string
         required: false
         default: ''
+      review:
+        description: >-
+          General code review ('on' | 'off') — the PR diff reviewed for
+          correctness on its own terms, posted as ONE PR comment. Opt-in:
+          needs INTENT_DRIFT_TOKEN and costs one agent run per unique diff.
+        type: string
+        required: false
+        default: 'off'
     secrets:
       INTENT_DRIFT_URL:
         required: false
@@ -73,6 +81,7 @@ jobs:
           workspace: ${{ inputs.workspace }}
           sln: ${{ inputs.sln }}
           lang: ${{ inputs.lang }}
+          review: ${{ inputs.review }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           INTENT_DRIFT_URL: ${{ secrets.INTENT_DRIFT_URL }}

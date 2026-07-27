@@ -49,6 +49,16 @@ inputs:
       runs in pr mode when INTENT_DRIFT_TOKEN is set.
     required: false
     default: 'off'
+  review:
+    description: >-
+      General code review — the raw PR diff reviewed for correctness on its
+      own terms (no institutional-knowledge grounding), posted as ONE PR
+      comment (not inline, no review API). 'off' (default): skipped, zero
+      agent spend. 'on': runs in pr mode when INTENT_DRIFT_TOKEN is set;
+      requires a dedicated agent run per unique diff. Opt-in until its
+      precision is measured.
+    required: false
+    default: 'off'
   reports-repo:
     description: >-
       OPTIONAL dedicated reports repository ('owner/name'). When set together
@@ -169,6 +179,7 @@ runs:
         UNDERSCORE_IMAGE: ${{ inputs.image }}
         MODE: ${{ inputs.mode }}
         FINDINGS: ${{ inputs.findings }}
+        REVIEW: ${{ inputs.review }}
         VIEWER_URL: ${{ inputs.viewer-url }}
         WORKSPACE: ${{ inputs.workspace }}
         DELIVERY: ${{ inputs.delivery }}
@@ -222,6 +233,7 @@ runs:
           -e BPMN_MAX_JOURNEYS \
           -e MODE \
           -e FINDINGS \
+          -e REVIEW \
           -e VIEWER_URL \
           -e DELIVERY \
           -e SLN \

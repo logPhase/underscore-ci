@@ -21,3 +21,6 @@ jobs:
     with:
       viewer-url: ${{ vars.UNDERSCORE_VIEWER_URL }}
       workspace: ${{ vars.UNDERSCORE_WORKSPACE }}
+      # Opt-in diff-only correctness review, delivered as one PR comment.
+      # Needs INTENT_DRIFT_TOKEN; costs one agent run per unique diff.
+      # review: 'on'
