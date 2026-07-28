@@ -52,6 +52,18 @@ on:
         type: string
         required: false
         default: 'off'
+      image:
+        description: >-
+          Analysis image to run. Leave empty for the pinned release image.
+          Set it to dogfood a dev build (e.g.
+          ghcr.io/logphase/underscore-ci:dev from scripts/build-image.sh)
+          WITHOUT moving the v2 tag, which every consumer of this workflow
+          shares. Note the action itself is still resolved from the ref this
+          workflow was called at — `uses:` cannot take an expression — so a
+          dev image only picks up entrypoint.sh changes, not action.yml ones.
+        type: string
+        required: false
+        default: ''
     secrets:
       INTENT_DRIFT_URL:
         required: false
@@ -82,6 +94,9 @@ jobs:
           sln: ${{ inputs.sln }}
           lang: ${{ inputs.lang }}
           review: ${{ inputs.review }}
+          # Empty falls back to action.yml's pinned default, so callers that
+          # don't set it are unaffected.
+          image: ${{ inputs.image || 'ghcr.io/logphase/underscore-ci:v2' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           INTENT_DRIFT_URL: ${{ secrets.INTENT_DRIFT_URL }}
