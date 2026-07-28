@@ -44,6 +44,15 @@ on:
         type: string
         required: false
         default: ''
+      enrichment:
+        description: >-
+          Analyzer-side enrichment ('on' | 'off'). 'off' gives a structural-only
+          report — no BPMN, overview, journey knowledge, specs, grouping or
+          architecture. Independent of `review`, so `enrichment: off` +
+          `review: on` is review-only and the cheapest useful setup.
+        type: string
+        required: false
+        default: 'on'
       flows:
         description: >-
           BPMN business-flow diagrams ('on' | 'off'). Default 'on'. Off is worth
@@ -103,6 +112,7 @@ jobs:
           lang: ${{ inputs.lang }}
           review: ${{ inputs.review }}
           flows: ${{ inputs.flows }}
+          enrichment: ${{ inputs.enrichment }}
           # Empty falls back to action.yml's pinned default, so callers that
           # don't set it are unaffected.
           image: ${{ inputs.image || 'ghcr.io/logphase/underscore-ci:v2' }}

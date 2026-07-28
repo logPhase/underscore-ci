@@ -397,6 +397,24 @@ on_analysis_failure() {
 #                                  analyze!, so no re-export is needed here.
 # INTENT_DRIFT_TOKEN missing  -> structural-only; the pipeline soft-degrades
 #                                and never fails on enrichment.
+# `enrichment: off` — drop the token for the ANALYSIS step only, which is the
+# single lever that silences every analyzer-side agent at once: BPMN, PR
+# overview, journey knowledge, specs, grouping and architecture. Per the note
+# above, a missing token makes the CLI degrade to a structural-only report, and
+# that is exactly the wanted behaviour here.
+#
+# Why a lever rather than a flag per agent: only FLOW_*, OVERVIEW_ENABLED,
+# ARCHITECTURE_ENABLED and FINDINGS_ENABLED are gated here. /journey-knowledge,
+# /specs and /grouping are driven by the CLI with no env gate, so switching them
+# off individually would mean changing Clojure and rebuilding the uberjar.
+#
+# The code review is UNAFFECTED: post_general_review already ran, above, with
+# the token intact. So `enrichment: off` + `review: on` is "review only".
+if [[ "${ENRICHMENT:-on}" == "off" ]]; then
+  echo "Enrichment: DISABLED (enrichment: off) — structural-only report; the code review is unaffected"
+  unset INTENT_DRIFT_TOKEN
+fi
+
 if [[ -n "${INTENT_DRIFT_TOKEN:-}" ]]; then
   if [[ "$MODE" == "pr" ]]; then
     # BPMN flows are the most expensive thing here BY FAR: the analyzer runs a
