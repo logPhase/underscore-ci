@@ -30,7 +30,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BpmnEditor, type BpmnCanvasHandle } from "./BpmnEditor";
 import { BpmnStepFunctions } from "./BpmnStepFunctions";
-import CallFlowChart from "./CallFlowChart";
+import CallFlowChart from "./CallFlowGraph";
 import { ExpandableFrame } from "./ExpandableFrame";
 import { JourneyIntro } from "./JourneyIntro";
 import { useUIStore } from "@/store/use-ui-store";
