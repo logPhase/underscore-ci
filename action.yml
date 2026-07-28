@@ -49,6 +49,15 @@ inputs:
       runs in pr mode when INTENT_DRIFT_TOKEN is set.
     required: false
     default: 'off'
+  flows:
+    description: >-
+      BPMN business-flow diagrams ('on' | 'off'). 'on' (default): the analyzer
+      runs a synthesis pre-pass plus ONE agent session per journey, so a
+      10-journey PR is 11+ sessions — by far the most expensive part of a run.
+      'off': journeys still appear, without diagrams. Turn it off when you only
+      want the code review or the structural report.
+    required: false
+    default: 'on'
   review:
     description: >-
       General code review — the raw PR diff reviewed for correctness on its
@@ -179,6 +188,7 @@ runs:
         UNDERSCORE_IMAGE: ${{ inputs.image }}
         MODE: ${{ inputs.mode }}
         FINDINGS: ${{ inputs.findings }}
+        FLOWS: ${{ inputs.flows }}
         REVIEW: ${{ inputs.review }}
         VIEWER_URL: ${{ inputs.viewer-url }}
         WORKSPACE: ${{ inputs.workspace }}
@@ -233,6 +243,7 @@ runs:
           -e BPMN_MAX_JOURNEYS \
           -e MODE \
           -e FINDINGS \
+          -e FLOWS \
           -e REVIEW \
           -e VIEWER_URL \
           -e DELIVERY \

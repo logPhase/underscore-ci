@@ -382,7 +382,18 @@ on_analysis_failure() {
 #                                and never fails on enrichment.
 if [[ -n "${INTENT_DRIFT_TOKEN:-}" ]]; then
   if [[ "$MODE" == "pr" ]]; then
-    export FLOW_ENABLED=1 FLOW_ANALYZER=1 OVERVIEW_ENABLED=1
+    # BPMN flows are the most expensive thing here BY FAR: the analyzer runs a
+    # synthesis pre-pass plus ONE agent session per journey (concurrency 5), so
+    # a 10-journey PR is 11+ sessions with the source mounted into each. Opt-out
+    # exists because a run that only needs the code review should not pay for
+    # diagrams — measured, flows are ~97% of such a run's spend.
+    # Default stays 'on' so existing callers are unaffected.
+    if [[ "${FLOWS:-on}" == "off" ]]; then
+      echo "Enrichment: BPMN flows DISABLED (flows: off) — journeys ship without diagrams"
+    else
+      export FLOW_ENABLED=1 FLOW_ANALYZER=1
+    fi
+    export OVERVIEW_ENABLED=1
     # Repository architecture diagram — a durable per-repo artifact the
     # analyzer maintains in the memory store and updates surgically (no agent
     # run unless the structure drifts), so it's near-free on most PRs. On by
