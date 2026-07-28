@@ -61,6 +61,23 @@ fi
 # The workspace is mounted with a different owner than the container user.
 git config --global --add safe.directory '*'
 
+# --- Normalize the analyzer base URL ----------------------------------------
+# A trailing slash in INTENT_DRIFT_URL makes every call `//endpoint`, which the
+# analyzer answers with a 404 {"detail":"Not Found"} — and because ALL
+# enrichment is best-effort, that surfaces as warnings on a green check rather
+# than a failure. Observed in the wild: BPMN, overview, journey-knowledge,
+# specs, grouping and architecture ALL 404ing on a run whose token was valid,
+# for exactly this reason. One character of config silently disabled every
+# LLM feature.
+#
+# Exported (not just used locally) so the Clojure CLI, which builds its own
+# endpoint URLs from the same variable, inherits the cleaned value — this is
+# the only place that can fix all of them at once.
+if [[ -n "${INTENT_DRIFT_URL:-}" ]]; then
+  while [[ "$INTENT_DRIFT_URL" == */ ]]; do INTENT_DRIFT_URL="${INTENT_DRIFT_URL%/}"; done
+  export INTENT_DRIFT_URL
+fi
+
 # --- PR comment upsert -------------------------------------------------------
 # One comment per PR, found by a marker in the body and edited in place.
 # Best-effort by design: a failed comment (read-only token on fork PRs, missing
