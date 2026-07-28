@@ -118,10 +118,27 @@ REVIEW_MARKER='<!-- underscore-code-review -->'
 
 post_general_review() {
   # Best-effort and narrowly gated: opt-in (REVIEW=on), pr mode only, needs a
-  # token and a PR to comment on. Anything else is a silent no-op — this must
-  # never fail the step (set -e is on; every fallible command below is
-  # guarded with `|| { ...; return 0; }`).
-  [[ "$MODE" == "pr" && "${REVIEW:-off}" == "on" && -n "${INTENT_DRIFT_TOKEN:-}" && -n "${PR_NUMBER:-}" ]] || return 0
+  # token and a PR to comment on. It must never fail the step (set -e is on;
+  # every fallible command below is guarded with `|| { ...; return 0; }`).
+  #
+  # Each precondition reports itself. An earlier version collapsed them into one
+  # silent `|| return 0`, which cost hours: "no comment appeared" was
+  # indistinguishable from "the step never ran", so every diagnosis had to work
+  # backwards from an ABSENCE of output. A skip is a fact worth logging.
+  [[ "$MODE" == "pr" ]] || return 0
+  if [[ "${REVIEW:-off}" != "on" ]]; then
+    echo "General review: off (review: '${REVIEW:-off}') — set review: 'on' to enable"
+    return 0
+  fi
+  if [[ -z "${INTENT_DRIFT_TOKEN:-}" ]]; then
+    echo "::warning::general review: INTENT_DRIFT_TOKEN is not set — skipping (the secret is not reaching the container; if it lives in a GitHub Environment, the job must declare it)"
+    return 0
+  fi
+  if [[ -z "${PR_NUMBER:-}" ]]; then
+    echo "::warning::general review: no PR number in the event payload — skipping"
+    return 0
+  fi
+  echo "General review: requesting a diff review from ${INTENT_DRIFT_URL:-http://127.0.0.1:8767}"
 
   # Three-dot diff (merge-base), matching the source-less-PR check below and
   # for the same reason: GitHub computes a PR's diff from the merge base, and
