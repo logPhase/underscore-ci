@@ -14,7 +14,7 @@
  * the new diagram replaces the prop in local state.
  */
 import { forwardRef, useEffect, useMemo, useState } from 'react';
-import { BpmnCanvas, type BpmnCanvasHandle } from '@/components/bpmn/BpmnCanvas';
+import { BpmnFlow, type BpmnCanvasHandle } from '@/components/bpmn/BpmnFlow';
 // Desktop adaptation: the webapp's `@/data/journeyTypes` is split here —
 // Chapter + the BpmnDiagram alias live in types/journey, BpmnElement in
 // the renderer's canonical home (components/bpmn/types).
@@ -202,7 +202,7 @@ export const BpmnEditor = forwardRef<BpmnCanvasHandle, Props>(function BpmnEdito
           : { height, width: '100%', position: 'relative' }
       }
     >
-      <BpmnCanvas
+      <BpmnFlow
         ref={canvasRef}
         journey={active}
         getSource={sourceLookup}
