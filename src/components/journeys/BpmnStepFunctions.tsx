@@ -177,10 +177,20 @@ function FunctionStrip({ fn, chapter, onOpenCallGraph, defaultOpen }: {
               >
                 {tall ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
               </button>
-              <pre
-                className="px-3 py-2 m-0 overflow-auto whitespace-pre"
+              {/* Split the scroll axes: the OUTER div owns vertical scroll
+                  (and the height cap), the inner <pre> owns ONLY horizontal.
+                  A single `overflow-auto whitespace-pre` <pre> is
+                  horizontally scrollable on long lines, and a horizontally-
+                  scrollable element eats vertical two-finger/trackpad scroll
+                  (it can't chain the vertical delta up to the list). With the
+                  axes separated, vertical trackpad scroll always reaches the
+                  vertical owner and chains to the function list past its end. */}
+              <div
+                className="overflow-y-auto overflow-x-hidden"
                 style={tall ? {} : { maxHeight: 320 }}
-              ><CodeHighlight code={body} lang={langFromFile(fn.file || getMethodInfo(fn.fqn)?.filePath)} /></pre>
+              >
+                <pre className="px-3 py-2 m-0 overflow-x-auto whitespace-pre"><CodeHighlight code={body} lang={langFromFile(fn.file || getMethodInfo(fn.fqn)?.filePath)} /></pre>
+              </div>
             </>
           )}
         </div>
