@@ -91,8 +91,16 @@ else
   ID="run-${RUN_NUMBER}"; REF="${REF_NAME}"; SHA="${HEAD_SHA}"; PRN=""; PRT=""
 fi
 
-# Branded, data-driven landing page ships WITH the action — self-bootstrapping.
-cp "$GITHUB_ACTION_PATH/viewer/index.html" "$WORKTREE/index.html"
+# Root landing = the SPA in HUB mode. The un-injected singlefile shell staged
+# by entrypoint ($PUBLISH_DIR/underscore-hub.html) boots hub mode from the
+# repo-manifest.json written below (global architecture + specs + PR index).
+# Falls back to the legacy standalone board when the hub shell is absent (older
+# CLI image), so a mixed rollout never drops the landing entirely.
+if [[ -f "$PUBLISH_DIR/underscore-hub.html" ]]; then
+  cp "$PUBLISH_DIR/underscore-hub.html" "$WORKTREE/index.html"
+else
+  cp "$GITHUB_ACTION_PATH/viewer/index.html" "$WORKTREE/index.html"
+fi
 touch "$WORKTREE/.nojekyll"
 
 SHORT="${SHA:0:7}"
@@ -121,6 +129,38 @@ else
 fi
 mv runs.tmp runs.json
 cd - >/dev/null
+
+# ── repo-manifest.json — the HUB's data (global architecture + specs + PR
+#    index). `prs` are refreshed from runs.json on EVERY publish so a newly
+#    analyzed PR appears on the hub immediately. `architecture` + `specs` are
+#    the GLOBAL artifacts: a full (merge-to-main) run refreshes them from its
+#    pr-output.json; PR publishes PRESERVE the last full run's copy verbatim
+#    (a PR must never overwrite the clean global diagram with its tinted one).
+REPO_URL="${GITHUB_SERVER_URL:-https://github.com}/${REPO_SLUG}"
+ARCH_JSON='null'; SPECS_JSON='null'
+if [[ -f "$WORKTREE/repo-manifest.json" ]]; then
+  ARCH_JSON=$(jq -c '.architecture // null' "$WORKTREE/repo-manifest.json")
+  SPECS_JSON=$(jq -c '.specs // null' "$WORKTREE/repo-manifest.json")
+fi
+if [[ "$MODE" == "full" && -f "$PROUT" ]]; then
+  ARCH_JSON=$(jq -c '.architecture // null' "$PROUT")
+  SPECS_JSON=$(jq -c '.specs // null' "$PROUT")
+fi
+jq -n \
+  --arg repo "$REPO_SLUG" --arg url "$REPO_URL" --arg gen "$ISO" \
+  --argjson arch "$ARCH_JSON" --argjson specs "$SPECS_JSON" \
+  --slurpfile runs "$WORKTREE/runs.json" \
+  '{schema:"underscore.repo-manifest/v1", repo:$repo, repoUrl:$url,
+    generatedAt:$gen, architecture:$arch, specs:$specs,
+    prs: ($runs[0]
+      | map(select(.pr != null))
+      | map({number:(.pr|tonumber?),
+             title:(.prTitle // ("PR #" + (.pr|tostring))),
+             branch:.ref, author:.actor,
+             url:(.dir + "/underscore-report.html"),
+             updatedAt:.date, journeys:.journeys})
+      | sort_by(.updatedAt) | reverse)}' \
+  > "$WORKTREE/repo-manifest.json"
 
 git -C "$WORKTREE" add -A
 git -C "$WORKTREE" commit -m "underscore ${ID} report (${STAMP})" || { echo "nothing to publish"; exit 0; }

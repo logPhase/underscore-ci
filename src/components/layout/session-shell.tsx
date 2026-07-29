@@ -28,6 +28,11 @@ function sessionsIndexHref(): string | null {
   return m ? m[1] : null;
 }
 
+/** "owner/repo.git" -> "repo". */
+function shortRepo(repo: string): string {
+  return (repo.split("/").pop() || repo).replace(/\.git$/, "");
+}
+
 /**
  * SessionShell — layout route for the report workspace. A persistent
  * ~232px left rail (static session identity + Canvas/Journeys nav) with
@@ -67,15 +72,16 @@ const ShellLoadWatchdog = () => {
 export const SessionShell = () => {
   const transformedData = useAnalysis((s) => s.transformedData);
   const status = useAnalysis((s) => s.status);
-  const loadReport = useAnalysis((s) => s.loadReport);
+  const boot = useAnalysis((s) => s.boot);
 
   // Deep links (#/canvas, #/specs, #/journeys/<slug>) land here BEFORE any
-  // report is loaded — self-load instead of bouncing to the loader route,
-  // so the requested view survives the boot. Only a failed load falls back
-  // to the loader (which owns the error state).
+  // report is loaded — self-boot instead of bouncing to the loader route, so
+  // the requested view survives. boot() is manifest-first, so a deep link into
+  // a repo HUB deployment (e.g. #/architecture at the repo root) resolves to
+  // the global artifact, not a 404 on pr-output.json.
   useEffect(() => {
-    if (!transformedData && status === "idle") void loadReport();
-  }, [transformedData, status, loadReport]);
+    if (!transformedData && status === "idle") void boot();
+  }, [transformedData, status, boot]);
 
   if (!transformedData) {
     if (status === "error") return <Navigate to="/" replace />;
@@ -111,10 +117,18 @@ export const SessionShell = () => {
 
 const SessionRail = () => {
   const transformedData = useAnalysis((s) => s.transformedData);
+  const repoMode = useAnalysis((s) => s.repoMode);
+  const repoManifest = useAnalysis((s) => s.repoManifest);
   const collapsed = useUIStore((s) => s.railCollapsed);
   const toggleRail = useUIStore((s) => s.toggleRail);
 
-  const title = transformedData?.prOverlay?.title ?? "Underscore report";
+  // Repo mode: the rail belongs to the repository, not a single PR — identity
+  // is the repo name and the top link returns to the hub overview.
+  const title = repoMode
+    ? repoManifest
+      ? shortRepo(repoManifest.repo)
+      : "Repository"
+    : (transformedData?.prOverlay?.title ?? "Underscore report");
   // The board lists only the agent-composed journeys (real diagram, not the
   // synthetic call-trace fallback) — the badge counts what the board shows.
   // Structural-only reports (zero composed) fall back to the raw count.
@@ -174,10 +188,10 @@ const SessionRail = () => {
       {collapsed ? (
         <div className="flex flex-col items-center gap-1 px-1.5 pt-2.5">
           <CollapseToggle collapsed onToggle={toggleRail} />
-          {indexHref && (
-            <a
-              href={indexHref}
-              title="All sessions"
+          {repoMode ? (
+            <NavLink
+              to="/"
+              title="Overview"
               className="rail-nav-item flex min-h-9 w-full items-center justify-center rounded-md"
               style={{
                 fontFamily: "var(--bpmn-font-mono)",
@@ -185,15 +199,42 @@ const SessionRail = () => {
               }}
             >
               <ArrowLeft className="h-3.5 w-3.5 shrink-0" />
-            </a>
+            </NavLink>
+          ) : (
+            indexHref && (
+              <a
+                href={indexHref}
+                title="All sessions"
+                className="rail-nav-item flex min-h-9 w-full items-center justify-center rounded-md"
+                style={{
+                  fontFamily: "var(--bpmn-font-mono)",
+                  color: "var(--bpmn-text-muted)",
+                }}
+              >
+                <ArrowLeft className="h-3.5 w-3.5 shrink-0" />
+              </a>
+            )
           )}
         </div>
       ) : (
         <div className="flex items-center gap-1 px-2 pt-2.5">
-          {/* Back to the hosted sessions index — a plain <a> because the index
-              is a different document, not a route of this report. Hidden for
-              file:// artifacts, which have nothing above them. */}
-          {indexHref ? (
+          {/* Repo mode returns to the hub overview (a route of this app); report
+              mode links out to the hosted sessions index (a different document,
+              hence a plain <a>). Hidden for file:// artifacts. */}
+          {repoMode ? (
+            <NavLink
+              to="/"
+              title="Overview"
+              className="rail-nav-item flex min-h-9 flex-1 items-center gap-2 rounded-md px-3 text-[12px]"
+              style={{
+                fontFamily: "var(--bpmn-font-mono)",
+                color: "var(--bpmn-text-muted)",
+              }}
+            >
+              <ArrowLeft className="h-3.5 w-3.5 shrink-0" />
+              <span>Overview</span>
+            </NavLink>
+          ) : indexHref ? (
             <a
               href={indexHref}
               title="All sessions"
@@ -243,7 +284,9 @@ const SessionRail = () => {
         aria-label="Session views"
         data-tour="rail-nav"
       >
-        <RailNavItem to="/canvas" icon={MapIcon} label="Canvas" collapsed={collapsed} />
+        {!repoMode && (
+          <RailNavItem to="/canvas" icon={MapIcon} label="Canvas" collapsed={collapsed} />
+        )}
         {hasArchitecture && (
           <RailNavItem
             to="/architecture"
@@ -254,14 +297,16 @@ const SessionRail = () => {
             collapsed={collapsed}
           />
         )}
-        <RailNavItem
-          to="/journeys"
-          icon={Route}
-          label="Journeys"
-          badge={journeyCount > 0 ? String(journeyCount) : null}
-          badgeColor="var(--bpmn-text-dim)"
-          collapsed={collapsed}
-        />
+        {!repoMode && (
+          <RailNavItem
+            to="/journeys"
+            icon={Route}
+            label="Journeys"
+            badge={journeyCount > 0 ? String(journeyCount) : null}
+            badgeColor="var(--bpmn-text-dim)"
+            collapsed={collapsed}
+          />
+        )}
         {hasSpecs && (
           <RailNavItem
             to="/specs"

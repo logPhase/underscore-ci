@@ -9,7 +9,7 @@ import ChapterPage from "./pages/chapter";
 import JourneyPage from "./pages/journeys";
 import FindingsPage from "./pages/findings";
 import ArchitecturePage from "./pages/architecture";
-import ReportLoader from "./pages/report-loader";
+import EntryLoader from "./pages/entry";
 import SpecsPage from "./pages/specs";
 
 const App = () => {
@@ -21,7 +21,7 @@ const App = () => {
       <PointerEventsGuard />
       <HashRouter>
         <Routes>
-          <Route path="/" element={<ReportLoader />} />
+          <Route path="/" element={<EntryLoader />} />
           {/* Session workspace — persistent left rail around the data
               routes; SessionShell redirects to the loader when no report
               is loaded. */}

@@ -1,29 +1,28 @@
 import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAnalysis } from "@/store/use-analysis-store";
+import RepoHub from "./repo-hub";
 
-/** How long the loader may sit in "loading" before it stops pretending —
- *  a wedged load (huge payload on a slow machine, a republish race, a
- *  swallowed parse error) must surface a visible way out, never an
- *  indefinite near-black screen the user can only escape by reloading. */
+/** How long boot may sit before offering a way out — a wedged load must never
+ *  strand the user on a near-black screen. */
 const STUCK_MS = 12_000;
 
-/** Report entry route ('/'): loads the static pr-output.json once, then hands
- *  off to the journeys page. Idempotent — if the report is already loaded
- *  (history Back onto '#/', or the SessionShell error guard) it bounces
- *  straight back out with a replace, so this route never lingers in history
- *  and never re-boots a loaded report. */
-export default function ReportLoader() {
+/** Entry route ('/'): manifest-first boot. A served repo-manifest.json makes
+ *  this a repository HUB (global architecture + specs + PR index); otherwise it
+ *  is a single PR report and we hand off to the journeys page once loaded.
+ *  Idempotent — bouncing back onto '/' with a report already loaded replaces
+ *  straight back to /journeys, so this route never lingers in history. */
+export default function EntryLoader() {
   const status = useAnalysis((s) => s.status);
   const error = useAnalysis((s) => s.error);
-  const loadReport = useAnalysis((s) => s.loadReport);
+  const repoMode = useAnalysis((s) => s.repoMode);
+  const boot = useAnalysis((s) => s.boot);
   const [stuck, setStuck] = useState(false);
 
   useEffect(() => {
-    if (status === "idle") void loadReport();
-  }, [status, loadReport]);
+    if (status === "idle") void boot();
+  }, [status, boot]);
 
-  // Loading watchdog — see STUCK_MS.
   useEffect(() => {
     if (status !== "loading") {
       setStuck(false);
@@ -33,6 +32,7 @@ export default function ReportLoader() {
     return () => window.clearTimeout(t);
   }, [status]);
 
+  if (repoMode) return <RepoHub />;
   if (status === "complete") return <Navigate to="/journeys" replace />;
 
   const failed = status === "error" || stuck;
@@ -55,13 +55,11 @@ export default function ReportLoader() {
             onClick={() => window.location.reload()}
             className="rounded border border-border px-3 py-1.5 font-mono text-xs text-foreground hover:bg-muted"
           >
-            Reload report
+            Reload
           </button>
         </div>
       ) : (
-        <p className="font-mono text-sm text-muted-foreground">
-          Loading analysis…
-        </p>
+        <p className="font-mono text-sm text-muted-foreground">Loading…</p>
       )}
     </div>
   );

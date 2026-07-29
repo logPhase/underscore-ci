@@ -33,30 +33,30 @@ const snap = (n: number) => Math.round(n / GRID) * GRID;
 export function sizeFor(type: BpmnElement["type"]): NodeSize {
   switch (type) {
     case "start-event":
-      return { w: 52, h: 52 };
+      return { w: 64, h: 64 };
     case "end-event":
     case "error-end-event":
-      return { w: 56, h: 56 };
+      return { w: 70, h: 70 };
     case "exclusive-gateway":
     case "parallel-gateway":
-      // Bumped 60 → 66 so the amber glyph has air and the diamond reads as
-      // a deliberate decision marker rather than a dot at auto-fit scale.
-      return { w: 66, h: 66 };
+      // Big enough that the amber decision glyph reads clearly at the
+      // readable default zoom (see BpmnFlow's fit floor) rather than only
+      // after the user zooms in.
+      return { w: 84, h: 84 };
     case "call-activity":
     case "missing-call-activity":
-      // Slightly larger than service-task so the `+` marker / "no journey
-      // yet" label have breathing room without truncating the title.
-      return { w: 288, h: 112 };
+      // Larger than service-task so the `+` marker / "no journey yet" label
+      // have breathing room without truncating the title.
+      return { w: 340, h: 152 };
     case "service-task":
     case "user-task":
     default:
       // Premium card: an uppercase kind eyebrow + a BOLD Space-Grotesk
-      // title (~16px). Wide enough that most real business-step titles
-      // fit in 2 lines; height leaves generous padding so the card reads
-      // as a card, not a cramped label box. The title never shrinks below
-      // 16px — legibility at auto-fit is bought with card size + weight,
-      // per the design brief.
-      return { w: 284, h: 100 };
+      // title (~18px). Sized so a real business-step title reads WITHOUT
+      // zooming in at the fit floor — legibility is bought with card size +
+      // weight, not by shrinking. Wide enough that most titles fit in 2-3
+      // lines; height leaves card-like padding.
+      return { w: 324, h: 136 };
   }
 }
 
@@ -82,11 +82,15 @@ export function layoutGraph(
     // smaller bounding box ⇒ a HIGHER auto-fit scale ⇒ the bold titles
     // stay readable at fit (the whole point of the redesign), while still
     // leaving air for a 2-line gateway label between rows.
-    nodesep: 150,
-    ranksep: 175,
-    edgesep: 44,
-    marginx: 56,
-    marginy: 56,
+    // Nodes and fonts were enlarged for read-without-zoom legibility, so the
+    // spread grows with them; the extra ranksep also gives the condition-chip
+    // solver room to place pills on the horizontal runs between ranks without
+    // colliding with the downstream shape's caption.
+    nodesep: 208,
+    ranksep: 200,
+    edgesep: 56,
+    marginx: 64,
+    marginy: 64,
     ranker: "tight-tree",
   });
   g.setDefaultEdgeLabel(() => ({}));
@@ -433,10 +437,10 @@ export function resolveChipPlacements(
   for (const n of nodes) {
     // The shape itself…
     occupied.push({
-      x1: n.x - n.w / 2 - 6,
-      y1: n.y - n.h / 2 - 6,
-      x2: n.x + n.w / 2 + 6,
-      y2: n.y + n.h / 2 + 6,
+      x1: n.x - n.w / 2 - 10,
+      y1: n.y - n.h / 2 - 10,
+      x2: n.x + n.w / 2 + 10,
+      y2: n.y + n.h / 2 + 10,
     });
     // …and its caption zone — gateways and events hang their labels BELOW
     // the shape (tasks/call-activities carry their text inside the card).
@@ -448,10 +452,10 @@ export function resolveChipPlacements(
       n.type === "parallel-gateway"
     ) {
       occupied.push({
-        x1: n.x - 85,
+        x1: n.x - 108,
         y1: n.y + n.h / 2,
-        x2: n.x + 85,
-        y2: n.y + n.h / 2 + 36,
+        x2: n.x + 108,
+        y2: n.y + n.h / 2 + 58,
       });
     }
   }
@@ -465,7 +469,12 @@ export function resolveChipPlacements(
     const geo = measure(edge.condition);
     const drift = edge.points[edge.points.length - 1].y - edge.points[0].y;
     const baseT = drift < -40 ? 0.3 : 0.76;
-    const offsets = [0, 0.07, -0.07, 0.14, -0.14, 0.21, -0.21, 0.28, -0.28];
+    // A wide slide ladder: in dense clusters a chip must be able to travel
+    // most of its wire to escape a source gateway / converging siblings.
+    const offsets = [
+      0, 0.08, -0.08, 0.16, -0.16, 0.24, -0.24, 0.32, -0.32, 0.4, -0.4, 0.48,
+      -0.48,
+    ];
 
     let best: { rect: Rect; x: number; y: number; badness: number } | null =
       null;

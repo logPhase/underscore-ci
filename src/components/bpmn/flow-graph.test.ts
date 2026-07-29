@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildBpmnFlowGraph } from "./flow-graph";
+import { buildBpmnFlowGraph, measureChip } from "./flow-graph";
 import type { BpmnJourney } from "./types";
 import type { StepKnowledge } from "@/lib/transform-data/journey-knowledge";
 
@@ -61,5 +61,51 @@ describe("buildBpmnFlowGraph", () => {
     const { edges } = buildBpmnFlowGraph(journey);
     const noEdge = edges.find((e) => e.target === "no")!;
     expect((noEdge.data as { condition?: string }).condition).toBe("no");
+  });
+
+  it("gives every conditioned edge a collision-solved chip that clears the shapes", () => {
+    // A gateway fanning to three terminals with long conditions — the class of
+    // graph whose pills used to pile onto the shapes before chip placement was
+    // wired back in.
+    const dense: BpmnJourney = {
+      journey_id: "j2",
+      title: "eligibility",
+      elements: [
+        { id: "g", type: "exclusive-gateway", label: "eligible?" },
+        { id: "a", type: "end-event", label: "granted", outcome: "grant" },
+        { id: "b", type: "error-end-event", label: "declined: no entitlement", outcome: "deny" },
+        { id: "c", type: "error-end-event", label: "declined: facility closed", outcome: "deny" },
+      ],
+      flows: [
+        { from: "g", to: "a", condition: "active contract, or autopay entitlement present" },
+        { from: "g", to: "b", condition: "no matching entitlement (plate unknown, outside validity)" },
+        { from: "g", to: "c", condition: "facility closed or not active for this reading" },
+      ],
+    };
+    const { nodes, edges } = buildBpmnFlowGraph(dense);
+    const shapes = nodes.map((n) => ({
+      x1: n.position.x,
+      y1: n.position.y,
+      x2: n.position.x + n.width!,
+      y2: n.position.y + n.height!,
+    }));
+    for (const e of edges) {
+      const d = e.data as { condition?: string; chip?: { x: number; y: number } | null };
+      if (!d.condition) continue;
+      expect(d.chip, `edge ${e.id} must have a solved chip`).toBeTruthy();
+      const { w, h } = measureChip(d.condition);
+      const chip = {
+        x1: d.chip!.x - w / 2,
+        y1: d.chip!.y - h / 2,
+        x2: d.chip!.x + w / 2,
+        y2: d.chip!.y + h / 2,
+      };
+      for (const s of shapes) {
+        const ox = Math.min(chip.x2, s.x2) - Math.max(chip.x1, s.x1);
+        const oy = Math.min(chip.y2, s.y2) - Math.max(chip.y1, s.y1);
+        // No meaningful area overlap between a chip and any shape.
+        expect(ox > 4 && oy > 4, `chip for "${d.condition}" overlaps a shape`).toBe(false);
+      }
+    }
   });
 });
