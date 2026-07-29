@@ -237,7 +237,12 @@ if [[ -n "${INTENT_DRIFT_TOKEN:-}" ]]; then
     fi
   else
     export FLOW_ENABLED=1 FLOW_ANALYZER=1 FLOW_WORKBOOK_ENABLED=1
-    echo "Enrichment: BPMN flows + journey summaries via ${INTENT_DRIFT_URL:-http://127.0.0.1:8767}${BPMN_MAX_JOURNEYS:+ (BPMN_MAX_JOURNEYS=$BPMN_MAX_JOURNEYS)} (full mode; the PR-overview narrative is pr-mode-only)"
+    # Architecture is the repo HUB's headline: a FULL (merge / manual-dispatch)
+    # run refreshes the durable global diagram (clean, no PR tints) that the
+    # hub landing shows. Reuses the stored artifact verbatim when nothing
+    # drifted, so it's near-free on repeat runs.
+    export ARCHITECTURE_ENABLED=1
+    echo "Enrichment: BPMN flows + journey summaries + architecture via ${INTENT_DRIFT_URL:-http://127.0.0.1:8767}${BPMN_MAX_JOURNEYS:+ (BPMN_MAX_JOURNEYS=$BPMN_MAX_JOURNEYS)} (full mode; the PR-overview narrative is pr-mode-only)"
   fi
 else
   echo "Enrichment: INTENT_DRIFT_TOKEN not set — structural-only report"
