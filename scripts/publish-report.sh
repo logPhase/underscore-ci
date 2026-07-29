@@ -137,21 +137,27 @@ cd - >/dev/null
 #    pr-output.json; PR publishes PRESERVE the last full run's copy verbatim
 #    (a PR must never overwrite the clean global diagram with its tinted one).
 REPO_URL="${GITHUB_SERVER_URL:-https://github.com}/${REPO_SLUG}"
-ARCH_JSON='null'; SPECS_JSON='null'
-if [[ -f "$WORKTREE/repo-manifest.json" ]]; then
-  ARCH_JSON=$(jq -c '.architecture // null' "$WORKTREE/repo-manifest.json")
-  SPECS_JSON=$(jq -c '.specs // null' "$WORKTREE/repo-manifest.json")
-fi
+# architecture + specs source, extracted to a FILE. A full (merge/dispatch) run
+# refreshes them from its own pr-output.json; PR publishes preserve the last
+# full run's copy from the existing manifest. Every large blob crosses into jq
+# by FILE (--slurpfile), never as a CLI arg — the specs bundle is many KB and
+# `--argjson` overflows ARG_MAX ("jq: Argument list too long").
+ARCH_SRC="$WORKTREE/.repo-arch-src.json"
 if [[ "$MODE" == "full" && -f "$PROUT" ]]; then
-  ARCH_JSON=$(jq -c '.architecture // null' "$PROUT")
-  SPECS_JSON=$(jq -c '.specs // null' "$PROUT")
+  jq '{architecture:(.architecture // null), specs:(.specs // null)}' "$PROUT" > "$ARCH_SRC"
+elif [[ -f "$WORKTREE/repo-manifest.json" ]]; then
+  jq '{architecture:(.architecture // null), specs:(.specs // null)}' "$WORKTREE/repo-manifest.json" > "$ARCH_SRC"
+else
+  echo '{"architecture":null,"specs":null}' > "$ARCH_SRC"
 fi
 jq -n \
   --arg repo "$REPO_SLUG" --arg url "$REPO_URL" --arg gen "$ISO" \
-  --argjson arch "$ARCH_JSON" --argjson specs "$SPECS_JSON" \
   --slurpfile runs "$WORKTREE/runs.json" \
+  --slurpfile src "$ARCH_SRC" \
   '{schema:"underscore.repo-manifest/v1", repo:$repo, repoUrl:$url,
-    generatedAt:$gen, architecture:$arch, specs:$specs,
+    generatedAt:$gen,
+    architecture:($src[0].architecture // null),
+    specs:($src[0].specs // null),
     prs: ($runs[0]
       | map(select(.pr != null))
       | map({number:(.pr|tonumber?),
@@ -160,7 +166,9 @@ jq -n \
              url:(.dir + "/underscore-report.html"),
              updatedAt:.date, journeys:.journeys})
       | sort_by(.updatedAt) | reverse)}' \
-  > "$WORKTREE/repo-manifest.json"
+  > "$WORKTREE/repo-manifest.json.tmp"
+mv "$WORKTREE/repo-manifest.json.tmp" "$WORKTREE/repo-manifest.json"
+rm -f "$ARCH_SRC"
 
 git -C "$WORKTREE" add -A
 git -C "$WORKTREE" commit -m "underscore ${ID} report (${STAMP})" || { echo "nothing to publish"; exit 0; }
