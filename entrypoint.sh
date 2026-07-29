@@ -280,6 +280,12 @@ mkdir -p "$PUBLISH_DIR"
 cp -R "$UNDERSCORE_HOME/report-dist/." "$PUBLISH_DIR/"
 cp "$OUT_DIR/pr-output.json" "$PUBLISH_DIR/pr-output.json"
 [[ -f "$OUT_DIR/manifest.json" ]] && cp "$OUT_DIR/manifest.json" "$PUBLISH_DIR/manifest.json"
+# Stage the un-injected singlefile as the HUB shell — the publish step uses it
+# as the root landing (index.html), where it boots hub mode from the
+# repo-manifest.json the publish step writes. Same bundle as the report, just
+# with no inlined PR data, so the manifest-first boot lands on the hub.
+[[ -f "$UNDERSCORE_HOME/underscore-report.template.html" ]] && \
+  cp "$UNDERSCORE_HOME/underscore-report.template.html" "$PUBLISH_DIR/underscore-hub.html"
 
 REPORT_FILE=""
 if [[ "$DELIVERY" == "artifact" ]]; then

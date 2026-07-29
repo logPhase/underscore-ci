@@ -1,5 +1,8 @@
 import { transformToFrontendFormat } from "@/lib/transform-data";
+import { buildRepoModeData } from "@/lib/repo/build-repo-data";
+import { fetchRepoManifest } from "@/lib/repo/load-manifest";
 import type { TransformedData } from "@/types/analysis";
+import type { RepoManifest } from "@/types/repo-manifest";
 import { create } from "zustand";
 import { useUIStore } from "./use-ui-store";
 
@@ -9,6 +12,14 @@ interface AnalysisState {
   status: ReportStatus;
   error: string | null;
   transformedData: TransformedData | null;
+  /** True when this deployment booted a repo HUB (repo-manifest.json present)
+   *  instead of a single PR report. Drives the repo-mode rail + entry route. */
+  repoMode: boolean;
+  /** The repo hub manifest (PR index + global artifacts); null in report mode. */
+  repoManifest: RepoManifest | null;
+  /** Manifest-first boot: repo HUB when a manifest is served, else the single
+   *  report. The single entry point for both the '/' route and deep links. */
+  boot(): Promise<void>;
   loadReport(): Promise<void>;
 }
 
@@ -34,11 +45,47 @@ async function fetchReportJson(): Promise<unknown> {
   return await res.json();
 }
 
-export const useAnalysis = create<AnalysisState>()((set) => ({
+export const useAnalysis = create<AnalysisState>()((set, get) => ({
   status: "idle",
   error: null,
   transformedData: null,
+  repoMode: false,
+  repoManifest: null,
 
+  boot: async () => {
+    if (get().status !== "idle") return;
+    set({ status: "loading", error: null });
+    // Repo HUB first — a served repo-manifest.json means this deployment is a
+    // repository home, not a single report. Absent (single-report demos,
+    // file:// artifacts) → fall through to the report flow untouched.
+    try {
+      const manifest = await fetchRepoManifest();
+      if (manifest) {
+        set({
+          status: "complete",
+          error: null,
+          repoMode: true,
+          repoManifest: manifest,
+          transformedData: buildRepoModeData(manifest),
+        });
+        useUIStore.getState().setPrMode(false);
+        return;
+      }
+    } catch {
+      // A manifest probe failure is never fatal — try the report.
+    }
+    try {
+      const raw = await fetchReportJson();
+      const transformedData = transformToFrontendFormat(raw as any);
+      set({ status: "complete", error: null, transformedData });
+      useUIStore.getState().setPrMode(transformedData.prOverlay !== null);
+    } catch (err: any) {
+      set({ status: "error", error: err?.message ?? "Failed to load report" });
+    }
+  },
+
+  // Retained for callers that specifically want the single-report load (and as
+  // the report-mode branch of the entry route). boot() is the general entry.
   loadReport: async () => {
     set({ status: "loading", error: null });
     try {

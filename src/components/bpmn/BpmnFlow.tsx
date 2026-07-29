@@ -143,7 +143,12 @@ function BpmnFlowInner(
         onPaneClick={onPaneClick}
         onNodeDoubleClick={onNodeDoubleClick}
         fitView
-        fitViewOptions={{ padding: 0.2 }}
+        // Readable by default: never open a wide flow below ~0.62 zoom (text
+        // would be unreadable) — clamp the fit and let the user pan instead of
+        // forcing a zoom-in. Small flows still cap at ~1.05 so they don't
+        // balloon. Instance minZoom stays low so manual zoom-out to an
+        // overview is still possible; the minimap covers the birds-eye.
+        fitViewOptions={{ padding: 0.14, minZoom: 0.72, maxZoom: 1.1 }}
         minZoom={0.2}
         maxZoom={2.5}
         proOptions={{ hideAttribution: true }}

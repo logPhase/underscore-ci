@@ -77,8 +77,8 @@ function LabelBelow({
         textAlign: "center",
         color: "var(--bpmn-text)",
         fontFamily: "var(--bpmn-font-mono)",
-        fontSize: 11,
-        lineHeight: 1.32,
+        fontSize: 13,
+        lineHeight: 1.3,
         fontWeight: weight,
         letterSpacing: 0.1,
         userSelect: "none",
@@ -205,7 +205,7 @@ function BpmnFlowNodeInner({ data, selected }: NodeProps) {
             />
           )}
         </div>
-        <LabelBelow label={label} weight={500} width={180} />
+        <LabelBelow label={label} weight={500} width={210} />
         {badge}
       </div>
     );
@@ -245,7 +245,7 @@ function BpmnFlowNodeInner({ data, selected }: NodeProps) {
         >
           {isExclusive ? "×" : "+"}
         </div>
-        <LabelBelow label={label} weight={600} width={188} />
+        <LabelBelow label={label} weight={600} width={220} />
         {badge}
       </div>
     );
@@ -303,7 +303,7 @@ function BpmnFlowNodeInner({ data, selected }: NodeProps) {
       )}
       <div
         style={{
-          padding: "12px 16px",
+          padding: "16px 20px",
           height: "100%",
           boxSizing: "border-box",
         }}
@@ -312,9 +312,9 @@ function BpmnFlowNodeInner({ data, selected }: NodeProps) {
           style={{
             color: kind.color,
             fontFamily: "var(--bpmn-font-mono)",
-            fontSize: 10,
+            fontSize: 11.5,
             fontWeight: 600,
-            letterSpacing: 1.3,
+            letterSpacing: 1.4,
             textTransform: "uppercase",
           }}
         >
@@ -322,11 +322,11 @@ function BpmnFlowNodeInner({ data, selected }: NodeProps) {
         </div>
         <div
           style={{
-            marginTop: 6,
+            marginTop: 8,
             color: "var(--bpmn-text)",
             fontFamily: "var(--bpmn-font-title)",
-            fontSize: 16,
-            lineHeight: 1.24,
+            fontSize: 19,
+            lineHeight: 1.26,
             fontWeight: 600,
             display: "-webkit-box",
             WebkitBoxOrient: "vertical",
