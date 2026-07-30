@@ -21,6 +21,9 @@ interface AnalysisState {
   /** Sibling repo viewers on this host (viewers.json) — the hub's repo
    *  switcher; null when the host serves a single repo. */
   repoViewers: RepoViewer[] | null;
+  /** True when this deployment is the PORTAL (Level 0): no repo manifest, no
+   *  report — just viewers.json listing every repo on the host. */
+  portalMode: boolean;
   /** Manifest-first boot: repo HUB when a manifest is served, else the single
    *  report. The single entry point for both the '/' route and deep links. */
   boot(): Promise<void>;
@@ -56,6 +59,7 @@ export const useAnalysis = create<AnalysisState>()((set, get) => ({
   repoMode: false,
   repoManifest: null,
   repoViewers: null,
+  portalMode: false,
 
   boot: async () => {
     if (get().status !== "idle") return;
@@ -79,6 +83,19 @@ export const useAnalysis = create<AnalysisState>()((set, get) => ({
       }
     } catch {
       // A manifest probe failure is never fatal — try the report.
+    }
+    // PORTAL deployment (Level 0): no repo manifest, but the host lists its
+    // repo viewers — render the all-repositories page instead of a report.
+    try {
+      const viewers = await fetchViewers();
+      if (viewers && viewers.length > 0) {
+        set({ status: "complete", error: null, portalMode: true,
+              repoViewers: viewers });
+        useUIStore.getState().setPrMode(false);
+        return;
+      }
+    } catch {
+      // viewers probe failure → plain single-report host
     }
     try {
       const raw = await fetchReportJson();

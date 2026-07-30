@@ -7,6 +7,9 @@
 export interface RepoViewer {
   name: string;
   href: string;
+  /** "portal" marks the all-repositories entry page (Level 0) — hubs link
+   *  back to it and never render it as a repo card. Absent = a repo viewer. */
+  kind?: string;
 }
 
 /** Parse + resolve the switcher model: entries in file order, `active` marked
@@ -32,6 +35,16 @@ export function resolveViewerLinks(
       activeHref = v.href;
   }
   return viewers.map((v) => ({ ...v, active: v.href === activeHref }));
+}
+
+/** The repo entries only (portal excluded) — what renders as cards. */
+export function repoEntries<T extends RepoViewer>(links: T[]): T[] {
+  return links.filter((v) => v.kind !== "portal");
+}
+
+/** The portal (all-repositories) entry, if the host has one. */
+export function portalEntry<T extends RepoViewer>(links: T[]): T | null {
+  return links.find((v) => v.kind === "portal") ?? null;
 }
 
 /** Fetch ./viewers.json from the served root — absent (single-viewer hosts,
