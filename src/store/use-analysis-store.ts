@@ -1,6 +1,7 @@
 import { transformToFrontendFormat } from "@/lib/transform-data";
 import { buildRepoModeData } from "@/lib/repo/build-repo-data";
 import { fetchRepoManifest } from "@/lib/repo/load-manifest";
+import { fetchViewers, type RepoViewer } from "@/lib/repo/viewers";
 import type { TransformedData } from "@/types/analysis";
 import type { RepoManifest } from "@/types/repo-manifest";
 import { create } from "zustand";
@@ -17,6 +18,9 @@ interface AnalysisState {
   repoMode: boolean;
   /** The repo hub manifest (PR index + global artifacts); null in report mode. */
   repoManifest: RepoManifest | null;
+  /** Sibling repo viewers on this host (viewers.json) — the hub's repo
+   *  switcher; null when the host serves a single repo. */
+  repoViewers: RepoViewer[] | null;
   /** Manifest-first boot: repo HUB when a manifest is served, else the single
    *  report. The single entry point for both the '/' route and deep links. */
   boot(): Promise<void>;
@@ -51,6 +55,7 @@ export const useAnalysis = create<AnalysisState>()((set, get) => ({
   transformedData: null,
   repoMode: false,
   repoManifest: null,
+  repoViewers: null,
 
   boot: async () => {
     if (get().status !== "idle") return;
@@ -66,6 +71,7 @@ export const useAnalysis = create<AnalysisState>()((set, get) => ({
           error: null,
           repoMode: true,
           repoManifest: manifest,
+          repoViewers: await fetchViewers(),
           transformedData: buildRepoModeData(manifest),
         });
         useUIStore.getState().setPrMode(false);

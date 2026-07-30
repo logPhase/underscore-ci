@@ -4,6 +4,7 @@ import { ArrowRight, GitPullRequest, Network, Route, ScrollText } from "lucide-r
 import ArchitectureCanvas from "@/components/architecture/ArchitectureCanvas";
 import { latestByCapability } from "@/lib/specs/history";
 import { relativeTime } from "@/lib/specs/relative-time";
+import { resolveViewerLinks } from "@/lib/repo/viewers";
 import { useAnalysis } from "@/store/use-analysis-store";
 import type { RepoManifestPr } from "@/types/repo-manifest";
 import type { SpecHistoryEvent } from "@/types/specs";
@@ -49,6 +50,14 @@ export default function RepoHub() {
   const manifest = useAnalysis((s) => s.repoManifest);
   const architecture = useAnalysis((s) => s.transformedData?.architecture);
   const specs = useAnalysis((s) => s.transformedData?.specs);
+  const repoViewers = useAnalysis((s) => s.repoViewers);
+
+  // Sibling repos on this host (viewers.json) — the repo switcher. Only
+  // rendered when the host actually serves more than one repo.
+  const viewerLinks = useMemo(
+    () => resolveViewerLinks(repoViewers, window.location.pathname),
+    [repoViewers],
+  );
 
   const prs = useMemo(() => {
     const list = manifest?.prs ?? [];
@@ -95,12 +104,42 @@ export default function RepoHub() {
           className="animate-fade-in pt-16 pb-10 sm:pt-24"
           style={{ animationDelay: "0ms" }}
         >
-          <p
-            className="mb-4 font-mono text-[11px] tracking-[0.22em] uppercase"
-            style={{ color: "var(--bpmn-text-dim)" }}
-          >
-            Repository
-          </p>
+          <div className="mb-4 flex items-baseline gap-3">
+            <p
+              className="font-mono text-[11px] tracking-[0.22em] uppercase"
+              style={{ color: "var(--bpmn-text-dim)" }}
+            >
+              Repository
+            </p>
+            {/* Repo switcher — every repo viewer on this host; the active one
+                is a quiet label, siblings are links. Hidden on single-repo
+                hosts (viewers.json absent or one entry). */}
+            {viewerLinks.length > 1 && (
+              <span className="ml-auto flex items-center gap-3 font-mono text-[11px]">
+                {viewerLinks.map((v) =>
+                  v.active ? (
+                    <span
+                      key={v.href}
+                      className="tracking-wide"
+                      style={{ color: "var(--bpmn-text)" }}
+                    >
+                      {v.name}
+                    </span>
+                  ) : (
+                    <a
+                      key={v.href}
+                      href={v.href}
+                      className="tracking-wide transition-colors hover:underline"
+                      style={{ color: "var(--bpmn-cyan)" }}
+                      title={`Switch to ${v.name}`}
+                    >
+                      {v.name} ↗
+                    </a>
+                  ),
+                )}
+              </span>
+            )}
+          </div>
           <h1
             className="text-[40px] leading-[1.05] font-semibold sm:text-[56px]"
             style={{
