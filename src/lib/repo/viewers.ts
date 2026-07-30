@@ -46,3 +46,59 @@ export async function fetchViewers(): Promise<RepoViewer[] | null> {
     return null;
   }
 }
+
+// ── portfolio overview — one card's numbers per integrated repo ──────────
+
+export interface ViewerOverview {
+  repo: string;
+  generatedAt: string | undefined;
+  components: number;
+  capabilities: number;
+  prs: number;
+  latestPr: { number?: number; title: string; updatedAt?: string } | null;
+}
+
+/** The portfolio-card numbers from a repo-manifest.json payload. Tolerant of
+ *  missing sections (a repo seeded before architecture existed still gets a
+ *  card); null only when the payload isn't a manifest at all. */
+export function manifestOverview(raw: unknown): ViewerOverview | null {
+  if (!raw || typeof raw !== "object") return null;
+  const m = raw as Record<string, unknown>;
+  if (typeof m.repo !== "string") return null;
+  const arch = (m.architecture ?? {}) as { nodes?: unknown[] };
+  const specs = (m.specs ?? {}) as { specs?: unknown[] };
+  const prs = Array.isArray(m.prs) ? (m.prs as Record<string, unknown>[]) : [];
+  const newest = [...prs].sort((a, b) =>
+    String(b.updatedAt ?? "").localeCompare(String(a.updatedAt ?? "")))[0];
+  return {
+    repo: m.repo,
+    generatedAt: typeof m.generatedAt === "string" ? m.generatedAt : undefined,
+    components: Array.isArray(arch.nodes) ? arch.nodes.length : 0,
+    capabilities: Array.isArray(specs.specs) ? specs.specs.length : 0,
+    prs: prs.length,
+    latestPr: newest
+      ? {
+          number: typeof newest.number === "number" ? newest.number : undefined,
+          title: String(newest.title ?? ""),
+          updatedAt:
+            typeof newest.updatedAt === "string" ? newest.updatedAt : undefined,
+        }
+      : null,
+  };
+}
+
+/** Fetch a sibling viewer's manifest overview (same host, its path prefix).
+ *  null on any failure — auth walls or older branches without a manifest
+ *  degrade to a minimal open-only card, never an error. */
+export async function fetchViewerOverview(
+  href: string,
+): Promise<ViewerOverview | null> {
+  try {
+    const base = href.endsWith("/") ? href : `${href}/`;
+    const res = await fetch(`${base}repo-manifest.json`);
+    if (!res.ok) return null;
+    return manifestOverview(await res.json());
+  } catch {
+    return null;
+  }
+}
