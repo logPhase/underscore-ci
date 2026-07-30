@@ -14,6 +14,8 @@ import { relativeTime } from "@/lib/specs/relative-time";
 import {
   fetchViewerOverview,
   manifestOverview,
+  portalEntry,
+  repoEntries,
   resolveViewerLinks,
   type ViewerOverview,
 } from "@/lib/repo/viewers";
@@ -69,7 +71,12 @@ export default function RepoHub() {
   // each sibling's from its viewer's manifest (fetched cross-path, graceful
   // when unreachable). Hidden entirely on single-repo hosts.
   const viewerLinks = useMemo(
-    () => resolveViewerLinks(repoViewers, window.location.pathname),
+    () =>
+      repoEntries(resolveViewerLinks(repoViewers, window.location.pathname)),
+    [repoViewers],
+  );
+  const portal = useMemo(
+    () => portalEntry(resolveViewerLinks(repoViewers, window.location.pathname)),
     [repoViewers],
   );
   const [siblingOverviews, setSiblingOverviews] = useState<
@@ -135,12 +142,24 @@ export default function RepoHub() {
           className="animate-fade-in pt-16 pb-10 sm:pt-24"
           style={{ animationDelay: "0ms" }}
         >
-          <p
-            className="mb-4 font-mono text-[11px] tracking-[0.22em] uppercase"
-            style={{ color: "var(--bpmn-text-dim)" }}
-          >
-            Repository
-          </p>
+          <div className="mb-4 flex items-baseline gap-3">
+            <p
+              className="font-mono text-[11px] tracking-[0.22em] uppercase"
+              style={{ color: "var(--bpmn-text-dim)" }}
+            >
+              Repository
+            </p>
+            {/* Level-0 back-link — present when the host has a portal page. */}
+            {portal && (
+              <a
+                href={portal.href}
+                className="ml-auto font-mono text-[11.5px] transition-colors hover:underline"
+                style={{ color: "var(--bpmn-text-muted)" }}
+              >
+                ← All repositories
+              </a>
+            )}
+          </div>
           <h1
             className="text-[40px] leading-[1.05] font-semibold sm:text-[56px]"
             style={{
@@ -413,8 +432,9 @@ function Section({
 /** One integrated repo's overview card. The card the user is ALREADY viewing
  *  is a quiet non-link (tagged); siblings are whole-card links carrying their
  *  real numbers; a sibling whose manifest can't be read from here degrades to
- *  an open-only card — always a way in, never an error. */
-function RepoCard({
+ *  an open-only card — always a way in, never an error. Shared with the
+ *  Level-0 portal page (where every card is a link). */
+export function RepoCard({
   name,
   href,
   active,

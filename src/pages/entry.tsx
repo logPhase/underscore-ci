@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAnalysis } from "@/store/use-analysis-store";
 import RepoHub from "./repo-hub";
+import RepoPortal from "./repo-portal";
 
 /** How long boot may sit before offering a way out — a wedged load must never
  *  strand the user on a near-black screen. */
@@ -16,6 +17,7 @@ export default function EntryLoader() {
   const status = useAnalysis((s) => s.status);
   const error = useAnalysis((s) => s.error);
   const repoMode = useAnalysis((s) => s.repoMode);
+  const portalMode = useAnalysis((s) => s.portalMode);
   const boot = useAnalysis((s) => s.boot);
   const [stuck, setStuck] = useState(false);
 
@@ -33,6 +35,7 @@ export default function EntryLoader() {
   }, [status]);
 
   if (repoMode) return <RepoHub />;
+  if (portalMode) return <RepoPortal />;
   if (status === "complete") return <Navigate to="/journeys" replace />;
 
   const failed = status === "error" || stuck;
