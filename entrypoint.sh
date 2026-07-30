@@ -61,6 +61,177 @@ fi
 # The workspace is mounted with a different owner than the container user.
 git config --global --add safe.directory '*'
 
+# --- Normalize the analyzer base URL ----------------------------------------
+# A trailing slash makes every call `//endpoint`, which the analyzer 404s. All
+# enrichment is best-effort, so that surfaces as warnings on a GREEN check, not
+# a failure — one stray character silently disables every LLM feature.
+# Exported so the Clojure CLI, which builds its own URLs from this variable,
+# inherits the cleaned value.
+if [[ -n "${INTENT_DRIFT_URL:-}" ]]; then
+  while [[ "$INTENT_DRIFT_URL" == */ ]]; do INTENT_DRIFT_URL="${INTENT_DRIFT_URL%/}"; done
+  export INTENT_DRIFT_URL
+fi
+
+# --- PR comment upsert -------------------------------------------------------
+# One comment per marker, found in the body and edited in place. Best-effort: a
+# failed comment (read-only token on fork PRs, missing pull-requests: write,
+# transient API error) must never fail the step. Defined above the
+# source-less-PR skip because post_general_review needs it and must run even
+# for a PR that skip exits 0 on.
+upsert_comment() {
+  # marker defaults to COMMENT_MARKER so existing call sites are unchanged;
+  # post_general_review passes its own so the two comments never clobber.
+  local body_file=$1 marker="${2:-$COMMENT_MARKER}" existing_id
+  export GH_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+  if [[ -z "$GH_TOKEN" ]]; then
+    echo "::warning::GITHUB_TOKEN not provided — skipping PR comment upsert"
+    return 0
+  fi
+  existing_id="$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" --paginate \
+    --jq "[.[] | select(.body | contains(\"$marker\"))][0].id // empty")" || existing_id=""
+  if [[ -n "$existing_id" ]]; then
+    gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$existing_id" -F "body=@$body_file" >/dev/null \
+      || { echo "::warning::PR comment update failed (token scope? fork PR?) — report was still produced"; return 0; }
+  else
+    gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" -F "body=@$body_file" >/dev/null \
+      || { echo "::warning::PR comment creation failed (token scope? fork PR?) — report was still produced"; return 0; }
+  fi
+}
+
+# --- diff-only general code review (separate PR comment) --------------------
+# POST /review/general reviews the raw PR diff on its own terms — no
+# institutional-knowledge grounding, no ledger, no inline anchors. A different
+# concern from post_findings_review below (the dormant KB-grounded reviewer), so
+# it gets its own marker and its own comment.
+REVIEW_MARKER='<!-- underscore-code-review -->'
+
+post_general_review() {
+  # Best-effort: set -e is on, so every fallible command is `|| { warn; return 0; }`.
+  # Each precondition logs itself — collapsing them into one silent `|| return 0`
+  # once made "no comment appeared" indistinguishable from "never ran".
+  [[ "$MODE" == "pr" ]] || return 0
+  if [[ "${REVIEW:-off}" != "on" ]]; then
+    echo "General review: off (review: '${REVIEW:-off}') — set review: 'on' to enable"
+    return 0
+  fi
+  if [[ -z "${INTENT_DRIFT_TOKEN:-}" ]]; then
+    echo "::warning::general review: INTENT_DRIFT_TOKEN is not set — skipping (the secret is not reaching the container; if it lives in a GitHub Environment, the job must declare it)"
+    return 0
+  fi
+  if [[ -z "${PR_NUMBER:-}" ]]; then
+    echo "::warning::general review: no PR number in the event payload — skipping"
+    return 0
+  fi
+
+  local api="${INTENT_DRIFT_URL:-http://127.0.0.1:8767}"
+  local diff_file=/tmp/underscore/review.diff
+  local req_body=/tmp/underscore/review-request.json
+  local resp_file=/tmp/underscore/review-response.json
+  local review_md=/tmp/underscore/review-comment.md
+  # pr-description.md always exists here — written unconditionally above, even
+  # when the PR body is empty.
+  local desc_file=/tmp/underscore/pr-description.md
+  # Bare repo segment, matching action.yml's INTENT_DRIFT_REPO_ID fallback.
+  local repo_id="${INTENT_DRIFT_REPO_ID:-${GITHUB_REPOSITORY##*/}}"
+  local diff_size resp_raw resp_body http_code
+
+  echo "General review: requesting a diff review from $api"
+
+  # Three-dot (merge-base) diff, like the source-less-PR check below: GitHub
+  # computes a PR's diff from the merge base, and a two-dot diff leaks
+  # unrelated upstream commits in the moment the base branch moves. Never pass
+  # -U — widened context would put findings outside the window GitHub's PR UI
+  # treats as part of the change.
+  git -C "$GITHUB_WORKSPACE" diff "$BASE_SHA...$HEAD_SHA" >"$diff_file" 2>/dev/null \
+    || { echo "::warning::general review: failed to compute the PR diff — skipping"; return 0; }
+  if [[ ! -s "$diff_file" ]]; then
+    echo "General review: empty diff between base and head — nothing to review."
+    return 0
+  fi
+  diff_size=$(wc -c <"$diff_file" | tr -d '[:space:]')
+  if (( diff_size > 4000000 )); then
+    echo "::warning::general review: diff is ${diff_size} bytes, over the 4000000-byte cap — skipping client-side (the endpoint 422s past this, and the service is single-worker, so an oversize monorepo diff must never be sent)"
+    return 0
+  fi
+
+  jq -n \
+    --arg repo_id "$repo_id" \
+    --arg pr_number "$PR_NUMBER" \
+    --arg pr_title "${PR_TITLE:-}" \
+    --rawfile pr_description "$desc_file" \
+    --rawfile diff "$diff_file" \
+    '{repo_id: $repo_id, pr_number: $pr_number, pr_title: $pr_title,
+      pr_description: $pr_description, diff: $diff}' \
+    >"$req_body" || { echo "::warning::general review: failed to build the request body — skipping"; return 0; }
+
+  # Long timeout: a synchronous managed-agent session, not a quick lookup.
+  resp_raw=$(curl -sS --max-time 900 -w '\n%{http_code}' \
+    -H "Authorization: Bearer $INTENT_DRIFT_TOKEN" \
+    -H "Content-Type: application/json" \
+    --data @"$req_body" \
+    "$api/review/general") \
+    || { echo "::warning::general review: request to the analyzer failed (network error / timeout) — skipping"; return 0; }
+  http_code="${resp_raw##*$'\n'}"
+  resp_body="${resp_raw%$'\n'*}"
+  printf '%s' "$resp_body" >"$resp_file"
+
+  if [[ ! "$http_code" =~ ^2 ]]; then
+    case "$http_code" in
+      503) echo "::warning::general review: reviewer agent is not configured on the analyzer (503) — skipping";;
+      402) echo "::warning::general review: analyzer is out of credits (402) — skipping";;
+      *) echo "::warning::general review: analyzer returned HTTP $http_code — ${resp_body:0:200}";;
+    esac
+    return 0
+  fi
+
+  # `reviewed: false` = the diff denoised to nothing service-side and no agent
+  # ever looked at it, so the clean-run comment below would be a lie. Say
+  # nothing. NOT `.reviewed // true`: jq's `//` also falls back on false, which
+  # swallows exactly the case being tested. Absent field (older service) =
+  # reviewed.
+  if [[ "$(jq -r 'if .reviewed == false then "no" else "yes" end' "$resp_file" 2>/dev/null)" == "no" ]]; then
+    echo "General review: the diff contains no reviewable code (docs/lock/generated only) — no comment posted."
+    return 0
+  fi
+
+  jq -r --arg marker "$REVIEW_MARKER" --arg run_url "$RUN_URL" '
+    ($marker),
+    "## Underscore code review",
+    "",
+    ((.items // []) as $items |
+      if ($items | length) == 0 then
+        "The reviewer found no correctness issues in the changed code. ✅"
+      else
+        # Response order is already high -> medium -> low; do not re-sort.
+        [$items[] |
+          "`" + (.file // "unknown file") + "`\n" +
+          "**[" + (.severity // "?") + "]** " + (.title // "") + "\n\n" +
+          (.detail // "") +
+          (if (.excerpt // "") != "" then "\n\n```\n" + .excerpt + "\n```" else "" end) +
+          (if (.check // "") != "" then "\n\n**Verify:** " + .check else "" end)
+        ] | join("\n\n---\n\n")
+      end
+    ),
+    "",
+    "---",
+    (
+      "_Automated correctness review of this PR'\''s diff only"
+      + (if (.cached // false) then " (cached: an identical diff was already reviewed, so no agent ran this time)" else "" end)
+      + ". [Workflow run](" + $run_url + ")._"
+    )
+  ' "$resp_file" >"$review_md" 2>/dev/null || { echo "::warning::general review: failed to render the response — skipping"; return 0; }
+
+  upsert_comment "$review_md" "$REVIEW_MARKER" || echo "::warning::general review comment upsert failed — analyzer call still succeeded"
+}
+
+# Called here, before the source-less-PR skip and the structural pipeline,
+# because the review needs only the checkout and the PR payload parsed above —
+# never ANALYSIS_ARGS, the CLI, or pr-output.json. So it still posts when the PR
+# touches no source files for the selected language (that skip exits 0) and when
+# the structural analysis itself fails. Exactly one call site, so an agent run
+# can never be billed twice.
+post_general_review || echo "::warning::general review step failed unexpectedly — continuing"
+
 # --- Skip source-less PRs (infrastructure-only changes) ----------------------
 # A PR that touches no source files for the selected language (helm, terraform,
 # CI, docs, …) has nothing to analyze — the pipeline would only fail or produce
@@ -83,29 +254,6 @@ if [[ "$MODE" == "pr" ]]; then
     exit 0
   fi
 fi
-
-# --- PR comment upsert -------------------------------------------------------
-# One comment per PR, found by COMMENT_MARKER in the body and edited in place.
-# Best-effort by design: a failed comment (read-only token on fork PRs, missing
-# pull-requests: write, transient API error) must never fail the step — the
-# report was still produced and the artifact must still upload.
-upsert_comment() {
-  local body_file=$1 existing_id
-  export GH_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
-  if [[ -z "$GH_TOKEN" ]]; then
-    echo "::warning::GITHUB_TOKEN not provided — skipping PR comment upsert"
-    return 0
-  fi
-  existing_id="$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" --paginate \
-    --jq "[.[] | select(.body | contains(\"$COMMENT_MARKER\"))][0].id // empty")" || existing_id=""
-  if [[ -n "$existing_id" ]]; then
-    gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$existing_id" -F "body=@$body_file" >/dev/null \
-      || { echo "::warning::PR comment update failed (token scope? fork PR?) — report was still produced"; return 0; }
-  else
-    gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" -F "body=@$body_file" >/dev/null \
-      || { echo "::warning::PR comment creation failed (token scope? fork PR?) — report was still produced"; return 0; }
-  fi
-}
 
 # --- findings → PR review (inline where anchorable) --------------------------
 # Open findings become inline review comments anchored to the finding's file +
@@ -219,6 +367,19 @@ on_analysis_failure() {
 #                                  analyze!, so no re-export is needed here.
 # INTENT_DRIFT_TOKEN missing  -> structural-only; the pipeline soft-degrades
 #                                and never fails on enrichment.
+# `enrichment: off` drops the token for the ANALYSIS step only — one lever that
+# silences every analyzer-side agent at once (BPMN, overview, journey knowledge,
+# specs, grouping, architecture), because per the note above a missing token
+# makes the CLI degrade to a structural-only report. A flag per agent is not
+# possible here: /journey-knowledge, /specs and /grouping are driven by the CLI
+# with no env gate, so gating them individually means changing Clojure.
+# The code review is unaffected — post_general_review already ran above with the
+# token intact, so `enrichment: off` + `review: on` is review-only.
+if [[ "${ENRICHMENT:-on}" == "off" ]]; then
+  echo "Enrichment: DISABLED (enrichment: off) — structural-only report; the code review is unaffected"
+  unset INTENT_DRIFT_TOKEN
+fi
+
 if [[ -n "${INTENT_DRIFT_TOKEN:-}" ]]; then
   if [[ "$MODE" == "pr" ]]; then
     export FLOW_ENABLED=1 FLOW_ANALYZER=1 OVERVIEW_ENABLED=1

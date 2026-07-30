@@ -44,6 +44,23 @@ on:
         type: string
         required: false
         default: ''
+      enrichment:
+        description: >-
+          Analyzer-side enrichment ('on' | 'off'). 'off' gives a structural-only
+          report — no BPMN, overview, journey knowledge, specs, grouping or
+          architecture. Independent of `review`, so `enrichment: off` +
+          `review: on` is review-only and the cheapest useful setup.
+        type: string
+        required: false
+        default: 'on'
+      review:
+        description: >-
+          General code review ('on' | 'off') — the PR diff reviewed for
+          correctness on its own terms, posted as ONE PR comment. Opt-in:
+          needs INTENT_DRIFT_TOKEN and costs one agent run per unique diff.
+        type: string
+        required: false
+        default: 'off'
     secrets:
       INTENT_DRIFT_URL:
         required: false
@@ -73,6 +90,8 @@ jobs:
           workspace: ${{ inputs.workspace }}
           sln: ${{ inputs.sln }}
           lang: ${{ inputs.lang }}
+          review: ${{ inputs.review }}
+          enrichment: ${{ inputs.enrichment }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           INTENT_DRIFT_URL: ${{ secrets.INTENT_DRIFT_URL }}
