@@ -1,8 +1,8 @@
 import {
   forwardRef,
   useCallback,
+  useEffect,
   useImperativeHandle,
-  useMemo,
   useState,
 } from "react";
 import {
@@ -14,6 +14,8 @@ import {
   type Node,
   ReactFlow,
   ReactFlowProvider,
+  useEdgesState,
+  useNodesState,
   useReactFlow,
 } from "@xyflow/react";
 import { toPng } from "html-to-image";
@@ -65,11 +67,23 @@ function BpmnFlowInner(
   const rf = useReactFlow();
   const [knowledgeNodeId, setKnowledgeNodeId] = useState<string | null>(null);
 
-  const { nodes, edges } = useMemo(
-    () =>
-      buildBpmnFlowGraph(journey, elementPrStatus, elementKnowledge, setKnowledgeNodeId),
-    [journey, elementPrStatus, elementKnowledge],
-  );
+  // React Flow STATE (not a plain prop) so the boxes are DRAGGABLE: a
+  // controlled `nodes` prop with no onNodesChange renders them pinned — that
+  // was the box-drag regression from the old SVG canvas. Rebuild from the
+  // journey whenever it (or its PR/knowledge overlays) change; a drag within a
+  // journey persists until the next rebuild, and connected edges reroute live.
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node<BpmnNodeData>>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  useEffect(() => {
+    const g = buildBpmnFlowGraph(
+      journey,
+      elementPrStatus,
+      elementKnowledge,
+      setKnowledgeNodeId,
+    );
+    setNodes(g.nodes);
+    setEdges(g.edges);
+  }, [journey, elementPrStatus, elementKnowledge, setNodes, setEdges]);
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => onSelectionChange?.(node.id),
@@ -137,6 +151,8 @@ function BpmnFlowInner(
       <ReactFlow
         nodes={nodes}
         edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onNodeClick={onNodeClick}
