@@ -164,7 +164,6 @@ post_general_review() {
   # pr-description.md always exists by this point (written unconditionally in
   # the PR-metadata block above, even when the PR body is empty).
   local desc_file=/tmp/underscore/pr-description.md
-  [[ -f "$desc_file" ]] || : >"$desc_file"
 
   # Bare repo segment (never owner-prefixed) — same fallback action.yml uses
   # for INTENT_DRIFT_REPO_ID, kept consistent here in case a caller invokes
