@@ -8,3 +8,8 @@ dev-runs/
 *.tsbuildinfo
 # staged image inputs — never commit (contains the backend uberjar)
 .docker-context/
+
+# Agent/dev scratch — tier-3 working docs, never committed
+.dev-docs/
+.superpowers/
+.claude/worktrees/
