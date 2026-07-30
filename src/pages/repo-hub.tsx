@@ -1,10 +1,22 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, GitPullRequest, Network, Route, ScrollText } from "lucide-react";
+import {
+  ArrowRight,
+  FolderGit2,
+  GitPullRequest,
+  Network,
+  Route,
+  ScrollText,
+} from "lucide-react";
 import ArchitectureCanvas from "@/components/architecture/ArchitectureCanvas";
 import { latestByCapability } from "@/lib/specs/history";
 import { relativeTime } from "@/lib/specs/relative-time";
-import { resolveViewerLinks } from "@/lib/repo/viewers";
+import {
+  fetchViewerOverview,
+  manifestOverview,
+  resolveViewerLinks,
+  type ViewerOverview,
+} from "@/lib/repo/viewers";
 import { useAnalysis } from "@/store/use-analysis-store";
 import type { RepoManifestPr } from "@/types/repo-manifest";
 import type { SpecHistoryEvent } from "@/types/specs";
@@ -52,12 +64,31 @@ export default function RepoHub() {
   const specs = useAnalysis((s) => s.transformedData?.specs);
   const repoViewers = useAnalysis((s) => s.repoViewers);
 
-  // Sibling repos on this host (viewers.json) — the repo switcher. Only
-  // rendered when the host actually serves more than one repo.
+  // Every integrated repo on this host (viewers.json) — the front-page
+  // PORTFOLIO. The current repo's overview comes from its own manifest;
+  // each sibling's from its viewer's manifest (fetched cross-path, graceful
+  // when unreachable). Hidden entirely on single-repo hosts.
   const viewerLinks = useMemo(
     () => resolveViewerLinks(repoViewers, window.location.pathname),
     [repoViewers],
   );
+  const [siblingOverviews, setSiblingOverviews] = useState<
+    Record<string, ViewerOverview | null>
+  >({});
+  useEffect(() => {
+    let cancelled = false;
+    for (const v of viewerLinks) {
+      if (v.active || siblingOverviews[v.href] !== undefined) continue;
+      void fetchViewerOverview(v.href).then((ov) => {
+        if (!cancelled)
+          setSiblingOverviews((prev) => ({ ...prev, [v.href]: ov }));
+      });
+    }
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewerLinks]);
 
   const prs = useMemo(() => {
     const list = manifest?.prs ?? [];
@@ -104,42 +135,12 @@ export default function RepoHub() {
           className="animate-fade-in pt-16 pb-10 sm:pt-24"
           style={{ animationDelay: "0ms" }}
         >
-          <div className="mb-4 flex items-baseline gap-3">
-            <p
-              className="font-mono text-[11px] tracking-[0.22em] uppercase"
-              style={{ color: "var(--bpmn-text-dim)" }}
-            >
-              Repository
-            </p>
-            {/* Repo switcher — every repo viewer on this host; the active one
-                is a quiet label, siblings are links. Hidden on single-repo
-                hosts (viewers.json absent or one entry). */}
-            {viewerLinks.length > 1 && (
-              <span className="ml-auto flex items-center gap-3 font-mono text-[11px]">
-                {viewerLinks.map((v) =>
-                  v.active ? (
-                    <span
-                      key={v.href}
-                      className="tracking-wide"
-                      style={{ color: "var(--bpmn-text)" }}
-                    >
-                      {v.name}
-                    </span>
-                  ) : (
-                    <a
-                      key={v.href}
-                      href={v.href}
-                      className="tracking-wide transition-colors hover:underline"
-                      style={{ color: "var(--bpmn-cyan)" }}
-                      title={`Switch to ${v.name}`}
-                    >
-                      {v.name} ↗
-                    </a>
-                  ),
-                )}
-              </span>
-            )}
-          </div>
+          <p
+            className="mb-4 font-mono text-[11px] tracking-[0.22em] uppercase"
+            style={{ color: "var(--bpmn-text-dim)" }}
+          >
+            Repository
+          </p>
           <h1
             className="text-[40px] leading-[1.05] font-semibold sm:text-[56px]"
             style={{
@@ -182,10 +183,36 @@ export default function RepoHub() {
           </div>
         </header>
 
+        {/* ── Repositories — the portfolio of every integrated repo ────── */}
+        {viewerLinks.length > 1 && (
+          <Section
+            index={1}
+            icon={FolderGit2}
+            label="Repositories"
+            caption="Every system on this platform — each with its own architecture, specifications, and analyzed pull requests."
+          >
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              {viewerLinks.map((v) => (
+                <RepoCard
+                  key={v.href}
+                  name={v.name}
+                  href={v.href}
+                  active={v.active}
+                  overview={
+                    v.active
+                      ? manifestOverview(manifest as unknown)
+                      : (siblingOverviews[v.href] ?? null)
+                  }
+                />
+              ))}
+            </div>
+          </Section>
+        )}
+
         {/* ── Architecture — the anchor ────────────────────────────────── */}
         {architecture && nodeCount > 0 && (
           <Section
-            index={1}
+            index={2}
             icon={Network}
             label="Architecture"
             action={{ to: "/architecture", text: "Open full view" }}
@@ -214,7 +241,7 @@ export default function RepoHub() {
         {/* ── Living specifications ────────────────────────────────────── */}
         {capCount > 0 && (
           <Section
-            index={2}
+            index={3}
             icon={ScrollText}
             label="Living specifications"
             action={{ to: "/specs", text: `View all ${capCount}` }}
@@ -275,7 +302,7 @@ export default function RepoHub() {
 
         {/* ── Pull requests ────────────────────────────────────────────── */}
         <Section
-          index={3}
+          index={4}
           icon={GitPullRequest}
           label="Pull requests"
           caption="Each analysis is a self-contained walk through what the change actually does."
@@ -380,6 +407,136 @@ function Section({
       )}
       {children}
     </section>
+  );
+}
+
+/** One integrated repo's overview card. The card the user is ALREADY viewing
+ *  is a quiet non-link (tagged); siblings are whole-card links carrying their
+ *  real numbers; a sibling whose manifest can't be read from here degrades to
+ *  an open-only card — always a way in, never an error. */
+function RepoCard({
+  name,
+  href,
+  active,
+  overview,
+}: {
+  name: string;
+  href: string;
+  active: boolean;
+  overview: ViewerOverview | null;
+}) {
+  const meta = overview
+    ? ([
+        `${overview.components} components`,
+        `${overview.capabilities} capabilities`,
+        `${overview.prs} pull request${overview.prs === 1 ? "" : "s"}`,
+        overview.generatedAt && `updated ${relativeTime(overview.generatedAt)}`,
+      ].filter(Boolean) as string[])
+    : [];
+
+  const body = (
+    <>
+      <div className="flex items-center gap-3">
+        <span
+          className="text-[19px] font-semibold"
+          style={{
+            fontFamily: "var(--bpmn-font-display)",
+            color: "var(--bpmn-text)",
+            letterSpacing: "-0.01em",
+          }}
+        >
+          {name}
+        </span>
+        {active ? (
+          <span
+            className="ml-auto rounded px-1.5 py-0.5 font-mono text-[9.5px] tracking-wider uppercase"
+            style={{
+              color: "var(--bpmn-text-dim)",
+              border: "1px solid var(--bpmn-border-soft)",
+            }}
+          >
+            Viewing
+          </span>
+        ) : (
+          <ArrowRight
+            className="ml-auto h-4 w-4 shrink-0 opacity-40 transition-all group-hover:translate-x-0.5 group-hover:opacity-80"
+            style={{ color: "var(--bpmn-cyan)" }}
+          />
+        )}
+      </div>
+      {overview && (
+        <>
+          <p
+            className="mt-1 font-mono text-[11px]"
+            style={{ color: "var(--bpmn-text-dim)" }}
+          >
+            {overview.repo}
+          </p>
+          <p
+            className="mt-3 flex flex-wrap gap-x-2 gap-y-0.5 font-mono text-[11.5px]"
+            style={{ color: "var(--bpmn-text-muted)" }}
+          >
+            {meta.map((m, i) => (
+              <span key={m} className="flex items-center gap-2">
+                {i > 0 && <span aria-hidden style={{ opacity: 0.45 }}>·</span>}
+                {m}
+              </span>
+            ))}
+          </p>
+          {overview.latestPr && (
+            <p
+              className="mt-2 line-clamp-1 text-[12.5px]"
+              style={{
+                fontFamily: "var(--reading-font)",
+                color: "var(--bpmn-text-muted)",
+              }}
+              title={overview.latestPr.title}
+            >
+              {overview.latestPr.number != null && (
+                <span
+                  className="mr-1.5 font-mono text-[11px]"
+                  style={{ color: "var(--bpmn-text-dim)" }}
+                >
+                  #{overview.latestPr.number}
+                </span>
+              )}
+              {overview.latestPr.title}
+            </p>
+          )}
+        </>
+      )}
+      {!overview && !active && (
+        <p
+          className="mt-2 font-mono text-[11px]"
+          style={{ color: "var(--bpmn-text-dim)" }}
+        >
+          Open to see its architecture, specs and pull requests.
+        </p>
+      )}
+    </>
+  );
+
+  const cardStyle: React.CSSProperties = {
+    borderColor: active ? "var(--bpmn-border-em)" : "var(--bpmn-border-soft)",
+    background: "var(--bpmn-surface-soft)",
+  };
+
+  if (active) {
+    return (
+      <div className="rounded-xl border px-5 py-4" style={cardStyle}>
+        {body}
+      </div>
+    );
+  }
+  return (
+    <a
+      href={href}
+      className="group block rounded-xl border px-5 py-4 transition-colors hover:border-[var(--bpmn-border-em)]"
+      style={cardStyle}
+      title={`Open ${name}`}
+    >
+      {body}
+    </a>
   );
 }
 
