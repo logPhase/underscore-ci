@@ -51,31 +51,20 @@ inputs:
     default: 'off'
   enrichment:
     description: >-
-      Analyzer-side enrichment ('on' | 'off'). 'off' runs a structural-only
-      report: no BPMN, PR overview, journey knowledge, specs, grouping or
-      architecture — one switch for all of them, since several are driven by the
-      CLI itself and have no individual gate. The `review` input is INDEPENDENT:
-      `enrichment: off` + `review: on` posts the code review and nothing else,
-      which is the cheapest useful configuration.
-    required: false
-    default: 'on'
-  flows:
-    description: >-
-      BPMN business-flow diagrams ('on' | 'off'). 'on' (default): the analyzer
-      runs a synthesis pre-pass plus ONE agent session per journey, so a
-      10-journey PR is 11+ sessions — by far the most expensive part of a run.
-      'off': journeys still appear, without diagrams. Turn it off when you only
-      want the code review or the structural report.
+      Analyzer-side enrichment ('on' | 'off'). 'off' gives a structural-only
+      report — no BPMN, PR overview, journey knowledge, specs, grouping or
+      architecture. One switch for all of them, since several are driven by the
+      CLI and have no individual gate. Independent of `review`, so
+      `enrichment: off` + `review: on` posts the code review and nothing else.
     required: false
     default: 'on'
   review:
     description: >-
-      General code review — the raw PR diff reviewed for correctness on its
-      own terms (no institutional-knowledge grounding), posted as ONE PR
-      comment (not inline, no review API). 'off' (default): skipped, zero
-      agent spend. 'on': runs in pr mode when INTENT_DRIFT_TOKEN is set;
-      requires a dedicated agent run per unique diff. Opt-in until its
-      precision is measured.
+      General code review ('on' | 'off') — the raw PR diff reviewed for
+      correctness on its own terms (no institutional-knowledge grounding),
+      posted as ONE PR comment. 'off' (default) spends nothing; 'on' runs in pr
+      mode when INTENT_DRIFT_TOKEN is set and costs one agent run per unique
+      diff.
     required: false
     default: 'off'
   reports-repo:
@@ -198,7 +187,6 @@ runs:
         UNDERSCORE_IMAGE: ${{ inputs.image }}
         MODE: ${{ inputs.mode }}
         FINDINGS: ${{ inputs.findings }}
-        FLOWS: ${{ inputs.flows }}
         ENRICHMENT: ${{ inputs.enrichment }}
         REVIEW: ${{ inputs.review }}
         VIEWER_URL: ${{ inputs.viewer-url }}
@@ -254,7 +242,6 @@ runs:
           -e BPMN_MAX_JOURNEYS \
           -e MODE \
           -e FINDINGS \
-          -e FLOWS \
           -e ENRICHMENT \
           -e REVIEW \
           -e VIEWER_URL \

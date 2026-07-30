@@ -53,14 +53,6 @@ on:
         type: string
         required: false
         default: 'on'
-      flows:
-        description: >-
-          BPMN business-flow diagrams ('on' | 'off'). Default 'on'. Off is worth
-          it when you only want the code review: flows are a synthesis pre-pass
-          plus one agent session per journey, i.e. the bulk of a run's spend.
-        type: string
-        required: false
-        default: 'on'
       review:
         description: >-
           General code review ('on' | 'off') — the PR diff reviewed for
@@ -99,10 +91,7 @@ jobs:
           sln: ${{ inputs.sln }}
           lang: ${{ inputs.lang }}
           review: ${{ inputs.review }}
-          flows: ${{ inputs.flows }}
           enrichment: ${{ inputs.enrichment }}
-          # Empty falls back to action.yml's pinned default, so callers that
-          # don't set it are unaffected.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           INTENT_DRIFT_URL: ${{ secrets.INTENT_DRIFT_URL }}
