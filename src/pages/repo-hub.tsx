@@ -1,16 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import {
-  ArrowRight,
-  FolderGit2,
-  GitPullRequest,
-  Network,
-  Route,
-  ScrollText,
-} from "lucide-react";
+import { ArrowRight, ChevronsUpDown } from "lucide-react";
 import ArchitectureCanvas from "@/components/architecture/ArchitectureCanvas";
-import { latestByCapability } from "@/lib/specs/history";
+import { Markdown } from "@/components/ui/Markdown";
+import { splitSpecBlocks } from "@/lib/specs/ears";
+import { latestByCapability, previousVersionOf, removedCapabilities } from "@/lib/specs/history";
+import { removedRequirementCount, touchedRequirements, type ReqChange } from "@/lib/specs/req-diff";
 import { relativeTime } from "@/lib/specs/relative-time";
+import {
+  buildActivity,
+  classifyEars,
+  groupPrs,
+  heroStats,
+  liveRequirementCount,
+  revisedThisWeek,
+  weeklyCells,
+} from "@/lib/repo/hub-data";
 import {
   fetchViewerOverview,
   manifestOverview,
@@ -20,420 +25,727 @@ import {
   type ViewerOverview,
 } from "@/lib/repo/viewers";
 import { useAnalysis } from "@/store/use-analysis-store";
-import type { RepoManifestPr } from "@/types/repo-manifest";
+import type { ArchNodeKind } from "@/types/architecture";
 import type { SpecHistoryEvent } from "@/types/specs";
 
 /**
- * RepoHub — the repository's HOME. Where a per-PR report opens onto one
- * pull request, the hub opens onto the whole repo: the GLOBAL system
- * architecture as the anchor (container first), the living specifications
- * beneath it, and every analyzed pull request indexed below. Rendered at '/'
- * when a repo-manifest.json is served (see EntryLoader / boot()).
- *
- * Design: restraint over decoration. One accent (cyan), a strong display
- * hierarchy (Space Grotesk) with mono for metadata, wide vertical rhythm, and
- * a single quiet entrance. The global artifacts are shown here AND reachable
- * full-screen via the shell routes — the hub feeds those same pages.
+ * RepoHub — the repository front page, per the founder's UX redesign
+ * ("Front Page - Redesign"): sticky top bar (mark + repo switcher + section
+ * nav), stat-strip hero, the arc42 building-block view (the REAL interactive
+ * canvas inside the redesigned shell), living specifications (capability
+ * activity grid + EARS requirement cards with revision badges + revisions
+ * rail), and the pull-request index with search and an activity rail. Every
+ * number is derived from the live manifest — no decorative data. Sections
+ * degrade away when their payload is absent.
  */
 
+// ── design tokens (from the redesign export) ─────────────────────────────
+const T = {
+  bg: "#090B12",
+  panel: "#10131C",
+  panel2: "#151926",
+  line: "#1A2030",
+  lineEm: "#232B3B",
+  lineHi: "#2C3444",
+  text: "#E9ECF4",
+  muted: "#9AA3B5",
+  dim: "#5F6879",
+  cyan: "#7DD3FC",
+  green: "#4ADE80",
+  amber: "#FBBF24",
+  rose: "#F87171",
+  violet: "#C4B5FD",
+  sans: "'Space Grotesk', system-ui, sans-serif",
+  mono: "'JetBrains Mono', monospace",
+  serif: "var(--reading-font, Georgia, serif)",
+};
+
+const OP_COLOR: Record<string, string> = {
+  created: T.green,
+  updated: T.cyan,
+  modified: T.cyan,
+  deleted: T.rose,
+};
+
+const KIND_COLOR: Partial<Record<ArchNodeKind, string>> = {
+  component: "#8b9fe8",
+  service: "#5ec6d6",
+  datastore: "#63d9a6",
+  topic: "#c39ae0",
+  external: "#9aa7c7",
+};
+
 function shortRepo(repo: string): string {
-  const tail = repo.split("/").pop() || repo;
-  return tail.replace(/\.git$/, "");
+  return (repo.split("/").pop() || repo).replace(/\.git$/, "");
 }
 
-/** "license-plate-identifier" -> "License plate identifier". */
-function capabilityTitle(slug: string): string {
+function capTitle(slug: string): string {
   const words = slug.replace(/[-_]+/g, " ").trim();
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-const OP_DOT: Record<string, string> = {
-  created: "#10b981",
-  updated: "#38bdf8",
-  modified: "#38bdf8",
-  deleted: "#f87171",
-};
-
-const STATE_META: Record<string, { dot: string; label: string }> = {
-  merged: { dot: "#a78bfa", label: "merged" },
-  open: { dot: "#10b981", label: "open" },
-  closed: { dot: "#f87171", label: "closed" },
-};
+const mono = (size: number, color: string): React.CSSProperties => ({
+  fontFamily: T.mono, fontSize: size, color,
+});
 
 export default function RepoHub() {
   const manifest = useAnalysis((s) => s.repoManifest);
   const architecture = useAnalysis((s) => s.transformedData?.architecture);
   const specs = useAnalysis((s) => s.transformedData?.specs);
   const repoViewers = useAnalysis((s) => s.repoViewers);
+  const now = useMemo(() => Date.now(), []);
 
-  // Every integrated repo on this host (viewers.json) — the front-page
-  // PORTFOLIO. The current repo's overview comes from its own manifest;
-  // each sibling's from its viewer's manifest (fetched cross-path, graceful
-  // when unreachable). Hidden entirely on single-repo hosts.
-  const viewerLinks = useMemo(
+  const allLinks = useMemo(
+    () => resolveViewerLinks(repoViewers, window.location.pathname),
+    [repoViewers],
+  );
+  const repos = useMemo(() => repoEntries(allLinks), [allLinks]);
+  const portal = useMemo(() => portalEntry(allLinks), [allLinks]);
+
+  const prs = useMemo(() => manifest?.prs ?? [], [manifest]);
+  const stats = useMemo(
+    () => heroStats(architecture, specs, prs),
+    [architecture, specs, prs],
+  );
+
+  // specs derivations
+  const history = useMemo(() => specs?.history ?? [], [specs]);
+  const latest = useMemo(() => latestByCapability(history), [history]);
+  const orderedSpecs = useMemo(
     () =>
-      repoEntries(resolveViewerLinks(repoViewers, window.location.pathname)),
-    [repoViewers],
-  );
-  const portal = useMemo(
-    () => portalEntry(resolveViewerLinks(repoViewers, window.location.pathname)),
-    [repoViewers],
-  );
-  const [siblingOverviews, setSiblingOverviews] = useState<
-    Record<string, ViewerOverview | null>
-  >({});
-  useEffect(() => {
-    let cancelled = false;
-    for (const v of viewerLinks) {
-      if (v.active || siblingOverviews[v.href] !== undefined) continue;
-      void fetchViewerOverview(v.href).then((ov) => {
-        if (!cancelled)
-          setSiblingOverviews((prev) => ({ ...prev, [v.href]: ov }));
-      });
-    }
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewerLinks]);
-
-  const prs = useMemo(() => {
-    const list = manifest?.prs ?? [];
-    return [...list].sort((a, b) =>
-      (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""),
-    );
-  }, [manifest]);
-
-  const latest = useMemo(
-    () => latestByCapability(specs?.history ?? []),
-    [specs],
-  );
-  const capabilities = useMemo(() => {
-    const items = specs?.specs ?? [];
-    return [...items].sort((a, b) =>
-      (latest.get(b.capability)?.at ?? "").localeCompare(
-        latest.get(a.capability)?.at ?? "",
+      [...(specs?.specs ?? [])].sort((a, b) =>
+        (latest.get(b.capability)?.at ?? "").localeCompare(
+          latest.get(a.capability)?.at ?? "",
+        ),
       ),
-    );
-  }, [specs, latest]);
+    [specs, latest],
+  );
+  const superseded = useMemo(
+    () => removedCapabilities(history, (specs?.specs ?? []).map((s) => s.capability)),
+    [history, specs],
+  );
+  const [selectedCap, setSelectedCap] = useState<string | null>(null);
+  const activeCap = selectedCap ?? orderedSpecs[0]?.capability ?? null;
+  const activeSpec = orderedSpecs.find((s) => s.capability === activeCap) ?? null;
+
+  /** Diff of the active capability's latest revision (best-effort — needs the
+   *  previous version's content in the baked bundle). */
+  const activeDiff = useMemo(() => {
+    if (!activeSpec) return { touched: new Map<number, ReqChange>(), removed: 0 };
+    const last = latest.get(activeSpec.capability);
+    const prevEvent = last ? previousVersionOf(history, last.version_id) : null;
+    const prevContent = prevEvent
+      ? (specs?.versions?.[prevEvent.version_id]?.content ?? null)
+      : null;
+    return {
+      touched: touchedRequirements(prevContent, activeSpec.content ?? ""),
+      removed: removedRequirementCount(prevContent, activeSpec.content ?? ""),
+    };
+  }, [activeSpec, latest, history, specs]);
+
+  const [prQuery, setPrQuery] = useState("");
+  const prGroups = useMemo(() => groupPrs(prs, prQuery, now), [prs, prQuery, now]);
+  const activity = useMemo(() => buildActivity(prs, history, 10), [prs, history]);
 
   if (!manifest) return null;
-
-  const nodeCount = architecture?.nodes.length ?? 0;
-  const layerCount = architecture?.layers.length ?? 0;
-  const edgeCount = architecture?.edges.length ?? 0;
-  const capCount = capabilities.length;
-
-  const meta = [
-    nodeCount > 0 && `${nodeCount} components`,
-    capCount > 0 && `${capCount} capabilities`,
-    `${prs.length} pull request${prs.length === 1 ? "" : "s"}`,
-    manifest.generatedAt && `updated ${relativeTime(manifest.generatedAt)}`,
-  ].filter(Boolean) as string[];
+  const name = shortRepo(manifest.repo).toUpperCase();
 
   return (
     <div
       className="h-screen w-screen overflow-y-auto"
-      style={{ background: "var(--page-bg)" }}
+      style={{ background: T.bg, color: T.text, fontFamily: T.sans }}
     >
-      <div className="mx-auto w-full max-w-[1080px] px-6 pb-24 sm:px-10">
-        {/* ── Hero ─────────────────────────────────────────────────────── */}
-        <header
-          className="animate-fade-in pt-16 pb-10 sm:pt-24"
-          style={{ animationDelay: "0ms" }}
-        >
-          <div className="mb-4 flex items-baseline gap-3">
-            <p
-              className="font-mono text-[11px] tracking-[0.22em] uppercase"
-              style={{ color: "var(--bpmn-text-dim)" }}
-            >
-              Repository
+      <TopBar name={name} repos={repos} portalHref={portal?.href}
+              hasArch={!!architecture} hasSpecs={!!specs} />
+
+      {/* ── Hero ─────────────────────────────────────────────────────── */}
+      <div style={{ borderBottom: `1px solid ${T.line}`, background: "#0B0E17" }}>
+        <div className="mx-auto flex max-w-[1240px] flex-wrap items-end gap-8 px-8 pt-10 pb-8">
+          <div className="min-w-[280px] flex-1">
+            <p style={{ ...mono(10.5, T.dim), letterSpacing: "0.18em",
+                        textTransform: "uppercase" }}>
+              Repository · {manifest.repo}
             </p>
-            {/* Level-0 back-link — present when the host has a portal page. */}
-            {portal && (
-              <a
-                href={portal.href}
-                className="ml-auto font-mono text-[11.5px] transition-colors hover:underline"
-                style={{ color: "var(--bpmn-text-muted)" }}
-              >
-                ← All repositories
-              </a>
-            )}
+            <h1 className="mt-2 text-[38px] leading-none font-bold"
+                style={{ letterSpacing: "-0.02em" }}>
+              {name}
+            </h1>
+            <p className="mt-3 max-w-md text-[14.5px] leading-relaxed"
+               style={{ fontFamily: T.serif, color: T.muted }}>
+              The system's architecture and living specifications, with every
+              pull request traced end to end.
+            </p>
           </div>
-          <h1
-            className="text-[40px] leading-[1.05] font-semibold sm:text-[56px]"
-            style={{
-              fontFamily: "var(--bpmn-font-display)",
-              color: "var(--bpmn-text)",
-              letterSpacing: "-0.02em",
-            }}
-          >
-            {shortRepo(manifest.repo)}
-          </h1>
-          <p
-            className="mt-4 max-w-xl text-[15px] leading-relaxed"
-            style={{
-              fontFamily: "var(--reading-font)",
-              color: "var(--bpmn-text-muted)",
-            }}
-          >
-            The system's architecture and living specifications, with every
-            analyzed pull request traced end to end.
-          </p>
-          <div
-            className="mt-6 flex flex-wrap items-center gap-x-2.5 gap-y-1 font-mono text-[12px]"
-            style={{ color: "var(--bpmn-text-dim)" }}
-          >
-            <a
-              href={manifest.repoUrl ?? undefined}
-              target={manifest.repoUrl ? "_blank" : undefined}
-              rel="noreferrer"
-              className={manifest.repoUrl ? "hover:underline" : ""}
-              style={{ color: "var(--bpmn-text-muted)", pointerEvents: manifest.repoUrl ? "auto" : "none" }}
-            >
-              {manifest.repo}
-            </a>
-            {meta.map((m) => (
-              <span key={m} className="flex items-center gap-2.5">
-                <span aria-hidden style={{ opacity: 0.5 }}>·</span>
-                {m}
-              </span>
+          <div className="flex flex-wrap items-end gap-10 pb-1">
+            {stats.map((s) => (
+              <div key={s.label}>
+                <div className="text-[26px] font-semibold leading-none">{s.value}</div>
+                <div className="mt-1.5"
+                     style={{ ...mono(9.5, T.dim), letterSpacing: "0.14em",
+                              textTransform: "uppercase" }}>
+                  {s.label}
+                </div>
+              </div>
             ))}
           </div>
-        </header>
+        </div>
+      </div>
 
-        {/* ── Repositories — the portfolio of every integrated repo ────── */}
-        {viewerLinks.length > 1 && (
-          <Section
-            index={1}
-            icon={FolderGit2}
-            label="Repositories"
-            caption="Every system on this platform — each with its own architecture, specifications, and analyzed pull requests."
-          >
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              {viewerLinks.map((v) => (
-                <RepoCard
-                  key={v.href}
-                  name={v.name}
-                  href={v.href}
-                  active={v.active}
-                  overview={
-                    v.active
-                      ? manifestOverview(manifest as unknown)
-                      : (siblingOverviews[v.href] ?? null)
-                  }
-                />
-              ))}
+      {/* ── Architecture — arc42 building-block view ─────────────────── */}
+      {architecture && architecture.nodes.length > 0 && (
+        <ArchSection architecture={architecture} name={name}
+                     weekNote={weekNote(prs, history, now)} />
+      )}
+
+      <div className="mx-auto max-w-[1240px] px-8">
+        {/* ── Living specifications ──────────────────────────────────── */}
+        {specs && orderedSpecs.length > 0 && (
+          <section className="mt-14">
+            <h2 className="text-[20px] font-semibold">Living specifications</h2>
+            <div className="mt-1 flex flex-wrap items-end gap-3">
+              <p className="max-w-lg text-[13.5px] leading-relaxed"
+                 style={{ fontFamily: T.serif, color: T.muted }}>
+                The behaviour this system guarantees, written as EARS
+                requirements and revised by the analyzer whenever the code
+                moves.
+              </p>
+              <Link to="/specs" className="group ml-auto flex items-center gap-1.5"
+                    style={mono(11.5, T.cyan)}>
+                Open specs
+                <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+              </Link>
             </div>
-          </Section>
-        )}
 
-        {/* ── Architecture — the anchor ────────────────────────────────── */}
-        {architecture && nodeCount > 0 && (
-          <Section
-            index={2}
-            icon={Network}
-            label="Architecture"
-            action={{ to: "/architecture", text: "Open full view" }}
-            caption={`${nodeCount} components across ${layerCount} layer${layerCount === 1 ? "" : "s"}, ${edgeCount} integration${edgeCount === 1 ? "" : "s"}.`}
-          >
-            <div
-              className="overflow-hidden rounded-xl border"
-              style={{
-                borderColor: "var(--bpmn-border-soft)",
-                background: "var(--bpmn-canvas, var(--bpmn-surface-soft))",
-                height: 460,
-              }}
-            >
-              <ArchitectureCanvas
-                nodes={architecture.nodes.filter(
-                  (n) => n.kind !== "person" && n.kind !== "system",
-                )}
-                edges={architecture.edges}
-                layers={architecture.layers}
-                storageKey={`${manifest.repo}:hub`}
-              />
+            <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1">
+              <Stat n={orderedSpecs.length} label="capabilities" />
+              <Stat n={liveRequirementCount(specs)} label="live requirements" />
+              <Stat n={revisedThisWeek(history, now)} label="revised this week"
+                    color={T.cyan} />
+              {superseded.length > 0 && (
+                <Stat n={superseded.length} label="superseded" color={T.rose} />
+              )}
             </div>
-          </Section>
-        )}
 
-        {/* ── Living specifications ────────────────────────────────────── */}
-        {capCount > 0 && (
-          <Section
-            index={3}
-            icon={ScrollText}
-            label="Living specifications"
-            action={{ to: "/specs", text: `View all ${capCount}` }}
-            caption="The behavioral contract the system upholds — maintained as the code evolves."
-          >
-            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-              {capabilities.slice(0, 8).map((spec) => {
-                const last = latest.get(spec.capability);
+            {/* capability grid */}
+            <div className="mt-5 overflow-hidden rounded-xl border"
+                 style={{ borderColor: T.line, background: T.panel }}>
+              {orderedSpecs.map((sp) => {
+                const last = latest.get(sp.capability);
+                const cells = weeklyCells(
+                  history.filter((e) => e.capability === sp.capability), 13, now);
+                const reqCount = splitSpecBlocks(sp.content)
+                  .filter((b) => b.kind === "req").length;
+                const active = sp.capability === activeCap;
                 return (
-                  <Link
-                    key={spec.capability}
-                    to="/specs"
-                    className="group flex items-center gap-3 rounded-lg border px-4 py-3 transition-colors"
+                  <button
+                    key={sp.capability}
+                    type="button"
+                    onClick={() => setSelectedCap(sp.capability)}
+                    className="flex w-full cursor-pointer items-center gap-4 border-b px-4 py-2.5 text-left transition-colors"
                     style={{
-                      borderColor: "var(--bpmn-border-soft)",
-                      background: "var(--bpmn-surface-soft)",
+                      borderColor: T.line,
+                      background: active ? T.panel2 : "transparent",
                     }}
                   >
-                    <span
-                      aria-hidden
-                      className="h-2 w-2 shrink-0 rounded-full"
-                      style={{
-                        background: last
-                          ? (OP_DOT[last.operation] ?? "var(--bpmn-text-dim)")
-                          : "var(--bpmn-border-em)",
-                      }}
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span
-                        className="line-clamp-1 text-[13.5px]"
-                        style={{
-                          fontFamily: "var(--reading-font)",
-                          color: "var(--bpmn-text)",
-                          fontWeight: 500,
-                        }}
-                      >
-                        {capabilityTitle(spec.capability)}
+                    <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full"
+                          style={{ background: last
+                            ? (OP_COLOR[last.operation] ?? T.dim) : T.lineEm }} />
+                    <span className="min-w-0 w-[220px] shrink-0">
+                      <span className="block truncate text-[13px] font-medium">
+                        {capTitle(sp.capability)}
                       </span>
                       {last && (
-                        <span
-                          className="mt-0.5 block font-mono text-[10.5px]"
-                          style={{ color: "var(--bpmn-text-dim)" }}
-                        >
-                          {opLabel(last)} {relativeTime(last.at)}
+                        <span style={mono(10, T.dim)}>
+                          {last.operation === "deleted" ? "superseded" : last.operation}{" "}
+                          {relativeTime(last.at)}
                         </span>
                       )}
                     </span>
-                    <ArrowRight
-                      className="h-3.5 w-3.5 shrink-0 opacity-0 transition-opacity group-hover:opacity-60"
-                      style={{ color: "var(--bpmn-text-muted)" }}
-                    />
-                  </Link>
+                    <span className="flex flex-1 items-center gap-[5px]">
+                      {cells.map((c, i) => (
+                        <span key={i} aria-hidden
+                              className="h-[11px] w-[11px] rounded-[3px]"
+                              style={{
+                                background: c.op
+                                  ? `color-mix(in srgb, ${OP_COLOR[c.op] ?? T.cyan} 28%, ${T.panel})`
+                                  : T.panel2,
+                                border: `1px solid ${c.op
+                                  ? (OP_COLOR[c.op] ?? T.cyan) : T.line}`,
+                              }} />
+                      ))}
+                    </span>
+                    <span className="shrink-0" style={mono(11, T.muted)}>
+                      {reqCount} req
+                    </span>
+                  </button>
                 );
               })}
+              {superseded.map((e) => (
+                <div key={e.version_id}
+                     className="flex w-full items-center gap-4 px-4 py-2.5"
+                     style={{ opacity: 0.6 }}>
+                  <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full"
+                        style={{ background: T.rose }} />
+                  <span className="text-[13px] line-through" style={{ color: T.dim }}>
+                    {capTitle(e.capability)}
+                  </span>
+                  <span style={mono(10, T.rose)}>superseded {relativeTime(e.at)}</span>
+                </div>
+              ))}
             </div>
-          </Section>
+
+            {/* selected capability — requirirement cards + revisions rail */}
+            {activeSpec && (
+              <CapabilityDetail
+                capability={activeSpec.capability}
+                content={activeSpec.content ?? ""}
+                last={latest.get(activeSpec.capability)}
+                touched={activeDiff.touched}
+                removed={activeDiff.removed}
+                events={history.filter((e) => e.capability === activeSpec.capability)}
+              />
+            )}
+          </section>
         )}
 
-        {/* ── Pull requests ────────────────────────────────────────────── */}
-        <Section
-          index={4}
-          icon={GitPullRequest}
-          label="Pull requests"
-          caption="Each analysis is a self-contained walk through what the change actually does."
-        >
-          {prs.length === 0 ? (
-            <p
-              className="rounded-lg border px-4 py-6 text-center font-mono text-[12px]"
-              style={{
-                borderColor: "var(--bpmn-border-soft)",
-                color: "var(--bpmn-text-dim)",
-              }}
-            >
-              No pull requests analyzed yet.
-            </p>
-          ) : (
-            <ul className="flex flex-col gap-2">
-              {prs.map((pr, i) => (
-                <PrRow key={pr.url || i} pr={pr} />
+        {/* ── Pull requests + activity ───────────────────────────────── */}
+        <section className="mt-14 pb-24">
+          <div className="flex flex-wrap items-baseline gap-3">
+            <h2 className="text-[20px] font-semibold">Pull requests</h2>
+            <span style={mono(11, T.dim)}>
+              {prs.length} analyzed · newest first
+            </span>
+          </div>
+          <div className="mt-4 flex flex-col gap-10 lg:flex-row">
+            <div className="min-w-0 flex-1">
+              <input
+                value={prQuery}
+                onChange={(e) => setPrQuery(e.target.value)}
+                placeholder="Search pull requests…"
+                className="w-full rounded-lg border px-3.5 py-2 outline-none"
+                style={{ ...mono(12.5, T.text), background: T.panel,
+                         borderColor: T.lineEm }}
+              />
+              {prGroups.length === 0 && (
+                <p className="mt-6 text-center" style={mono(12, T.dim)}>
+                  No pull requests match.
+                </p>
+              )}
+              {prGroups.map((g) => (
+                <div key={g.label} className="mt-5">
+                  <p style={{ ...mono(10, T.dim), letterSpacing: "0.16em",
+                              textTransform: "uppercase" }}>
+                    {g.label}
+                  </p>
+                  <ul className="mt-2 flex flex-col gap-1.5">
+                    {g.prs.map((pr, i) => (
+                      <li key={pr.url || i}>
+                        <a href={pr.url}
+                           className="group flex items-center gap-3.5 rounded-lg border px-4 py-2.5 transition-colors hover:border-[#2C3444]"
+                           style={{ borderColor: T.line, background: T.panel }}>
+                          {pr.number != null && (
+                            <span className="shrink-0 tabular-nums"
+                                  style={mono(11.5, T.dim)}>
+                              #{pr.number}
+                            </span>
+                          )}
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-[13.5px] font-medium">
+                              {pr.title}
+                            </span>
+                            {pr.summary && (
+                              <span className="block truncate text-[12px]"
+                                    style={{ fontFamily: T.serif, color: T.muted }}>
+                                {pr.summary}
+                              </span>
+                            )}
+                          </span>
+                          {pr.journeys != null && pr.journeys > 0 && (
+                            <span className="shrink-0" style={mono(10.5, T.dim)}>
+                              {pr.journeys} journey{pr.journeys === 1 ? "" : "s"}
+                            </span>
+                          )}
+                          {pr.author && (
+                            <span className="hidden shrink-0 sm:block"
+                                  style={mono(10.5, T.dim)}>
+                              {pr.author}
+                            </span>
+                          )}
+                          {pr.updatedAt && (
+                            <span className="shrink-0" style={mono(10.5, T.dim)}>
+                              {relativeTime(pr.updatedAt)}
+                            </span>
+                          )}
+                          <ArrowRight className="h-3.5 w-3.5 shrink-0 opacity-0 transition-all group-hover:translate-x-0.5 group-hover:opacity-60"
+                                      style={{ color: T.cyan }} />
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ))}
-            </ul>
-          )}
-        </Section>
+            </div>
 
-        <footer
-          className="mt-16 border-t pt-6 font-mono text-[11px]"
-          style={{
-            borderColor: "var(--bpmn-border-soft)",
-            color: "var(--bpmn-text-dim)",
-          }}
-        >
-          Generated by Underscore
-          {manifest.generatedAt && ` · ${relativeTime(manifest.generatedAt)}`}
-        </footer>
+            {activity.length > 0 && (
+              <aside className="w-full shrink-0 lg:w-[280px]">
+                <h3 className="text-[14px] font-semibold">Activity</h3>
+                <ul className="mt-3 flex flex-col gap-3.5 border-l pl-4"
+                    style={{ borderColor: T.line }}>
+                  {activity.map((a, i) => (
+                    <li key={i}>
+                      <p style={{ ...mono(9.5,
+                          a.kind === "specification" ? T.cyan : T.green),
+                          letterSpacing: "0.14em", textTransform: "uppercase" }}>
+                        {a.kind}
+                      </p>
+                      <p className="mt-0.5 line-clamp-2 text-[12.5px]"
+                         style={{ color: T.muted }}>
+                        {a.text}
+                      </p>
+                      <p style={mono(10, T.dim)}>{relativeTime(a.at)}</p>
+                    </li>
+                  ))}
+                </ul>
+              </aside>
+            )}
+          </div>
+        </section>
+      </div>
+
+      <footer className="mx-auto max-w-[1240px] border-t px-8 py-6"
+              style={{ borderColor: T.line, ...mono(11, T.dim) }}>
+        Generated by Underscore
+        {manifest.generatedAt && ` · ${relativeTime(manifest.generatedAt)}`}
+      </footer>
+    </div>
+  );
+}
+
+// ── top bar ──────────────────────────────────────────────────────────────
+
+function TopBar({ name, repos, portalHref, hasArch, hasSpecs }: {
+  name: string;
+  repos: { name: string; href: string; active: boolean }[];
+  portalHref?: string;
+  hasArch: boolean;
+  hasSpecs: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    window.addEventListener("click", close);
+    return () => window.removeEventListener("click", close);
+  }, [open]);
+
+  return (
+    <header className="sticky top-0 z-40 border-b backdrop-blur-md"
+            style={{ background: "rgba(9,11,18,0.86)", borderColor: T.line }}>
+      <div className="mx-auto flex h-14 max-w-[1240px] items-center gap-5 px-8">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-[22px] w-[22px] items-end justify-center rounded-md border"
+                style={{ background: T.panel2, borderColor: T.lineHi,
+                         ...mono(13, T.cyan), fontWeight: 600 }}>
+            <span style={{ transform: "translateY(-4px)" }}>_</span>
+          </span>
+          <span style={{ ...mono(11, T.dim), letterSpacing: "0.18em",
+                         textTransform: "uppercase" }}>
+            Underscore
+          </span>
+        </div>
+        <div className="h-5 w-px" style={{ background: T.lineEm }} />
+        {/* repo switcher */}
+        <div className="relative">
+          <button type="button"
+                  onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
+                  className="flex cursor-pointer items-center gap-2 rounded-lg border py-1 pr-2.5 pl-2"
+                  style={{ borderColor: T.lineEm, background: T.panel,
+                           color: T.text }}>
+            <span className="text-[13px] font-semibold">{name}</span>
+            {repos.length > 1 && (
+              <ChevronsUpDown className="h-3 w-3" style={{ color: T.dim }} />
+            )}
+          </button>
+          {open && repos.length > 1 && (
+            <div className="absolute top-9 left-0 z-50 w-56 overflow-hidden rounded-lg border shadow-xl"
+                 style={{ borderColor: T.lineEm, background: T.panel }}>
+              {repos.map((r) =>
+                r.active ? (
+                  <div key={r.href} className="flex items-center px-3 py-2"
+                       style={{ background: T.panel2 }}>
+                    <span className="text-[12.5px] font-semibold">{r.name}</span>
+                    <span className="ml-auto" style={mono(9, T.dim)}>VIEWING</span>
+                  </div>
+                ) : (
+                  <a key={r.href} href={r.href}
+                     className="block px-3 py-2 text-[12.5px] transition-colors hover:bg-[#151926]"
+                     style={{ color: T.text }}>
+                    {r.name}
+                  </a>
+                ),
+              )}
+              {portalHref && (
+                <a href={portalHref}
+                   className="block border-t px-3 py-2 transition-colors hover:bg-[#151926]"
+                   style={{ borderColor: T.line, ...mono(11, T.cyan) }}>
+                  All repositories →
+                </a>
+              )}
+            </div>
+          )}
+        </div>
+        <nav className="ml-auto flex items-center gap-1">
+          {hasArch && <NavItem to="/architecture" label="Architecture" />}
+          {hasSpecs && <NavItem to="/specs" label="Specs" />}
+        </nav>
+      </div>
+    </header>
+  );
+}
+
+const NavItem = ({ to, label }: { to: string; label: string }) => (
+  <Link to={to}
+        className="rounded-lg px-2.5 py-1.5 transition-colors hover:bg-[#151926]"
+        style={mono(11.5, T.muted)}>
+    {label}
+  </Link>
+);
+
+// ── architecture section ─────────────────────────────────────────────────
+
+function weekNote(prs: { updatedAt?: string }[],
+                  history: SpecHistoryEvent[], now: number): string | null {
+  const week = 7 * 24 * 60 * 60 * 1000;
+  const p = prs.filter((x) => x.updatedAt &&
+    now - Date.parse(x.updatedAt) < week).length;
+  const s = revisedThisWeek(history, now);
+  if (p === 0 && s === 0) return null;
+  const parts = [
+    p > 0 && `${p} pull request${p === 1 ? "" : "s"}`,
+    s > 0 && `${s} spec revision${s === 1 ? "" : "s"}`,
+  ].filter(Boolean);
+  return `${parts.join(" · ")} this week`;
+}
+
+function ArchSection({ architecture, name, weekNote }: {
+  architecture: NonNullable<ReturnType<() => import("@/types/architecture").ArchitecturePayload>>;
+  name: string;
+  weekNote: string | null;
+}) {
+  const [level, setLevel] = useState<"context" | "container">("container");
+  const container = useMemo(() => {
+    const cn = architecture.nodes.filter(
+      (n) => n.kind !== "person" && n.kind !== "system");
+    const ids = new Set(cn.map((n) => n.id));
+    return {
+      nodes: cn,
+      edges: architecture.edges.filter((e) => ids.has(e.from) && ids.has(e.to)),
+    };
+  }, [architecture]);
+  const hasContext = useMemo(
+    () => architecture.nodes.some((n) => n.kind === "person" || n.kind === "system"),
+    [architecture],
+  );
+  const legend = useMemo(() => {
+    const kinds = new Set(architecture.nodes.map((n) => n.kind));
+    return (Object.entries(KIND_COLOR) as [ArchNodeKind, string][])
+      .filter(([k]) => kinds.has(k));
+  }, [architecture]);
+
+  return (
+    <div style={{ borderBottom: `1px solid ${T.line}` }}>
+      <div className="mx-auto max-w-[1240px] px-8">
+        <div className="flex flex-wrap items-center gap-4 py-3">
+          <span style={{ ...mono(10.5, T.dim), letterSpacing: "0.16em",
+                         textTransform: "uppercase" }}>
+            arc42 §5 · Building block view
+          </span>
+          {hasContext && (
+            <div className="flex overflow-hidden rounded-lg border"
+                 style={{ borderColor: T.lineEm }}>
+              {([["container", "Level 1 · Building blocks"],
+                 ["context", "Context · Neighbours"]] as const).map(([k, label]) => (
+                <button key={k} type="button" onClick={() => setLevel(k)}
+                        className="cursor-pointer px-3 py-1.5 transition-colors"
+                        style={{ ...mono(10.5, level === k ? T.text : T.dim),
+                                 background: level === k ? T.panel2 : "transparent" }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+          <span className="ml-auto" />
+          {weekNote && (
+            <span className="rounded-full border px-3 py-1"
+                  style={{ borderColor: T.lineEm, ...mono(10.5, T.amber) }}>
+              ● {weekNote}
+            </span>
+          )}
+          <Link to="/architecture"
+                className="group flex items-center gap-1.5 rounded-lg border px-3 py-1.5"
+                style={{ borderColor: T.lineEm, ...mono(11, T.cyan) }}>
+            Open full architecture
+            <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+          </Link>
+        </div>
+      </div>
+      <div style={{ height: 520, background: "#0A0D15",
+                    borderTop: `1px solid ${T.line}` }}>
+        <ArchitectureCanvas
+          nodes={level === "container" ? container.nodes : architecture.nodes}
+          edges={level === "container" ? container.edges : architecture.edges}
+          layers={architecture.layers}
+          storageKey={`${name}:hub:${level}`}
+        />
+      </div>
+      <div className="mx-auto flex max-w-[1240px] flex-wrap items-center gap-4 px-8 py-2.5">
+        {legend.map(([kind, color]) => (
+          <span key={kind} className="flex items-center gap-1.5"
+                style={{ ...mono(9.5, T.dim), letterSpacing: "0.1em",
+                         textTransform: "uppercase" }}>
+            <span className="h-2 w-2 rounded-sm" style={{ background: color }} />
+            {kind === "datastore" ? "data store" : kind}
+          </span>
+        ))}
       </div>
     </div>
   );
 }
 
-function opLabel(e: SpecHistoryEvent): string {
-  if (e.operation === "deleted") return "superseded";
-  return e.operation;
-}
+// ── specs helpers ────────────────────────────────────────────────────────
 
-/** A section shell — number-prefixed label, optional right-aligned action, and
- *  a one-line caption, then the content. The shared vertical rhythm + quiet
- *  staggered entrance that gives the page its calm. */
-function Section({
-  index,
-  icon: Icon,
-  label,
-  caption,
-  action,
-  children,
-}: {
-  index: number;
-  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
-  label: string;
-  caption?: string;
-  action?: { to: string; text: string };
-  children: React.ReactNode;
+const Stat = ({ n, label, color }: { n: number; label: string; color?: string }) => (
+  <span className="flex items-baseline gap-1.5">
+    <span className="text-[17px] font-semibold"
+          style={{ color: color ?? T.text }}>{n}</span>
+    <span style={{ ...mono(9.5, T.dim), letterSpacing: "0.12em",
+                   textTransform: "uppercase" }}>{label}</span>
+  </span>
+);
+
+const KIND_LABEL: Record<string, string> = {
+  "ubiquitous": "ubiquitous",
+  "event-driven": "event-driven",
+  "state-driven": "state-driven",
+  "unwanted behaviour": "unwanted behaviour",
+  "optional feature": "optional feature",
+};
+
+function CapabilityDetail({ capability, content, last, touched, removed, events }: {
+  capability: string;
+  content: string;
+  last: SpecHistoryEvent | undefined;
+  touched: Map<number, ReqChange>;
+  removed: number;
+  events: SpecHistoryEvent[];
 }) {
+  const reqs = useMemo(
+    () => splitSpecBlocks(content).filter((b) => b.kind === "req"),
+    [content],
+  );
+  const SHOWN = 8;
+  const changedCount = [...touched.values()].filter((c) => c === "changed").length;
+  const newCount = [...touched.values()].filter((c) => c === "new").length;
+  const summary = [
+    changedCount && `${changedCount} revised`,
+    newCount && `${newCount} added`,
+    removed && `${removed} removed`,
+  ].filter(Boolean).join(" · ");
+
   return (
-    <section
-      className="animate-fade-in mt-14"
-      style={{ animationDelay: `${index * 70}ms` }}
-    >
-      <div className="mb-4 flex items-end gap-3">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <Icon className="h-4 w-4 shrink-0" style={{ color: "var(--bpmn-text-dim)" }} />
-          <h2
-            className="text-[17px] font-semibold"
-            style={{
-              fontFamily: "var(--bpmn-font-display)",
-              color: "var(--bpmn-text)",
-              letterSpacing: "-0.01em",
-            }}
-          >
-            {label}
-          </h2>
+    <div className="mt-8 flex flex-col gap-10 lg:flex-row">
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-3">
+          <h3 className="text-[16px] font-semibold">{capTitle(capability)}</h3>
+          {last && (
+            <span className="rounded-full border px-2.5 py-0.5"
+                  style={{ borderColor: T.lineEm,
+                           ...mono(10, OP_COLOR[last.operation] ?? T.dim) }}>
+              {last.operation === "deleted" ? "superseded" : last.operation}{" "}
+              {relativeTime(last.at)}
+            </span>
+          )}
         </div>
-        {action && (
-          <Link
-            to={action.to}
-            className="group ml-auto flex shrink-0 items-center gap-1.5 font-mono text-[11.5px] transition-colors"
-            style={{ color: "var(--bpmn-cyan)" }}
-          >
-            {action.text}
-            <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
-          </Link>
+        {summary && (
+          <p className="mt-1" style={mono(11, T.amber)}>
+            {summary} in this revision
+          </p>
+        )}
+        <div className="mt-4 flex flex-col gap-2.5">
+          {reqs.slice(0, SHOWN).map((b) => {
+            const change = touched.get(b.reqNo);
+            const edge = change === "new" ? T.green
+              : change === "changed" ? T.amber : T.line;
+            return (
+              <div key={b.reqNo} className="rounded-lg border py-2.5 pr-4 pl-3.5"
+                   style={{ borderColor: T.line, background: T.panel,
+                            borderLeft: `3px solid ${edge}` }}>
+                <div className="flex items-center gap-2.5">
+                  <span className="rounded px-1.5 py-0.5"
+                        style={{ background: T.bg, ...mono(10, T.cyan) }}>
+                    REQ-{b.reqNo}
+                  </span>
+                  <span style={{ ...mono(9, T.dim), letterSpacing: "0.14em",
+                                 textTransform: "uppercase" }}>
+                    {KIND_LABEL[classifyEars(b.text)]}
+                  </span>
+                  {change && (
+                    <span className="ml-auto"
+                          style={{ ...mono(9.5,
+                            change === "new" ? T.green : T.amber),
+                            letterSpacing: "0.12em",
+                            textTransform: "uppercase" }}>
+                      {change === "new" ? "new" : "revised"}
+                    </span>
+                  )}
+                </div>
+                {b.title && (
+                  <div className="mt-1.5 text-[13px] font-semibold">
+                    {b.title}
+                  </div>
+                )}
+                <div className="mt-1.5 text-[13px] leading-relaxed"
+                     style={{ color: b.title ? T.muted : T.text }}>
+                  <Markdown text={b.text} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {reqs.length > SHOWN && (
+          <p className="mt-3" style={mono(11, T.dim)}>
+            {reqs.length - SHOWN} further requirement
+            {reqs.length - SHOWN === 1 ? "" : "s"} —{" "}
+            <Link to="/specs" style={{ color: T.cyan }}>open the full spec →</Link>
+          </p>
         )}
       </div>
-      {caption && (
-        <p
-          className="mb-5 max-w-2xl text-[13.5px] leading-relaxed"
-          style={{
-            fontFamily: "var(--reading-font)",
-            color: "var(--bpmn-text-muted)",
-          }}
-        >
-          {caption}
-        </p>
+      {events.length > 0 && (
+        <aside className="w-full shrink-0 lg:w-[260px]">
+          <h4 className="text-[13.5px] font-semibold">Revisions</h4>
+          <ul className="mt-3 flex flex-col gap-3 border-l pl-4"
+              style={{ borderColor: T.line }}>
+            {events.slice(0, 8).map((e, i) => (
+              <li key={e.version_id || String(i)}>
+                <p style={{ ...mono(9.5, OP_COLOR[e.operation] ?? T.dim),
+                            letterSpacing: "0.14em",
+                            textTransform: "uppercase" }}>
+                  {e.operation === "deleted" ? "superseded" : e.operation}
+                </p>
+                <p style={mono(10.5, T.dim)}>{relativeTime(e.at)}</p>
+              </li>
+            ))}
+          </ul>
+        </aside>
       )}
-      {children}
-    </section>
+    </div>
   );
 }
 
-/** One integrated repo's overview card. The card the user is ALREADY viewing
- *  is a quiet non-link (tagged); siblings are whole-card links carrying their
- *  real numbers; a sibling whose manifest can't be read from here degrades to
- *  an open-only card — always a way in, never an error. Shared with the
- *  Level-0 portal page (where every card is a link). */
+// ── RepoCard — shared with the Level-0 portal page ───────────────────────
+
+/** One integrated repo's overview card (unchanged — the portal renders these;
+ *  the hub's own cross-repo affordance is the top-bar switcher now). */
 export function RepoCard({
   name,
   href,
@@ -560,78 +872,5 @@ export function RepoCard({
   );
 }
 
-function PrRow({ pr }: { pr: RepoManifestPr }) {
-  const state = pr.state ? STATE_META[pr.state] : undefined;
-  return (
-    <li>
-      <a
-        href={pr.url}
-        className="group flex items-center gap-4 rounded-lg border px-4 py-3.5 transition-colors"
-        style={{
-          borderColor: "var(--bpmn-border-soft)",
-          background: "var(--bpmn-surface-soft)",
-        }}
-      >
-        <span
-          aria-hidden
-          className="h-2 w-2 shrink-0 rounded-full"
-          style={{ background: state?.dot ?? "var(--bpmn-text-dim)" }}
-          title={state?.label}
-        />
-        {pr.number != null && (
-          <span
-            className="shrink-0 font-mono text-[12px] tabular-nums"
-            style={{ color: "var(--bpmn-text-dim)" }}
-          >
-            #{pr.number}
-          </span>
-        )}
-        <span className="min-w-0 flex-1">
-          <span
-            className="line-clamp-1 text-[14px]"
-            style={{
-              fontFamily: "var(--reading-font)",
-              color: "var(--bpmn-text)",
-              fontWeight: 500,
-            }}
-          >
-            {pr.title}
-          </span>
-          {pr.summary && (
-            <span
-              className="mt-0.5 line-clamp-1 block text-[12px]"
-              style={{
-                fontFamily: "var(--reading-font)",
-                color: "var(--bpmn-text-muted)",
-              }}
-            >
-              {pr.summary}
-            </span>
-          )}
-        </span>
-        {pr.journeys != null && pr.journeys > 0 && (
-          <span
-            className="hidden shrink-0 items-center gap-1.5 font-mono text-[11px] sm:flex"
-            style={{ color: "var(--bpmn-text-dim)" }}
-            title={`${pr.journeys} journeys`}
-          >
-            <Route className="h-3 w-3" />
-            {pr.journeys}
-          </span>
-        )}
-        {pr.updatedAt && (
-          <span
-            className="hidden shrink-0 font-mono text-[11px] md:block"
-            style={{ color: "var(--bpmn-text-dim)" }}
-          >
-            {relativeTime(pr.updatedAt)}
-          </span>
-        )}
-        <ArrowRight
-          className="h-4 w-4 shrink-0 opacity-0 transition-all group-hover:translate-x-0.5 group-hover:opacity-70"
-          style={{ color: "var(--bpmn-text-muted)" }}
-        />
-      </a>
-    </li>
-  );
-}
+// re-exports kept for the portal page's imports
+export { fetchViewerOverview, manifestOverview };

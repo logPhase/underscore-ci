@@ -559,6 +559,14 @@ const SpecReader = ({
               REQ-{block.reqNo}
             </span>
             <div className="min-w-0 flex-1 text-[13px] leading-relaxed">
+              {block.title && (
+                <p
+                  className="mb-1 font-semibold"
+                  style={{ color: "var(--bpmn-text)" }}
+                >
+                  {block.title}
+                </p>
+              )}
               <Markdown text={block.text} />
             </div>
             {change && (
