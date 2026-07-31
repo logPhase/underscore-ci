@@ -13,6 +13,7 @@ import {
   groupPrs,
   heroStats,
   liveRequirementCount,
+  prStateTabs,
   revisedThisWeek,
   weeklyCells,
 } from "@/lib/repo/hub-data";
@@ -65,6 +66,12 @@ const OP_COLOR: Record<string, string> = {
   updated: T.cyan,
   modified: T.cyan,
   deleted: T.rose,
+};
+
+const STATE_DOT: Record<string, string> = {
+  open: T.green,
+  merged: T.violet,
+  closed: T.rose,
 };
 
 const KIND_COLOR: Partial<Record<ArchNodeKind, string>> = {
@@ -144,7 +151,12 @@ export default function RepoHub() {
   }, [activeSpec, latest, history, specs]);
 
   const [prQuery, setPrQuery] = useState("");
-  const prGroups = useMemo(() => groupPrs(prs, prQuery, now), [prs, prQuery, now]);
+  const [prState, setPrState] = useState<string | null>(null);
+  const stateTabs = useMemo(() => prStateTabs(prs), [prs]);
+  const prGroups = useMemo(
+    () => groupPrs(prs, prQuery, now, prState),
+    [prs, prQuery, now, prState],
+  );
   const activity = useMemo(() => buildActivity(prs, history, 10), [prs, history]);
 
   if (!manifest) return null;
@@ -318,14 +330,33 @@ export default function RepoHub() {
           </div>
           <div className="mt-4 flex flex-col gap-10 lg:flex-row">
             <div className="min-w-0 flex-1">
-              <input
-                value={prQuery}
-                onChange={(e) => setPrQuery(e.target.value)}
-                placeholder="Search pull requests…"
-                className="w-full rounded-lg border px-3.5 py-2 outline-none"
-                style={{ ...mono(12.5, T.text), background: T.panel,
-                         borderColor: T.lineEm }}
-              />
+              <div className="flex flex-wrap items-center gap-2.5">
+                <input
+                  value={prQuery}
+                  onChange={(e) => setPrQuery(e.target.value)}
+                  placeholder="Search pull requests…"
+                  className="min-w-[220px] flex-1 rounded-lg border px-3.5 py-2 outline-none"
+                  style={{ ...mono(12.5, T.text), background: T.panel,
+                           borderColor: T.lineEm }}
+                />
+                {stateTabs.map((t) => (
+                  <button key={t.label} type="button"
+                          onClick={() => setPrState(t.state)}
+                          className="flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 transition-colors"
+                          style={{
+                            borderColor: prState === t.state ? T.lineHi : T.lineEm,
+                            background: prState === t.state ? T.panel2 : "transparent",
+                            ...mono(10.5, prState === t.state ? T.text : T.dim),
+                          }}>
+                    {t.state && (
+                      <span aria-hidden className="h-1.5 w-1.5 rounded-full"
+                            style={{ background: STATE_DOT[t.state] ?? T.dim }} />
+                    )}
+                    {t.label}
+                    <span style={{ color: T.dim }}>{t.count}</span>
+                  </button>
+                ))}
+              </div>
               {prGroups.length === 0 && (
                 <p className="mt-6 text-center" style={mono(12, T.dim)}>
                   No pull requests match.
@@ -343,6 +374,11 @@ export default function RepoHub() {
                         <a href={pr.url}
                            className="group flex items-center gap-3.5 rounded-lg border px-4 py-2.5 transition-colors hover:border-[#2C3444]"
                            style={{ borderColor: T.line, background: T.panel }}>
+                          {pr.state && (
+                            <span aria-hidden title={pr.state}
+                                  className="h-2 w-2 shrink-0 rounded-full"
+                                  style={{ background: STATE_DOT[pr.state] ?? T.dim }} />
+                          )}
                           {pr.number != null && (
                             <span className="shrink-0 tabular-nums"
                                   style={mono(11.5, T.dim)}>

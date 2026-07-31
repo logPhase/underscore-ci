@@ -5,6 +5,7 @@ import {
   groupPrs,
   heroStats,
   liveRequirementCount,
+  prStateTabs,
   revisedThisWeek,
   weeklyCells,
 } from "./hub-data";
@@ -86,8 +87,8 @@ describe("revisedThisWeek", () => {
 
 describe("groupPrs", () => {
   const prs = [
-    { number: 1, title: "Old fix", url: "a/", updatedAt: "2026-06-01T00:00:00Z" },
-    { number: 2, title: "Today fix", url: "b/", updatedAt: "2026-07-31T09:00:00Z", author: "rin" },
+    { number: 1, title: "Old fix", url: "a/", updatedAt: "2026-06-01T00:00:00Z", state: "merged" },
+    { number: 2, title: "Today fix", url: "b/", updatedAt: "2026-07-31T09:00:00Z", author: "rin", state: "open" },
     { number: 3, title: "Yesterday feat", url: "c/", updatedAt: "2026-07-30T09:00:00Z" },
   ];
 
@@ -101,6 +102,33 @@ describe("groupPrs", () => {
     expect(groupPrs(prs, "#3", NOW).flatMap((g) => g.prs)).toHaveLength(1);
     expect(groupPrs(prs, "rin", NOW).flatMap((g) => g.prs)[0].number).toBe(2);
     expect(groupPrs(prs, "feat", NOW).flatMap((g) => g.prs)[0].number).toBe(3);
+  });
+
+  it("filters by state when one is selected", () => {
+    const merged = groupPrs(prs, "", NOW, "merged").flatMap((g) => g.prs);
+    expect(merged.map((p) => p.number)).toEqual([1]);
+    const all = groupPrs(prs, "", NOW, null).flatMap((g) => g.prs);
+    expect(all).toHaveLength(3);
+  });
+});
+
+describe("prStateTabs", () => {
+  it("counts states, All first, only states that exist", () => {
+    const tabs = prStateTabs([
+      { title: "a", url: "a/", state: "merged" },
+      { title: "b", url: "b/", state: "merged" },
+      { title: "c", url: "c/", state: "open" },
+      { title: "d", url: "d/" },
+    ]);
+    expect(tabs).toEqual([
+      { state: null, label: "All", count: 4 },
+      { state: "open", label: "Open", count: 1 },
+      { state: "merged", label: "Merged", count: 2 },
+    ]);
+  });
+
+  it("hides the tab row entirely when no PR has a state", () => {
+    expect(prStateTabs([{ title: "a", url: "a/" }])).toEqual([]);
   });
 });
 

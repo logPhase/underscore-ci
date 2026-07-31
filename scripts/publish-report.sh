@@ -81,14 +81,17 @@ if [[ "$MODE" == "pr" ]]; then
   [[ -f "$PROUT" ]] && JRN=$(jq '[.journeys[]? | select(.prStatus != null)] | length' "$PROUT")
   ID="pr-${PR_NUMBER}"; REF="${PR_HEAD_REF}"; SHA="${PR_HEAD_SHA}"
   PRN="${PR_NUMBER}"
-  PRT="$(gh pr view "$PR_NUMBER" -R "$REPO_SLUG" --json title -q .title 2>/dev/null || echo '')"
+  # title + lifecycle state in ONE call; state lowercased for the manifest
+  PRJ="$(gh pr view "$PR_NUMBER" -R "$REPO_SLUG" --json title,state 2>/dev/null || echo '{}')"
+  PRT="$(jq -r '.title // empty' <<<"$PRJ")"
+  PRS="$(jq -r '(.state // empty) | ascii_downcase' <<<"$PRJ")"
 else
   DEST="reports/${STAMP}-run-${RUN_NUMBER}"
   mkdir -p "$WORKTREE/$DEST" "$WORKTREE/latest"
   cp "$REPORT_FILE" "$WORKTREE/$DEST/underscore-report.html"
   cp "$REPORT_FILE" "$WORKTREE/latest/underscore-report.html"
   JRN=0; [[ -f "$MANIFEST" ]] && JRN=$(jq -r '.counts.journeys // 0' "$MANIFEST")
-  ID="run-${RUN_NUMBER}"; REF="${REF_NAME}"; SHA="${HEAD_SHA}"; PRN=""; PRT=""
+  ID="run-${RUN_NUMBER}"; REF="${REF_NAME}"; SHA="${HEAD_SHA}"; PRN=""; PRT=""; PRS=""
 fi
 
 # Root landing = the SPA in HUB mode. The un-injected singlefile shell staged
@@ -107,7 +110,7 @@ SHORT="${SHA:0:7}"
 REC=$(jq -n \
   --arg id "$ID" --arg dir "$DEST" --arg stamp "$STAMP" --arg run "$RUN_NUMBER" \
   --arg date "$ISO" --arg ref "$REF" --arg sha "$SHA" --arg short "$SHORT" \
-  --arg actor "$ACTOR" --arg pr "$PRN" --arg prTitle "$PRT" \
+  --arg actor "$ACTOR" --arg pr "$PRN" --arg prTitle "$PRT" --arg prState "${PRS:-}" \
   --arg repo "$REPO_SLUG" --arg project "$PROJECT" \
   --arg j "$JRN" --arg b "$BPMN" --arg s "$SUM" --arg f "$FND" \
   '{id:$id, dir:$dir, stamp:$stamp, run:($run|tonumber), date:$date, ref:$ref,
@@ -116,6 +119,7 @@ REC=$(jq -n \
     actor:$actor,
     pr:(if $pr=="" then null else $pr end),
     prTitle:(if $prTitle=="" then null else $prTitle end),
+    prState:(if $prState=="" then null else $prState end),
     repo:$repo, project:$project,
     journeys:($j|tonumber), bpmn:($b|tonumber), summaries:($s|tonumber),
     findings:($f|tonumber)}')
@@ -162,6 +166,7 @@ jq -n \
       | map(select(.pr != null))
       | map({number:(.pr|tonumber?),
              title:(.prTitle // ("PR #" + (.pr|tostring))),
+             state:(.prState // null),
              branch:.ref, author:.actor,
              url:(.dir + "/underscore-report.html"),
              updatedAt:.date, journeys:.journeys})

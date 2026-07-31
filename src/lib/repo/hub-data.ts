@@ -125,20 +125,23 @@ function dayLabel(iso: string, now: number): string {
   return "earlier";
 }
 
-/** Filter by a free-text query (number, title, branch, author) then group by
- *  recency bucket, newest first — the design's TODAY / YESTERDAY rails. */
+/** Filter by a free-text query (number, title, branch, author) and an
+ *  optional state, then group by recency bucket, newest first — the
+ *  design's TODAY / YESTERDAY rails. */
 export function groupPrs(
   prs: RepoManifestPr[],
   query: string,
   now: number,
+  state: string | null = null,
 ): PrDayGroup[] {
   const q = query.trim().toLowerCase();
   const hit = (p: RepoManifestPr) =>
-    !q ||
-    String(p.number ?? "").includes(q.replace(/^#/, "")) ||
-    p.title.toLowerCase().includes(q) ||
-    (p.branch ?? "").toLowerCase().includes(q) ||
-    (p.author ?? "").toLowerCase().includes(q);
+    (!state || p.state === state) &&
+    (!q ||
+      String(p.number ?? "").includes(q.replace(/^#/, "")) ||
+      p.title.toLowerCase().includes(q) ||
+      (p.branch ?? "").toLowerCase().includes(q) ||
+      (p.author ?? "").toLowerCase().includes(q));
   const sorted = [...prs]
     .filter(hit)
     .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
@@ -150,6 +153,34 @@ export function groupPrs(
     else groups.push({ label, prs: [p] });
   }
   return groups;
+}
+
+// ── PR state filter tabs ─────────────────────────────────────────────────
+
+export interface PrStateTab {
+  state: string | null;
+  label: string;
+  count: number;
+}
+
+const STATE_ORDER = ["open", "merged", "closed"];
+
+/** "All N · Open a · Merged b · Closed c" — only states that actually occur.
+ *  [] when NO pr carries a state (older manifests): the tab row hides. */
+export function prStateTabs(prs: RepoManifestPr[]): PrStateTab[] {
+  const counts = new Map<string, number>();
+  for (const p of prs)
+    if (p.state) counts.set(p.state, (counts.get(p.state) ?? 0) + 1);
+  if (counts.size === 0) return [];
+  const tabs: PrStateTab[] = [{ state: null, label: "All", count: prs.length }];
+  for (const s of STATE_ORDER)
+    if (counts.has(s))
+      tabs.push({ state: s, label: s.charAt(0).toUpperCase() + s.slice(1),
+                  count: counts.get(s)! });
+  for (const [s, n] of counts)
+    if (!STATE_ORDER.includes(s))
+      tabs.push({ state: s, label: s, count: n });
+  return tabs;
 }
 
 // ── activity rail ────────────────────────────────────────────────────────
