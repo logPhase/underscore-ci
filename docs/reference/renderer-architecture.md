@@ -88,4 +88,6 @@ Everything but `/` nests under a pathless `SessionShell` layout route (`src/comp
 
 `askEndpointHref()` (`src/lib/ask-endpoint.ts`) returns `null` off `http:`/`https:`, and otherwise matches the path against `^(.*\/)(reports|latest)\/[^/]*`; on a match it returns `<prefix>ask` — the viewer relay that injects analyzer auth server-side. Requests abort after `TIMEOUT_MS = 180_000`. `askAvailable()` gates `AskPanel`, which is mounted only from `ChapterView.tsx`, so a `file://` artifact renders no Ask affordance.
 
-The chapter's call graph is `CallFlowGraph.tsx` (React Flow, with built-in pan/zoom/minimap), sharing its layout with `src/lib/callgraph/tree-layout.ts`. The older SVG `CallFlowChart.tsx` still exists but has no importers. Other latent ported components: `BpmnEditor.tsx`, `CodePanel.tsx`.
+The chapter's call graph is `CallFlowGraph.tsx` (React Flow, with built-in pan/zoom/minimap), sharing its layout with `src/lib/callgraph/tree-layout.ts`. Mind the alias: `ChapterView.tsx` imports it as `CallFlowChart` (`import CallFlowChart from "./CallFlowGraph"`), so the *name* in that file points at the new component while the older SVG `CallFlowChart.tsx` sits unimported next to it.
+
+Only two components under `src/components/journeys/` and `src/components/bpmn/` have no importers at all: `CallFlowChart.tsx` and `bpmn/BpmnCanvas.tsx`. `BpmnEditor.tsx` and `CodePanel.tsx` are **live** — `ChapterView.tsx` imports both and renders them, and `BpmnEditor` in turn mounts `bpmn/BpmnFlow.tsx`.
