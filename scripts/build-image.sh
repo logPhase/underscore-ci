@@ -4,6 +4,7 @@
 # Stages into .docker-context/:
 #   underscore-cli.jar                backend uberjar
 #   roslyn-cli/                       dotnet publish of backend/tools/roslyn-cli
+#   kotlin-parser/kotlin-parser.jar   mvnw package of backend/tools/kotlin-parser
 #   report-dist/                      static report build (pnpm build)
 #   underscore-report.template.html   singlefile report build (pnpm build:singlefile)
 #
