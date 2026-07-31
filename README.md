@@ -42,7 +42,9 @@ The reusable workflow does the checkout and calls the action with
 `mode: auto` + `publish: branch`; see
 [`.github/workflows/underscore.yml`](.github/workflows/underscore.yml). To wire
 the analysis into your own steps instead of the reusable workflow, call the
-action (`logPhase/underscore-ci@v2`) directly — its inputs are documented below.
+action (`logPhase/underscore-ci@v2`) directly — the most commonly used inputs
+are below; the full list is in
+[docs/reference/action-inputs-outputs.md](docs/reference/action-inputs-outputs.md).
 
 ### Inputs
 
