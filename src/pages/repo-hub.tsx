@@ -14,6 +14,7 @@ import {
   heroStats,
   liveRequirementCount,
   prStateTabs,
+  recentPrCount,
   revisedThisWeek,
   weeklyCells,
 } from "@/lib/repo/hub-data";
@@ -143,10 +144,16 @@ export default function RepoHub() {
 
   const [prQuery, setPrQuery] = useState("");
   const [prState, setPrState] = useState<string | null>(null);
+  const [showAllPrs, setShowAllPrs] = useState(false);
   const stateTabs = useMemo(() => prStateTabs(prs), [prs]);
+  // Default = RECENT only (open PRs + last 7 days) — nobody scrolls for a
+  // six-week-old merged PR. Searching or picking a state widens to ALL so a
+  // filter never silently misses old matches.
+  const recentOnly = !showAllPrs && !prQuery.trim() && prState === null;
+  const recentN = useMemo(() => recentPrCount(prs, now), [prs, now]);
   const prGroups = useMemo(
-    () => groupPrs(prs, prQuery, now, prState),
-    [prs, prQuery, now, prState],
+    () => groupPrs(prs, prQuery, now, prState, recentOnly),
+    [prs, prQuery, now, prState, recentOnly],
   );
   const activity = useMemo(() => buildActivity(prs, history, 10), [prs, history]);
 
@@ -325,7 +332,9 @@ export default function RepoHub() {
           <div className="flex flex-wrap items-baseline gap-3">
             <h2 className="text-[20px] font-semibold">Pull requests</h2>
             <span style={mono(11, T.dim)}>
-              {prs.length} analyzed · newest first
+              {recentOnly
+                ? `showing ${recentN} recent of ${prs.length} analyzed`
+                : `${prs.length} analyzed · newest first`}
             </span>
           </div>
           <div className="mt-4 flex flex-col gap-10 lg:flex-row">
@@ -361,6 +370,20 @@ export default function RepoHub() {
                 <p className="mt-6 text-center" style={mono(12, T.dim)}>
                   No pull requests match.
                 </p>
+              )}
+              {recentOnly && recentN < prs.length && (
+                <button type="button" onClick={() => setShowAllPrs(true)}
+                        className="mt-4 w-full cursor-pointer rounded-lg border py-2 text-center transition-colors hover:border-[#2C3444]"
+                        style={{ borderColor: T.lineEm, ...mono(11.5, T.cyan) }}>
+                  Show all {prs.length} pull requests
+                </button>
+              )}
+              {showAllPrs && (
+                <button type="button" onClick={() => setShowAllPrs(false)}
+                        className="mt-4 w-full cursor-pointer rounded-lg border py-2 text-center transition-colors"
+                        style={{ borderColor: T.lineEm, ...mono(11.5, T.dim) }}>
+                  Show recent only
+                </button>
               )}
               {prGroups.map((g) => (
                 <div key={g.label} className="mt-5">

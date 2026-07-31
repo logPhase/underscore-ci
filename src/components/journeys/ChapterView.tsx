@@ -30,7 +30,9 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BpmnEditor, type BpmnCanvasHandle } from "./BpmnEditor";
 import { BpmnStepFunctions } from "./BpmnStepFunctions";
-import CallFlowChart from "./CallFlowGraph";
+// REVERTED to the original SVG chart (founder call, 2026-07-31) — the React
+// Flow call graph didn't look right after several iterations.
+import CallFlowChart from "./CallFlowChart";
 import { ExpandableFrame } from "./ExpandableFrame";
 import { JourneyIntro } from "./JourneyIntro";
 import { useUIStore } from "@/store/use-ui-store";

@@ -99,7 +99,15 @@ fi
 # repo-manifest.json written below (global architecture + specs + PR index).
 # Falls back to the legacy standalone board when the hub shell is absent (older
 # CLI image), so a mixed rollout never drops the landing entirely.
-if [[ -f "$PUBLISH_DIR/underscore-hub.html" ]]; then
+# PERF: the landing is the MULTI-FILE build — a tiny no-cache index.html plus
+# content-hashed /assets (cached immutable), so repeat visits re-download ~2KB
+# instead of a 3MB inlined singlefile. Old assets are pruned each publish
+# (hashed names — the current index references only its own set).
+if [[ -f "$PUBLISH_DIR/index.html" && -d "$PUBLISH_DIR/assets" ]]; then
+  rm -rf "$WORKTREE/assets"
+  cp -R "$PUBLISH_DIR/assets" "$WORKTREE/assets"
+  cp "$PUBLISH_DIR/index.html" "$WORKTREE/index.html"
+elif [[ -f "$PUBLISH_DIR/underscore-hub.html" ]]; then
   cp "$PUBLISH_DIR/underscore-hub.html" "$WORKTREE/index.html"
 else
   cp "$GITHUB_ACTION_PATH/viewer/index.html" "$WORKTREE/index.html"

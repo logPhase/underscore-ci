@@ -125,17 +125,32 @@ function dayLabel(iso: string, now: number): string {
   return "earlier";
 }
 
-/** Filter by a free-text query (number, title, branch, author) and an
- *  optional state, then group by recency bucket, newest first — the
- *  design's TODAY / YESTERDAY rails. */
+/** "Recent" = still open (any age), or touched in the trailing 7 days.
+ *  Nobody scrolls for a merged PR from six weeks ago — those stay one
+ *  click away behind "Show all". */
+export function isRecentPr(p: RepoManifestPr, now: number): boolean {
+  if (p.state === "open") return true;
+  const at = Date.parse(p.updatedAt ?? "");
+  return !Number.isNaN(at) && now - at < WEEK_MS;
+}
+
+export function recentPrCount(prs: RepoManifestPr[], now: number): number {
+  return prs.filter((p) => isRecentPr(p, now)).length;
+}
+
+/** Filter by a free-text query (number, title, branch, author), an optional
+ *  state, and optionally recency, then group by recency bucket, newest
+ *  first — the design's TODAY / YESTERDAY rails. */
 export function groupPrs(
   prs: RepoManifestPr[],
   query: string,
   now: number,
   state: string | null = null,
+  recentOnly = false,
 ): PrDayGroup[] {
   const q = query.trim().toLowerCase();
   const hit = (p: RepoManifestPr) =>
+    (!recentOnly || isRecentPr(p, now)) &&
     (!state || p.state === state) &&
     (!q ||
       String(p.number ?? "").includes(q.replace(/^#/, "")) ||

@@ -14,7 +14,11 @@
  * the new diagram replaces the prop in local state.
  */
 import { forwardRef, useEffect, useMemo, useState } from 'react';
-import { BpmnFlow, type BpmnCanvasHandle } from '@/components/bpmn/BpmnFlow';
+// REVERTED to the original SVG canvas (founder call, 2026-07-31): the React
+// Flow renderer went through several iterations and still didn't look right.
+// The SVG canvas keeps the shared layout improvements (bigger nodes, chip
+// collision solver) since those live in bpmn/layout.ts.
+import { BpmnCanvas, type BpmnCanvasHandle } from '@/components/bpmn/BpmnCanvas';
 // Desktop adaptation: the webapp's `@/data/journeyTypes` is split here —
 // Chapter + the BpmnDiagram alias live in types/journey, BpmnElement in
 // the renderer's canonical home (components/bpmn/types).
@@ -202,7 +206,7 @@ export const BpmnEditor = forwardRef<BpmnCanvasHandle, Props>(function BpmnEdito
           : { height, width: '100%', position: 'relative' }
       }
     >
-      <BpmnFlow
+      <BpmnCanvas
         ref={canvasRef}
         journey={active}
         getSource={sourceLookup}
