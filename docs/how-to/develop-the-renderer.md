@@ -39,7 +39,7 @@ pnpm preview              # serve the built report-dist/
 | A route | `src/App.tsx` plus a page in `src/pages/` |
 | App state | a store in `src/store/` (see the store table in the reference) |
 | The canvas | `src/components/canvas/` |
-| The chapter reading surface | `src/components/journeys/` (`ChapterView`, `CallFlowGraph`, `AskPanel`, diff and body panels) |
+| The chapter reading surface | `src/components/journeys/` (`ChapterView`, `ExpandableFrame`, `CallFlowGraph`, `AskPanel`, diff and body panels) |
 | Visual identity (the fork) | `src/index.css` tokens, `src/pages/journeys.tsx` |
 | Domain types / the JSON contract | `src/types/` |
 

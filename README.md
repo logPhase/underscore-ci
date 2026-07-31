@@ -141,7 +141,7 @@ is never needed in your CI; the model key lives on our analyzer.
 
 Static web build of the Underscore PR report renderer, used by this action to
 publish the interactive report (journeys, impact overlay, BPMN, chapter
-deep-dives). The renderer is a stripped, Electron-free copy of the
+deep-dives). The renderer is an Electron-free fork of the
 `underscore-desktop` app: it boots by fetching `./pr-output.json` (emitted by
 the Underscore analysis CLI), transforms it with `transformToFrontendFormat`,
 hydrates the Zustand analysis store, and lands on the journeys page —
@@ -156,7 +156,7 @@ injects the JSON into `<script type="application/json" id="underscore-report-dat
 ## Building the image (maintainers)
 
 The image is built from a sibling `underscore-desktop` checkout — the backend
-CLI and Roslyn sidecar live there; the report renderer lives here (copied,
+CLI and Roslyn sidecar live there; the report renderer lives here (forked,
 Electron-stripped).
 
 ```bash
@@ -171,6 +171,7 @@ The script stages into `.docker-context/`:
 - `underscore-cli.jar` — backend uberjar (`clojure -T:build uber`)
 - `roslyn-cli/` — framework-dependent `dotnet publish` (run in-container as
   `dotnet RoslynCli.dll <sln>` via `UNDERSCORE_ROSLYN_CLI`)
+- `kotlin-parser/kotlin-parser.jar` — `mvnw package` of `backend/tools/kotlin-parser`
 - `report-dist/` — static report (`pnpm build`)
 - `underscore-report.template.html` — singlefile build
   (`pnpm build:singlefile`) carrying the `__UNDERSCORE_REPORT_DATA__` marker

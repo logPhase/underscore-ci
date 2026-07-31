@@ -6,7 +6,7 @@ Stand up the two hosted ops components. Scope: the operational sequence and its 
 
 nginx plus a git-sync sidecar serving a reports branch. New CI commits appear with no redeploy.
 
-1. **Build and push the image.** From `viewer/`, build and push `…/underscore-viewer:dev` to your registry (see `viewer/README.md`).
+1. **Build and push the image.** From the repo root, build and push `…/underscore-viewer:dev` to your registry (see `viewer/README.md`).
 2. **Create three secrets in the target namespace.**
    - `underscore-reports-git` — `GITSYNC_USERNAME` / `GITSYNC_PASSWORD` for the reports repo (a read-only PAT is enough).
    - `underscore-viewer-htpasswd` — the basic-auth file, mounted at `/etc/nginx/.htpasswd`.
