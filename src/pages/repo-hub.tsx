@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, ChevronsUpDown } from "lucide-react";
-import ArchitectureCanvas from "@/components/architecture/ArchitectureCanvas";
+import { HubArchDiagram } from "@/components/repo/HubArchDiagram";
 import { Markdown } from "@/components/ui/Markdown";
 import { splitSpecBlocks } from "@/lib/specs/ears";
 import { latestByCapability, previousVersionOf, removedCapabilities } from "@/lib/specs/history";
@@ -26,7 +26,6 @@ import {
   type ViewerOverview,
 } from "@/lib/repo/viewers";
 import { useAnalysis } from "@/store/use-analysis-store";
-import type { ArchNodeKind } from "@/types/architecture";
 import type { SpecHistoryEvent } from "@/types/specs";
 
 /**
@@ -72,14 +71,6 @@ const STATE_DOT: Record<string, string> = {
   open: T.green,
   merged: T.violet,
   closed: T.rose,
-};
-
-const KIND_COLOR: Partial<Record<ArchNodeKind, string>> = {
-  component: "#8b9fe8",
-  service: "#5ec6d6",
-  datastore: "#63d9a6",
-  topic: "#c39ae0",
-  external: "#9aa7c7",
 };
 
 function shortRepo(repo: string): string {
@@ -161,6 +152,16 @@ export default function RepoHub() {
 
   if (!manifest) return null;
   const name = shortRepo(manifest.repo).toUpperCase();
+  // The architecture's SYSTEM node names + describes the software system —
+  // the mock's "REPOSITORY · VEHICLE AUTHORIZATION SERVICE" eyebrow and the
+  // repo-specific hero line. Generic fallbacks when no system node exists.
+  const systemNode = architecture?.nodes.find((n) => n.kind === "system");
+  const eyebrow = systemNode?.name
+    ? `Repository · ${systemNode.name}`
+    : `Repository · ${manifest.repo}`;
+  const heroLine = systemNode?.description ||
+    "The system's architecture and living specifications, with every pull " +
+    "request traced end to end.";
 
   return (
     <div
@@ -176,7 +177,7 @@ export default function RepoHub() {
           <div className="min-w-[280px] flex-1">
             <p style={{ ...mono(10.5, T.dim), letterSpacing: "0.18em",
                         textTransform: "uppercase" }}>
-              Repository · {manifest.repo}
+              {eyebrow}
             </p>
             <h1 className="mt-2 text-[38px] leading-none font-bold"
                 style={{ letterSpacing: "-0.02em" }}>
@@ -184,8 +185,7 @@ export default function RepoHub() {
             </h1>
             <p className="mt-3 max-w-md text-[14.5px] leading-relaxed"
                style={{ fontFamily: T.serif, color: T.muted }}>
-              The system's architecture and living specifications, with every
-              pull request traced end to end.
+              {heroLine}
             </p>
           </div>
           <div className="flex flex-wrap items-end gap-10 pb-1">
@@ -563,30 +563,42 @@ function weekNote(prs: { updatedAt?: string }[],
   return `${parts.join(" · ")} this week`;
 }
 
+const LEGEND: [string, string][] = [
+  ["container", "#7DD3FC"],
+  ["component", "#7DD3FC"],
+  ["data store", "#4ADE80"],
+  ["message topic", "#C4B5FD"],
+  ["external system", "#8A94A9"],
+];
+
 function ArchSection({ architecture, name, weekNote }: {
   architecture: NonNullable<ReturnType<() => import("@/types/architecture").ArchitecturePayload>>;
   name: string;
   weekNote: string | null;
 }) {
-  const [level, setLevel] = useState<"context" | "container">("container");
-  const container = useMemo(() => {
-    const cn = architecture.nodes.filter(
-      (n) => n.kind !== "person" && n.kind !== "system");
-    const ids = new Set(cn.map((n) => n.id));
-    return {
-      nodes: cn,
-      edges: architecture.edges.filter((e) => ids.has(e.from) && ids.has(e.to)),
-    };
-  }, [architecture]);
-  const hasContext = useMemo(
-    () => architecture.nodes.some((n) => n.kind === "person" || n.kind === "system"),
+  const [level, setLevel] = useState<1 | 2>(1);
+  const diagNodes = useMemo(
+    () => architecture.nodes.filter(
+      (n) => n.kind !== "person" && n.kind !== "system"),
     [architecture],
   );
+  const hasComponents = useMemo(
+    () => diagNodes.some((n) => n.kind === "component"),
+    [diagNodes],
+  );
   const legend = useMemo(() => {
-    const kinds = new Set(architecture.nodes.map((n) => n.kind));
-    return (Object.entries(KIND_COLOR) as [ArchNodeKind, string][])
-      .filter(([k]) => kinds.has(k));
-  }, [architecture]);
+    const kinds = new Set(diagNodes.map((n) => n.kind));
+    return LEGEND.filter(([label]) =>
+      label === "container" ? kinds.has("service")
+      : label === "component" ? kinds.has("component")
+      : label === "data store" ? kinds.has("datastore")
+      : label === "message topic" ? kinds.has("topic")
+      : kinds.has("external"));
+  }, [diagNodes]);
+  const levelNote =
+    level === 1
+      ? `Level 1 — ${name} containers and their neighbours`
+      : `Level 2 — ${name} components by layer`;
 
   return (
     <div style={{ borderBottom: `1px solid ${T.line}` }}>
@@ -596,20 +608,22 @@ function ArchSection({ architecture, name, weekNote }: {
                          textTransform: "uppercase" }}>
             arc42 §5 · Building block view
           </span>
-          {hasContext && (
-            <div className="flex overflow-hidden rounded-lg border"
-                 style={{ borderColor: T.lineEm }}>
-              {([["container", "Level 1 · Building blocks"],
-                 ["context", "Context · Neighbours"]] as const).map(([k, label]) => (
-                <button key={k} type="button" onClick={() => setLevel(k)}
-                        className="cursor-pointer px-3 py-1.5 transition-colors"
-                        style={{ ...mono(10.5, level === k ? T.text : T.dim),
-                                 background: level === k ? T.panel2 : "transparent" }}>
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
+          <div className="flex overflow-hidden rounded-lg border"
+               style={{ borderColor: T.lineEm }}>
+            {([[1, "Level 1 · Containers"],
+               ...(hasComponents ? [[2, "Level 2 · Components"]] : [])] as
+               [1 | 2, string][]).map(([k, label]) => (
+              <button key={k} type="button" onClick={() => setLevel(k)}
+                      className="cursor-pointer px-3 py-1.5 transition-colors"
+                      style={{ ...mono(10.5, level === k ? T.text : T.dim),
+                               background: level === k ? T.panel2 : "transparent" }}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <span className="hidden lg:inline" style={mono(10.5, T.dim)}>
+            {levelNote}
+          </span>
           <span className="ml-auto" />
           {weekNote && (
             <span className="rounded-full border px-3 py-1"
@@ -625,22 +639,18 @@ function ArchSection({ architecture, name, weekNote }: {
           </Link>
         </div>
       </div>
-      <div style={{ height: 520, background: "#0A0D15",
-                    borderTop: `1px solid ${T.line}` }}>
-        <ArchitectureCanvas
-          nodes={level === "container" ? container.nodes : architecture.nodes}
-          edges={level === "container" ? container.edges : architecture.edges}
-          layers={architecture.layers}
-          storageKey={`${name}:hub:${level}`}
-        />
+      <div style={{ background: "#0A0D15", borderTop: `1px solid ${T.line}`,
+                    padding: "14px 0 18px" }}>
+        <HubArchDiagram nodes={diagNodes} edges={architecture.edges}
+                        level={level} systemName={name} />
       </div>
       <div className="mx-auto flex max-w-[1240px] flex-wrap items-center gap-4 px-8 py-2.5">
-        {legend.map(([kind, color]) => (
-          <span key={kind} className="flex items-center gap-1.5"
+        {legend.map(([label, color]) => (
+          <span key={label} className="flex items-center gap-1.5"
                 style={{ ...mono(9.5, T.dim), letterSpacing: "0.1em",
                          textTransform: "uppercase" }}>
             <span className="h-2 w-2 rounded-sm" style={{ background: color }} />
-            {kind === "datastore" ? "data store" : kind}
+            {label}
           </span>
         ))}
       </div>
