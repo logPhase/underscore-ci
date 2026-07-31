@@ -6,6 +6,7 @@ import {
   heroStats,
   liveRequirementCount,
   prStateTabs,
+  recentPrCount,
   revisedThisWeek,
   weeklyCells,
 } from "./hub-data";
@@ -108,6 +109,39 @@ describe("groupPrs", () => {
     const merged = groupPrs(prs, "", NOW, "merged").flatMap((g) => g.prs);
     expect(merged.map((p) => p.number)).toEqual([1]);
     const all = groupPrs(prs, "", NOW, null).flatMap((g) => g.prs);
+    expect(all).toHaveLength(3);
+  });
+});
+
+describe("recentPrCount", () => {
+  it("counts open PRs (any age) plus anything updated in the last 7 days", () => {
+    const prs = [
+      { title: "old open", url: "a/", state: "open", updatedAt: "2026-05-01T00:00:00Z" },
+      { title: "fresh merged", url: "b/", state: "merged", updatedAt: "2026-07-30T00:00:00Z" },
+      { title: "stale merged", url: "c/", state: "merged", updatedAt: "2026-06-01T00:00:00Z" },
+      { title: "stale closed", url: "d/", state: "closed", updatedAt: "2026-06-01T00:00:00Z" },
+    ];
+    expect(recentPrCount(prs, NOW)).toBe(2);   // old-open + fresh-merged
+  });
+
+  it("stateless PRs count as recent only by freshness", () => {
+    expect(recentPrCount([
+      { title: "fresh", url: "a/", updatedAt: "2026-07-30T00:00:00Z" },
+      { title: "stale", url: "b/", updatedAt: "2026-01-01T00:00:00Z" },
+    ], NOW)).toBe(1);
+  });
+});
+
+describe("groupPrs recentOnly", () => {
+  it("hides stale closed/merged PRs when recentOnly", () => {
+    const prs = [
+      { number: 1, title: "old open", url: "a/", state: "open", updatedAt: "2026-05-01T00:00:00Z" },
+      { number: 2, title: "stale merged", url: "b/", state: "merged", updatedAt: "2026-06-01T00:00:00Z" },
+      { number: 3, title: "fresh merged", url: "c/", state: "merged", updatedAt: "2026-07-30T09:00:00Z" },
+    ];
+    const shown = groupPrs(prs, "", NOW, null, true).flatMap((g) => g.prs);
+    expect(shown.map((p) => p.number).sort()).toEqual([1, 3]);
+    const all = groupPrs(prs, "", NOW, null, false).flatMap((g) => g.prs);
     expect(all).toHaveLength(3);
   });
 });
