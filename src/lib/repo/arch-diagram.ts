@@ -28,6 +28,31 @@ export interface DiagEdge {
   label: string | null;
   lx: number;        // label pill centre
   ly: number;
+  from: string;      // endpoint box ids — drive the hover focus
+  to: string;
+}
+
+/** Icon KEY for a node — brandish where the name gives it away, kind
+ *  fallback otherwise. Pure so the mapping is testable; the component maps
+ *  keys to actual icon glyphs. */
+export function iconKeyFor(name: string, kind: string): string {
+  const n = name.toLowerCase();
+  if (/redis|cache/.test(n)) return "cache";
+  if (/blob|bucket|s3/.test(n)) return "blob";
+  if (/postgres|sql|database/.test(n)) return "database";
+  if (/azure|cloud|aws|gcp/.test(n)) return "cloud";
+  if (/kafka|topic|queue/.test(n)) return "topic";
+  if (/mqtt|broker/.test(n)) return "broker";
+  if (/camera/.test(n)) return "camera";
+  if (/user|driver|person|operator|motorist/.test(n)) return "user";
+  switch (kind) {
+    case "person": return "user";
+    case "datastore": return "database";
+    case "topic": return "topic";
+    case "component": return "component";
+    case "external": return "external";
+    default: return "service";
+  }
 }
 
 export interface DiagLane {
@@ -218,6 +243,8 @@ export function layoutDiagram(
       stroke: EDGE_STROKE[e.kind] ?? EDGE_STROKE.dependency,
       dash: e.kind === "sync" ? "" : "5 5",
       label: crossesBoundary ? (e.label ?? null) : null,
+      from: e.from,
+      to: e.to,
       // provisional; the solver below slides labelled pills along the curve
       // to clear every box and every earlier pill.
       lx: (sx + tx) / 2,
