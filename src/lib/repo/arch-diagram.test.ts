@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { layoutDiagram } from "./arch-diagram";
+import { iconKeyFor, layoutDiagram } from "./arch-diagram";
 import type { ArchEdge, ArchNode } from "@/types/architecture";
 
 const n = (id: string, kind: ArchNode["kind"], layer?: string): ArchNode =>
@@ -59,6 +59,36 @@ describe("layoutDiagram — level 2 (components by layer)", () => {
     expect(L.lanes.map((l) => l.label).sort()).toEqual(["domain", "edge"]);
     expect(L.boxes.find((b) => b.id === "api")).toBeUndefined();
     expect(L.edges).toHaveLength(1);              // comp1 -> comp2
+  });
+});
+
+describe("edges carry endpoints for hover focus", () => {
+  it("each edge knows its from/to box ids", () => {
+    const L = layoutDiagram(NODES, EDGES, 1, "IRIS");
+    const kafka = L.edges.find((e) => e.label === "consumes")!;
+    expect(kafka.from).toBe("kafka");
+    expect(kafka.to).toBe("worker");
+  });
+});
+
+describe("iconKeyFor — infographic node icons", () => {
+  it("picks brandish icons from the node name", () => {
+    expect(iconKeyFor("Redis", "datastore")).toBe("cache");
+    expect(iconKeyFor("Session & facility cache", "datastore")).toBe("cache");
+    expect(iconKeyFor("Postgres", "datastore")).toBe("database");
+    expect(iconKeyFor("Azure Blob Storage", "datastore")).toBe("blob");
+    expect(iconKeyFor("Kafka", "external")).toBe("topic");
+    expect(iconKeyFor("MQTT Broker (edge)", "external")).toBe("broker");
+    expect(iconKeyFor("ANPR Cameras", "external")).toBe("camera");
+    expect(iconKeyFor("Azure Service Bus", "external")).toBe("cloud");
+    expect(iconKeyFor("Motorist / Driver", "person")).toBe("user");
+  });
+
+  it("falls back by kind", () => {
+    expect(iconKeyFor("Web API", "service")).toBe("service");
+    expect(iconKeyFor("Domain Model", "component")).toBe("component");
+    expect(iconKeyFor("anpr_reading_v2", "topic")).toBe("topic");
+    expect(iconKeyFor("Some Vendor", "external")).toBe("external");
   });
 });
 
