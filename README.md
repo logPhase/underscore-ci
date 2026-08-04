@@ -42,18 +42,20 @@ The reusable workflow does the checkout and calls the action with
 `mode: auto` + `publish: branch`; see
 [`.github/workflows/underscore.yml`](.github/workflows/underscore.yml). To wire
 the analysis into your own steps instead of the reusable workflow, call the
-action (`logPhase/underscore-ci@v2`) directly — its inputs are documented below.
+action (`logPhase/underscore-ci@v2`) directly — the most commonly used inputs
+are below; the full list is in
+[docs/reference/action-inputs-outputs.md](docs/reference/action-inputs-outputs.md).
 
 ### Inputs
 
 | Input | Default | Meaning |
 |---|---|---|
-| `mode` | `pr` | `pr`: analyze the PR diff (needs a `pull_request` event). `full`: whole-repo report, works on `workflow_dispatch` — see [On-demand full-repo report](#on-demand-full-repo-report). |
+| `mode` | `auto` | `auto`: `pr` on a `pull_request` event, `full` otherwise. `pr`: analyze the PR diff. `full`: whole-repo report — see [On-demand full-repo report](#on-demand-full-repo-report). |
 | `delivery` | `artifact` | `artifact`: single-file HTML via the `report-file` output. `pages`: static dir via `publish-dir` for a Pages deploy step. |
 | `sln` | auto-detect | Repo-relative `.sln`/`.slnx` path — required only when the repo has several solutions. |
-| `lang` | `csharp` | `csharp` \| `java` \| `python` (C# is the supported bundle today). |
+| `lang` | `csharp` | `csharp` \| `java` \| `python` \| `kotlin` (C# is the supported bundle today). |
 | `fail-on-error` | `false` | `true` fails the workflow on analysis errors. Default posture: post a "failed, see logs" comment and exit green — Underscore never blocks your pipeline. |
-| `image` | `ghcr.io/logphase/underscore-ci:v1` | Analysis image to run — override for dev/dogfood builds (e.g. `:dev` from `scripts/build-image.sh`). |
+| `image` | `ghcr.io/logphase/underscore-ci:v2` | Analysis image to run — override for dev/dogfood builds (e.g. `:dev` from `scripts/build-image.sh`). |
 | `ghcr-username` / `ghcr-token` | none | Pull auth for the private analysis image. Omit only when `image` is anonymously pullable. |
 
 ### Outputs
@@ -82,10 +84,10 @@ why artifact is the default.
 
 ## On-demand full-repo report
 
-Pass `mode: full` to get a whole-repo report (every journey and chapter — no
-PR diff) from a manually dispatched workflow. Copy
-[`examples/underscore-full.yml`](examples/underscore-full.yml) to
-`.github/workflows/underscore-full.yml` and run it from the Actions tab.
+A whole-repo report (every journey and chapter — no PR diff) needs no extra
+workflow: the caller in [`examples/underscore.yml`](examples/underscore.yml)
+triggers on `workflow_dispatch`, and `mode: auto` resolves that to `full`. Run
+it from the Actions tab.
 
 - Runs on `workflow_dispatch` — no `pull_request` event or payload is needed,
   and no PR comment is posted (`pr-number` output stays empty).
@@ -141,7 +143,7 @@ is never needed in your CI; the model key lives on our analyzer.
 
 Static web build of the Underscore PR report renderer, used by this action to
 publish the interactive report (journeys, impact overlay, BPMN, chapter
-deep-dives). The renderer is a stripped, Electron-free copy of the
+deep-dives). The renderer is an Electron-free fork of the
 `underscore-desktop` app: it boots by fetching `./pr-output.json` (emitted by
 the Underscore analysis CLI), transforms it with `transformToFrontendFormat`,
 hydrates the Zustand analysis store, and lands on the journeys page —
@@ -151,19 +153,19 @@ fixture in `dev-runs/dev-fixture/pr-output.json` (dev-server-only middleware,
 override with `DEV_PR_OUTPUT`); fixtures never live in `public/`, so builds
 carry no baked-in analysis data. `pnpm build` emits `report-dist/`;
 `pnpm build:singlefile` emits the one-file artifact variant (the CI action
-injects the JSON as `<script type="application/json" id="pr-output">`).
+injects the JSON into `<script type="application/json" id="underscore-report-data">`).
 
 ## Building the image (maintainers)
 
 The image is built from a sibling `underscore-desktop` checkout — the backend
-CLI and Roslyn sidecar live there; the report renderer lives here (copied,
+CLI and Roslyn sidecar live there; the report renderer lives here (forked,
 Electron-stripped).
 
 ```bash
 # prerequisites: JDK 21+, Clojure CLI, .NET 10 SDK, pnpm, docker
 ./scripts/build-image.sh [path-to-underscore-desktop]   # or UNDERSCORE_DESKTOP_DIR
-IMAGE_TAG=ghcr.io/logphase/underscore-ci:v1.0.0 ./scripts/build-image.sh
-docker push ghcr.io/logphase/underscore-ci:v1.0.0
+IMAGE_TAG=ghcr.io/logphase/underscore-ci:v2.0.0 ./scripts/build-image.sh
+docker push ghcr.io/logphase/underscore-ci:v2.0.0
 ```
 
 The script stages into `.docker-context/`:
@@ -171,13 +173,14 @@ The script stages into `.docker-context/`:
 - `underscore-cli.jar` — backend uberjar (`clojure -T:build uber`)
 - `roslyn-cli/` — framework-dependent `dotnet publish` (run in-container as
   `dotnet RoslynCli.dll <sln>` via `UNDERSCORE_ROSLYN_CLI`)
+- `kotlin-parser/kotlin-parser.jar` — `mvnw package` of `backend/tools/kotlin-parser`
 - `report-dist/` — static report (`pnpm build`)
 - `underscore-report.template.html` — singlefile build
   (`pnpm build:singlefile`) carrying the `__UNDERSCORE_REPORT_DATA__` marker
   that `scripts/inject-report-data.mjs` replaces per PR
 
 `action.yml` is a **composite** action that does `docker login` + `docker pull`
-+ `docker run` itself (defaulting to `ghcr.io/logphase/underscore-ci:v1`). It is
++ `docker run` itself (defaulting to `ghcr.io/logphase/underscore-ci:v2`). It is
 deliberately NOT a `runs.using: docker` container action: hosted runners pull
 container-action images during "Set up job", before any workflow step can
 authenticate, so a private GHCR image would be unpullable (actions/runner#1919).
@@ -213,3 +216,8 @@ docker run --rm \
    JSON into one HTML file.
 5. One marker-keyed PR comment (`<!-- underscore-pr-report -->`) is created or
    updated with the summary and report location.
+
+## Developing on underscore-ci
+
+Maintainer documentation — architecture, runbooks and reference — lives in
+[`docs/README.md`](docs/README.md).

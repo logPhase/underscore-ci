@@ -1,0 +1,90 @@
+# Underscore-CI — documentation
+
+**Start here.** This is the map of the whole documentation set. It is organised
+by the [Diátaxis](https://diataxis.fr/) framework — four kinds of docs, each
+answering a different question — and shaped as a *pyramid*: read top-to-bottom
+and each layer widens the detail below the last.
+
+```
+                    ┌─────────────────────────┐
+   apex  ─────────► │  What is underscore-ci?  │   ← this file + system-overview
+                    └─────────────────────────┘
+                    ┌─────────────────────────┐
+   explanation ───► │  How & why it works      │   ← the flow, the 3 repos, the fork
+                    └─────────────────────────┘
+          ┌───────────────────┐   ┌───────────────────────────┐
+   do  ─► │  tutorials (learn) │   │  how-to (get a job done)  │
+          └───────────────────┘   └───────────────────────────┘
+                    ┌─────────────────────────┐
+   look up ───────► │  reference (the facts)   │   ← inputs, env vars, routes, types
+                    └─────────────────────────┘
+```
+
+## What underscore-ci is, in one paragraph
+
+On every pull request in a client's C#/.NET repo, a **GitHub Action** runs the
+Underscore analysis CLI *ephemerally on the client's own CI runner*. It diffs
+the PR against the repo's full call graph, finds the execution **journeys** the
+change touches, and publishes a self-contained **interactive HTML report**
+(journeys, method-level impact overlay, BPMN business-flow diagrams, chapter
+deep-dives). The client's code never leaves the runner unless they opt into
+**enrichment**, which routes the diff and changed method bodies through our
+hosted [intent-drift-analyzer](../../intent-drift-analyzer) for the AI layer
+(BPMN synthesis, PR narrative, journey knowledge, correctness findings).
+
+This repo contains three deliverables: the **Action pack** (`action.yml`,
+`entrypoint.sh`, `Dockerfile`, scripts), the **report renderer** (a React SPA
+under `src/`), and the **ops glue** (`viewer/`, `github-app/`).
+
+## The four doc kinds
+
+### 📖 [Explanation](explanation/) — understand the system
+Read these first if you are new. They explain *how the system works and why it
+is shaped the way it is* — no step-by-step, just understanding.
+
+- **[system-overview.md](explanation/system-overview.md)** — the flagship: a PR
+  becoming a report, narrated end to end with file references. **Read this first.**
+- **[architecture-three-repos.md](explanation/architecture-three-repos.md)** —
+  how underscore-ci, intent-drift-analyzer, and underscore-desktop relate.
+- **[the-report-renderer.md](explanation/the-report-renderer.md)** — the React
+  SPA: why it is a *fork* of the desktop app, why HashRouter, why single-file.
+- **[enrichment-and-privacy.md](explanation/enrichment-and-privacy.md)** —
+  structural-only vs enriched, and exactly what data leaves the runner.
+
+### 🛠 [How-to guides](how-to/) — get a specific job done
+Goal-oriented recipes for someone who already understands the system.
+
+- **[run-the-container-locally.md](how-to/run-the-container-locally.md)** — smoke-test the analysis image against a local repo, no GitHub.
+- **[develop-the-renderer.md](how-to/develop-the-renderer.md)** — `pnpm dev` against the dev fixture; add a route/store/page.
+- **[build-and-push-the-image.md](how-to/build-and-push-the-image.md)** — build the analysis image from a sibling desktop checkout.
+- **[deploy-the-viewer.md](how-to/deploy-the-viewer.md)** — stand up the hosted report viewer and the onboarding GitHub App.
+
+### 🎓 [Tutorials](tutorials/) — learn by doing
+- **[first-analysis-end-to-end.md](tutorials/first-analysis-end-to-end.md)** —
+  from a fresh clone to opening a real report in your browser.
+
+### 🔎 [Reference](reference/) — look up the exact facts
+Dry, complete, lookup-friendly. No narrative.
+
+- **[action-inputs-outputs.md](reference/action-inputs-outputs.md)** — every `action.yml` input/output.
+- **[entrypoint-runtime.md](reference/entrypoint-runtime.md)** — every env var, the pr-vs-full branch table, staging, comment upsert.
+- **[renderer-architecture.md](reference/renderer-architecture.md)** — routes, all Zustand stores, the domain types, the boot contract.
+- **[scripts-and-image.md](reference/scripts-and-image.md)** — each script and every Dockerfile layer.
+- **[deployment-viewer-and-app.md](reference/deployment-viewer-and-app.md)** — the viewer and github-app K8s topology.
+
+## The 30-second orientation
+
+| If you want to… | Go to |
+|---|---|
+| Understand what happens on a PR | [system-overview](explanation/system-overview.md) |
+| Change what the report *looks like* | [develop-the-renderer](how-to/develop-the-renderer.md) → [renderer-architecture](reference/renderer-architecture.md) |
+| Change what the analysis *does* | the backend lives in **underscore-desktop**, not here — see [architecture-three-repos](explanation/architecture-three-repos.md) |
+| Change the CI orchestration | [entrypoint-runtime](reference/entrypoint-runtime.md) + `entrypoint.sh` |
+| Ship a new image to clients | [build-and-push-the-image](how-to/build-and-push-the-image.md) |
+| Understand the AI enrichment | [enrichment-and-privacy](explanation/enrichment-and-privacy.md) + the analyzer's own `docs/explanation/system-overview.md` |
+
+> **Client-facing quickstart** (wiring the Action into a repo) lives in the
+> root [`README.md`](../README.md), not here. This `docs/` tree is for
+> *understanding the flow and developing on underscore-ci itself*.
+</content>
+</invoke>
