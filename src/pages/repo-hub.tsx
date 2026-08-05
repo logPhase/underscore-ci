@@ -1,15 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight, ChevronsUpDown } from "lucide-react";
 import { HubArchDiagram } from "@/components/repo/HubArchDiagram";
-import { Markdown } from "@/components/ui/Markdown";
 import { splitSpecBlocks } from "@/lib/specs/ears";
-import { latestByCapability, previousVersionOf, removedCapabilities } from "@/lib/specs/history";
-import { removedRequirementCount, touchedRequirements, type ReqChange } from "@/lib/specs/req-diff";
+import { useSpecsStore } from "@/store/use-specs-store";
+import { latestByCapability, removedCapabilities } from "@/lib/specs/history";
 import { relativeTime } from "@/lib/specs/relative-time";
 import {
   buildActivity,
-  classifyEars,
   groupPrs,
   heroStats,
   liveRequirementCount,
@@ -123,24 +121,15 @@ export default function RepoHub() {
     () => removedCapabilities(history, (specs?.specs ?? []).map((s) => s.capability)),
     [history, specs],
   );
-  const [selectedCap, setSelectedCap] = useState<string | null>(null);
-  const activeCap = selectedCap ?? orderedSpecs[0]?.capability ?? null;
-  const activeSpec = orderedSpecs.find((s) => s.capability === activeCap) ?? null;
-
-  /** Diff of the active capability's latest revision (best-effort — needs the
-   *  previous version's content in the baked bundle). */
-  const activeDiff = useMemo(() => {
-    if (!activeSpec) return { touched: new Map<number, ReqChange>(), removed: 0 };
-    const last = latest.get(activeSpec.capability);
-    const prevEvent = last ? previousVersionOf(history, last.version_id) : null;
-    const prevContent = prevEvent
-      ? (specs?.versions?.[prevEvent.version_id]?.content ?? null)
-      : null;
-    return {
-      touched: touchedRequirements(prevContent, activeSpec.content ?? ""),
-      removed: removedRequirementCount(prevContent, activeSpec.content ?? ""),
-    };
-  }, [activeSpec, latest, history, specs]);
+  // A capability row opens the FULL reader at /specs (EARS text, revision
+  // history, diffs) focused on that capability — the hub lists, /specs reads.
+  // Selecting before navigating survives the reader's own payload load
+  // (see use-specs-store.test.ts).
+  const navigate = useNavigate();
+  const openSpec = (capability: string) => {
+    useSpecsStore.getState().select(capability);
+    navigate("/specs");
+  };
 
   const [prQuery, setPrQuery] = useState("");
   const [prState, setPrState] = useState<string | null>(null);
@@ -254,16 +243,15 @@ export default function RepoHub() {
                   history.filter((e) => e.capability === sp.capability), 13, now);
                 const reqCount = splitSpecBlocks(sp.content)
                   .filter((b) => b.kind === "req").length;
-                const active = sp.capability === activeCap;
                 return (
                   <button
                     key={sp.capability}
                     type="button"
-                    onClick={() => setSelectedCap(sp.capability)}
+                    onClick={() => openSpec(sp.capability)}
                     className="flex w-full cursor-pointer items-center gap-4 border-b px-4 py-2.5 text-left transition-colors"
                     style={{
                       borderColor: T.line,
-                      background: active ? T.panel2 : "transparent",
+                      background: "transparent",
                     }}
                   >
                     <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full"
@@ -313,17 +301,6 @@ export default function RepoHub() {
               ))}
             </div>
 
-            {/* selected capability — requirirement cards + revisions rail */}
-            {activeSpec && (
-              <CapabilityDetail
-                capability={activeSpec.capability}
-                content={activeSpec.content ?? ""}
-                last={latest.get(activeSpec.capability)}
-                touched={activeDiff.touched}
-                removed={activeDiff.removed}
-                events={history.filter((e) => e.capability === activeSpec.capability)}
-              />
-            )}
           </section>
         )}
 
@@ -692,129 +669,6 @@ const Stat = ({ n, label, color }: { n: number; label: string; color?: string })
   </span>
 );
 
-const KIND_LABEL: Record<string, string> = {
-  "ubiquitous": "ubiquitous",
-  "event-driven": "event-driven",
-  "state-driven": "state-driven",
-  "unwanted behaviour": "unwanted behaviour",
-  "optional feature": "optional feature",
-};
-
-function CapabilityDetail({ capability, content, last, touched, removed, events }: {
-  capability: string;
-  content: string;
-  last: SpecHistoryEvent | undefined;
-  touched: Map<number, ReqChange>;
-  removed: number;
-  events: SpecHistoryEvent[];
-}) {
-  const reqs = useMemo(
-    () => splitSpecBlocks(content).filter((b) => b.kind === "req"),
-    [content],
-  );
-  const SHOWN = 8;
-  const changedCount = [...touched.values()].filter((c) => c === "changed").length;
-  const newCount = [...touched.values()].filter((c) => c === "new").length;
-  const summary = [
-    changedCount && `${changedCount} revised`,
-    newCount && `${newCount} added`,
-    removed && `${removed} removed`,
-  ].filter(Boolean).join(" · ");
-
-  return (
-    <div className="mt-8 flex flex-col gap-10 lg:flex-row">
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-3">
-          <h3 className="text-[16px] font-semibold">{capTitle(capability)}</h3>
-          {last && (
-            <span className="rounded-full border px-2.5 py-0.5"
-                  style={{ borderColor: T.lineEm,
-                           ...mono(10, OP_COLOR[last.operation] ?? T.dim) }}>
-              {last.operation === "deleted" ? "superseded" : last.operation}{" "}
-              {relativeTime(last.at)}
-            </span>
-          )}
-        </div>
-        {summary && (
-          <p className="mt-1" style={mono(11, T.amber)}>
-            {summary} in this revision
-          </p>
-        )}
-        <div className="mt-4 flex flex-col gap-2.5">
-          {reqs.slice(0, SHOWN).map((b) => {
-            const change = touched.get(b.reqNo);
-            const edge = change === "new" ? T.green
-              : change === "changed" ? T.amber : T.line;
-            return (
-              <div key={b.reqNo} className="rounded-lg border py-2.5 pr-4 pl-3.5"
-                   style={{ borderColor: T.line, background: T.panel,
-                            borderLeft: `3px solid ${edge}` }}>
-                <div className="flex items-center gap-2.5">
-                  <span className="rounded px-1.5 py-0.5"
-                        style={{ background: T.bg, ...mono(10, T.cyan) }}>
-                    REQ-{b.reqNo}
-                  </span>
-                  <span style={{ ...mono(9, T.dim), letterSpacing: "0.14em",
-                                 textTransform: "uppercase" }}>
-                    {KIND_LABEL[classifyEars(b.text)]}
-                  </span>
-                  {change && (
-                    <span className="ml-auto"
-                          style={{ ...mono(9.5,
-                            change === "new" ? T.green : T.amber),
-                            letterSpacing: "0.12em",
-                            textTransform: "uppercase" }}>
-                      {change === "new" ? "new" : "revised"}
-                    </span>
-                  )}
-                </div>
-                {b.title && (
-                  <div className="mt-1.5 text-[13px] font-semibold">
-                    {b.title}
-                  </div>
-                )}
-                <div className="mt-1.5 text-[13px] leading-relaxed"
-                     style={{ color: b.title ? T.muted : T.text }}>
-                  <Markdown text={b.text} />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        {reqs.length > SHOWN && (
-          <p className="mt-3" style={mono(11, T.dim)}>
-            {reqs.length - SHOWN} further requirement
-            {reqs.length - SHOWN === 1 ? "" : "s"} —{" "}
-            <Link to="/specs" style={{ color: T.cyan }}>open the full spec →</Link>
-          </p>
-        )}
-      </div>
-      {events.length > 0 && (
-        <aside className="w-full shrink-0 lg:w-[260px]">
-          <h4 className="text-[13.5px] font-semibold">Revisions</h4>
-          <ul className="mt-3 flex flex-col gap-3 border-l pl-4"
-              style={{ borderColor: T.line }}>
-            {events.slice(0, 8).map((e, i) => (
-              <li key={e.version_id || String(i)}>
-                <p style={{ ...mono(9.5, OP_COLOR[e.operation] ?? T.dim),
-                            letterSpacing: "0.14em",
-                            textTransform: "uppercase" }}>
-                  {e.operation === "deleted" ? "superseded" : e.operation}
-                </p>
-                <p style={mono(10.5, T.dim)}>{relativeTime(e.at)}</p>
-              </li>
-            ))}
-          </ul>
-        </aside>
-      )}
-    </div>
-  );
-}
-
-// ── RepoCard — shared with the Level-0 portal page ───────────────────────
-
-/** One integrated repo's overview card (unchanged — the portal renders these;
- *  the hub's own cross-repo affordance is the top-bar switcher now). */
 export function RepoCard({
   name,
   href,

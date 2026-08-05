@@ -116,3 +116,28 @@ describe("specs store vs the pr-593 pathological payload", () => {
     expect(useSpecsStore.getState().diffError).toMatch(/wasn't captured/);
   });
 });
+
+// The hub's spec list navigates to /specs by selecting the capability BEFORE
+// the reader mounts and loads its payload. If load clobbered that selection,
+// every click would land on the default capability instead of the one clicked.
+describe("selection made before the payload loads", () => {
+  beforeEach(() => {
+    useSpecsStore.setState({ specs: [], history: [], selected: null });
+  });
+
+  it("survives the load that follows it", () => {
+    useSpecsStore.getState().select("holey");
+
+    useSpecsStore.getState().load(PR593_LIKE);
+
+    expect(useSpecsStore.getState().selected).toBe("holey");
+  });
+
+  it("falls back to the default when the capability is gone", () => {
+    useSpecsStore.getState().select("deleted-capability");
+
+    useSpecsStore.getState().load(PR593_LIKE);
+
+    expect(useSpecsStore.getState().selected).toBe("cpms-authorization");
+  });
+});
