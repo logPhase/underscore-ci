@@ -22,6 +22,11 @@ metadata:
     appgw.ingress.kubernetes.io/ssl-redirect: "true"
     appgw.ingress.kubernetes.io/backend-protocol: "http"
     appgw.ingress.kubernetes.io/backend-path-prefix: "/"
+    # The /ask relay proxies to the analyzer's agent-backed answer, which can
+    # legitimately run 40-180s. Without this, AGIC's default 30s requestTimeout
+    # 504s every Ask while the analyzer is still thinking. Must match the 180s
+    # proxy_read_timeout in the viewer nginx and the report client's fetch abort.
+    appgw.ingress.kubernetes.io/request-timeout: "180"
 spec:
   ingressClassName: azure-application-gateway
   tls:
