@@ -90,4 +90,6 @@ Everything but `/` nests under a pathless `SessionShell` layout route (`src/comp
 
 The chapter's call graph is `CallFlowGraph.tsx` (React Flow, with built-in pan/zoom/minimap), sharing its layout with `src/lib/callgraph/tree-layout.ts`. Mind the alias: `ChapterView.tsx` imports it as `CallFlowChart` (`import CallFlowChart from "./CallFlowGraph"`), so the *name* in that file points at the new component while the older SVG `CallFlowChart.tsx` sits unimported next to it.
 
-Only two components under `src/components/journeys/` and `src/components/bpmn/` have no importers at all: `CallFlowChart.tsx` and `bpmn/BpmnCanvas.tsx`. `BpmnEditor.tsx` and `CodePanel.tsx` are **live** — `ChapterView.tsx` imports both and renders them, and `BpmnEditor` in turn mounts `bpmn/BpmnFlow.tsx`.
+The live business-flow renderer is `bpmn/BpmnCanvas.tsx` — a hand-rolled SVG canvas, **not** React Flow. `ChapterView.tsx` → `BpmnEditor.tsx` → `BpmnCanvas`. `BpmnEditor.tsx` and `CodePanel.tsx` are both live; `ChapterView.tsx` imports and renders each.
+
+Two components under `src/components/journeys/` and `src/components/bpmn/` have no importers at all: `CallFlowChart.tsx` and `bpmn/BpmnFlow.tsx`. `BpmnFlow` is a React-Flow implementation of the same diagram that nothing mounts; it still shares `layout.ts` (via `flow-graph.ts`) with the live canvas, so layout changes are covered by `flow-graph.test.ts` even though the component itself is dead. Edit `BpmnCanvas` when you mean to change what users see.
