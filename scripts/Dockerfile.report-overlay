@@ -1,0 +1,26 @@
+# Renderer-only release: reskin the report WITHOUT rebuilding the backend.
+#
+# The full scripts/build-image.sh compiles the Clojure uberjar, Roslyn CLI and
+# Kotlin parser from a sibling underscore-desktop checkout. That is the right
+# path when the ANALYSIS changes — but it also means a purely cosmetic report
+# change drags in whatever state that checkout happens to be on, and today
+# underscore-desktop@main cannot build the image at all (the Kotlin parser is
+# unmerged; only feature branches carry its sources and mvnw wrapper).
+#
+# A renderer change touches exactly two paths in the image, both produced by
+# `pnpm build` + `pnpm build:singlefile` in THIS repo. So layer them onto the
+# published image instead: the backend that ships is bit-for-bit the one
+# already running in client CI, and no unreviewed backend code can ride along.
+#
+# Use this ONLY for report/renderer changes. Anything touching analysis,
+# entrypoint.sh, or the injector script must go through build-image.sh.
+#
+#   docker build --platform linux/amd64 \
+#     --build-arg BASE=ghcr.io/logphase/underscore-ci:v2 \
+#     -t ghcr.io/logphase/underscore-ci:v2 \
+#     -f scripts/Dockerfile.report-overlay .
+ARG BASE=ghcr.io/logphase/underscore-ci:v2
+FROM ${BASE}
+
+COPY .docker-context/report-dist/ /opt/underscore/report-dist/
+COPY .docker-context/underscore-report.template.html /opt/underscore/underscore-report.template.html
