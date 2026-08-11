@@ -52,7 +52,7 @@ The report lands at `/path/to/repo/.underscore-report/underscore-report.html`. O
 | Exercise correctness findings | `-e FINDINGS=on` with the analyzer env above |
 | Whole-repo report | `-e MODE=full` (no event payload needed for the diff; note full mode always fails the step on an analysis error) |
 | A repo with several solutions | `-e SLN=path/to/App.sln` (repo-relative) |
-| Another language | `-e UNDERSCORE_LANG=java\|python\|kotlin` |
+| Another language | `-e UNDERSCORE_LANG=java\|python` |
 | Inspect what the action would emit | mount two files and set `-e GITHUB_OUTPUT=/github/output -e GITHUB_STEP_SUMMARY=/github/step-summary` |
 
 With `REVIEW=on` and no `GITHUB_TOKEN`, the analyzer call still happens (and is billed) but the comment upsert warns and returns — that is the designed posture, not a bug.

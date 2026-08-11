@@ -69,7 +69,7 @@ The hosted [`viewer/`](../../viewer) — nginx plus a git-sync sidecar — serve
 | Concern | Where it runs | Why it matters |
 |---|---|---|
 | Call-graph analysis, diff, journeys | client's CI runner, in our image | the client's code stays on the runner |
-| The analysis *logic* (CLI + Roslyn/Kotlin parsers) | source lives in underscore-desktop | not editable here |
+| The analysis *logic* (CLI + Roslyn parser) | source lives in underscore-desktop | not editable here |
 | The report renderer | built here from `src/`, baked into the image | a fork of the desktop renderer |
 | AI enrichment and the code review | our hosted analyzer | the only thing that leaves the runner, opt-in |
 | Report hosting | our viewer, or an artifact, or Pages | pure static; no analysis, no IP |

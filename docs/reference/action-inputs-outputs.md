@@ -18,7 +18,7 @@ The complete surface of [`action.yml`](../../action.yml) and of the reusable wor
 | `viewer-url` | `''` | Base URL of the hosted viewer (e.g. `https://host/underscore`). When set, the PR comment and step summary link the report there. |
 | `delivery` | `artifact` | `artifact` emits a single-file HTML via the `report-file` output. `pages` leaves a static dir (`publish-dir`) for a Pages deploy step under `pr-<number>/`. |
 | `sln` | `''` | Repo-relative `.sln`/`.slnx` path. Needed only when the repository holds more than one solution. |
-| `lang` | `csharp` | `csharp` \| `java` \| `python` \| `kotlin`. |
+| `lang` | `csharp` | `csharp` | `java` | `python`. |
 | `fail-on-error` | `false` | `true` fails the workflow on an analysis error. Default posts a "failed, see logs" comment and exits green. |
 | `image` | `ghcr.io/logphase/underscore-ci:v2` | Analysis image to run. Override for dev/dogfood builds (e.g. `:dev` from `scripts/build-image.sh`). |
 | `ghcr-username` | `''` | Username for `ghcr.io` pull auth; any non-empty value works with a PAT-style pull token. Falls back to `x-access-token`. |

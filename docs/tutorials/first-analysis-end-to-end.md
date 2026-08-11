@@ -15,7 +15,7 @@ cd underscore-ci
 ./scripts/build-image.sh /path/to/underscore-desktop
 ```
 
-This builds the backend uberjar, the Roslyn CLI and the Kotlin parser from the desktop checkout, builds the report (`pnpm build` and `pnpm build:singlefile`) from `src/` here, stages all five artifacts into `.docker-context/`, and produces `ghcr.io/logphase/underscore-ci:dev`.
+This builds the backend uberjar and the Roslyn CLI from the desktop checkout, builds the report (`pnpm build` and `pnpm build:singlefile`) from `src/` here, stages all four artifacts into `.docker-context/`, and produces `ghcr.io/logphase/underscore-ci:dev`.
 
 **Checkpoint:** you can say which half of the image came from which repo. → [architecture-three-repos](../explanation/architecture-three-repos.md).
 

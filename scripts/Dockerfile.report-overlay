@@ -1,11 +1,10 @@
 # Renderer-only release: reskin the report WITHOUT rebuilding the backend.
 #
-# The full scripts/build-image.sh compiles the Clojure uberjar, Roslyn CLI and
-# Kotlin parser from a sibling underscore-desktop checkout. That is the right
-# path when the ANALYSIS changes — but it also means a purely cosmetic report
-# change drags in whatever state that checkout happens to be on, and today
-# underscore-desktop@main cannot build the image at all (the Kotlin parser is
-# unmerged; only feature branches carry its sources and mvnw wrapper).
+# The full scripts/build-image.sh compiles the Clojure uberjar and Roslyn CLI
+# from a sibling underscore-desktop checkout. That is the right path when the
+# ANALYSIS changes — but it means a purely cosmetic report change drags in
+# whatever state that checkout happens to be on, and rebuilds the backend for
+# a diff that never touched it.
 #
 # A renderer change touches exactly two paths in the image, both produced by
 # `pnpm build` + `pnpm build:singlefile` in THIS repo. So layer them onto the
