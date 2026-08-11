@@ -31,7 +31,7 @@ on:
         required: false
         default: ''
       lang:
-        description: "csharp | java | python | kotlin."
+        description: "csharp | java | python."
         type: string
         required: false
         default: 'csharp'

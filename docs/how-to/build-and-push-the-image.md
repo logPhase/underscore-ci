@@ -5,7 +5,7 @@ The analysis image bundles the backend CLI and language parsers (sourced from un
 ## Prerequisites
 
 - A sibling **underscore-desktop** checkout — the backend and the parsers live there ([architecture-three-repos](../explanation/architecture-three-repos.md)).
-- JDK 21+, the Clojure CLI, the .NET 10 SDK, pnpm with Node ≥ 24, and Docker. The Kotlin parser builds through the desktop repo's own Maven wrapper, so no separate Maven install is needed.
+- JDK 21+, the Clojure CLI, the .NET 10 SDK, pnpm with Node ≥ 24, and Docker.
 
 ## Build
 
@@ -23,7 +23,6 @@ It stages five artifacts into `.docker-context/` and builds `ghcr.io/logphase/un
 |---|---|
 | `underscore-cli.jar` | `clojure -T:build uber` in the desktop checkout |
 | `roslyn-cli/` | `dotnet publish` of `backend/tools/roslyn-cli` (run in-container as `dotnet RoslynCli.dll`) |
-| `kotlin-parser/kotlin-parser.jar` | `./mvnw -DskipTests package` in `backend/tools/kotlin-parser` |
 | `report-dist/` | `pnpm build` here |
 | `underscore-report.template.html` | `pnpm build:singlefile` here — carries the `__UNDERSCORE_REPORT_DATA__` marker |
 

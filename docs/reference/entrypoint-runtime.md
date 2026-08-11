@@ -67,7 +67,7 @@ Everything [`entrypoint.sh`](../../entrypoint.sh) reads and does inside the anal
 
 ## The source glob
 
-`java` → `*.java`, `python` → `*.py`, `kotlin` → `*.kt`, anything else → `*.cs`. The skip uses a three-dot merge-base diff so only the PR's own changes count; a two-dot diff would leak unrelated upstream commits the moment the base branch moves.
+`java` → `*.java`, `python` → `*.py`, anything else → `*.cs`. The skip uses a three-dot merge-base diff so only the PR's own changes count; a two-dot diff would leak unrelated upstream commits the moment the base branch moves.
 
 ## CLI invocation
 

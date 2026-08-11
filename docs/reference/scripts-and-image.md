@@ -20,20 +20,19 @@ Every script in `scripts/` and every layer of the [`Dockerfile`](../../Dockerfil
 | apt | `git` (worktree diffing), `jq` (payload parsing), `curl`, `ca-certificates`, `nodejs` (runs the injector), and `gh` from the cli.github.com apt repo (comment upsert, findings review) |
 | .NET | .NET 10 SDK installed by `dotnet-install.sh --channel 10.0` into `/usr/share/dotnet`; the install script is kept at `/usr/local/bin/dotnet-install.sh` so the backend can lazily add SDK versions a client repo pins |
 | ENV (.NET) | `DOTNET_ROOT`, `DOTNET_INSTALL_SCRIPT`, telemetry/nologo/first-run opt-outs; `PATH` prepends `DOTNET_ROOT` |
-| ENV (backend) | `UNDERSCORE_MODE=container`, `UNDERSCORE_IN_CONTAINER=1`, `UNDERSCORE_ROSLYN_CLI=/opt/underscore/roslyn-cli/RoslynCli.dll` (DLL mode — no in-container build), `UNDERSCORE_KOTLIN_ANALYZER=/opt/underscore/kotlin-parser/kotlin-parser.jar`, `UNDERSCORE_RUNS_DIR=/tmp/underscore/runs` |
-| COPY from `.docker-context/` | `underscore-cli.jar`, `roslyn-cli/`, `kotlin-parser/`, `report-dist/`, `underscore-report.template.html` → under `/opt/underscore/` |
+| ENV (backend) | `UNDERSCORE_MODE=container`, `UNDERSCORE_IN_CONTAINER=1`, `UNDERSCORE_ROSLYN_CLI=/opt/underscore/roslyn-cli/RoslynCli.dll` (DLL mode — no in-container build), `UNDERSCORE_RUNS_DIR=/tmp/underscore/runs` |
+| COPY from `.docker-context/` | `underscore-cli.jar`, `roslyn-cli/`, `report-dist/`, `underscore-report.template.html` → under `/opt/underscore/` |
 | COPY from the repo | `scripts/inject-report-data.mjs` → `/opt/underscore/scripts/`, `entrypoint.sh` → `/entrypoint.sh` (chmod +x) |
 | Entrypoint | `ENTRYPOINT ["/entrypoint.sh"]`, with the OCI source `LABEL` last on purpose — a metadata-only layer keeps everything above cache-stable |
 
 ## `scripts/build-image.sh` — build-time
 
-Builds the image from a sibling `underscore-desktop` checkout, resolved from the first argument, else `UNDERSCORE_DESKTOP_DIR`, else `../underscore-desktop`; it exits with usage if that path has no `backend/`. It wipes and re-stages `.docker-context/` with five artifacts:
+Builds the image from a sibling `underscore-desktop` checkout, resolved from the first argument, else `UNDERSCORE_DESKTOP_DIR`, else `../underscore-desktop`; it exits with usage if that path has no `backend/`. It wipes and re-stages `.docker-context/` with four artifacts:
 
 1. the backend uberjar — `clojure -T:build uber`, then the newest `underscore-*.jar` under `backend/target/`;
 2. the Roslyn CLI — `dotnet publish backend/tools/roslyn-cli/RoslynCli.csproj -c Release`, asserting `RoslynCli.dll` exists afterwards;
-3. the Kotlin parser — `./mvnw -q -DskipTests package` in `backend/tools/kotlin-parser`, copying `kotlin-parser-1.0-SNAPSHOT.jar` to `kotlin-parser/kotlin-parser.jar`;
-4. `report-dist/` — `pnpm install --frozen-lockfile && pnpm build && pnpm build:singlefile` **in this repo**;
-5. the singlefile template — the first of `report-dist-singlefile/index.html` or `report-dist/underscore-report.html` that exists.
+3. `report-dist/` — `pnpm install --frozen-lockfile && pnpm build && pnpm build:singlefile` **in this repo**;
+4. the singlefile template — the first of `report-dist-singlefile/index.html` or `report-dist/underscore-report.html` that exists.
 
 Two guards: `report-dist/pr-output.json` is deleted and asserted absent (no client analysis data may ship in the distributable), and the singlefile HTML must contain `__UNDERSCORE_REPORT_DATA__`. The build is forced to `linux/amd64` (`IMAGE_PLATFORM`) so an Apple Silicon build never ships unrunnable to GitHub-hosted runners. Tag with `IMAGE_TAG=…`, default `ghcr.io/logphase/underscore-ci:dev`. The script builds; it never pushes.
 

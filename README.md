@@ -53,7 +53,7 @@ are below; the full list is in
 | `mode` | `auto` | `auto`: `pr` on a `pull_request` event, `full` otherwise. `pr`: analyze the PR diff. `full`: whole-repo report — see [On-demand full-repo report](#on-demand-full-repo-report). |
 | `delivery` | `artifact` | `artifact`: single-file HTML via the `report-file` output. `pages`: static dir via `publish-dir` for a Pages deploy step. |
 | `sln` | auto-detect | Repo-relative `.sln`/`.slnx` path — required only when the repo has several solutions. |
-| `lang` | `csharp` | `csharp` \| `java` \| `python` \| `kotlin` (C# is the supported bundle today). |
+| `lang` | `csharp` | `csharp` | `java` | `python` (C# is the supported bundle today). |
 | `fail-on-error` | `false` | `true` fails the workflow on analysis errors. Default posture: post a "failed, see logs" comment and exit green — Underscore never blocks your pipeline. |
 | `image` | `ghcr.io/logphase/underscore-ci:v2` | Analysis image to run — override for dev/dogfood builds (e.g. `:dev` from `scripts/build-image.sh`). |
 | `ghcr-username` / `ghcr-token` | none | Pull auth for the private analysis image. Omit only when `image` is anonymously pullable. |
@@ -173,7 +173,6 @@ The script stages into `.docker-context/`:
 - `underscore-cli.jar` — backend uberjar (`clojure -T:build uber`)
 - `roslyn-cli/` — framework-dependent `dotnet publish` (run in-container as
   `dotnet RoslynCli.dll <sln>` via `UNDERSCORE_ROSLYN_CLI`)
-- `kotlin-parser/kotlin-parser.jar` — `mvnw package` of `backend/tools/kotlin-parser`
 - `report-dist/` — static report (`pnpm build`)
 - `underscore-report.template.html` — singlefile build
   (`pnpm build:singlefile`) carrying the `__UNDERSCORE_REPORT_DATA__` marker

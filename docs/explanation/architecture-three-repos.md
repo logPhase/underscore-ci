@@ -4,7 +4,7 @@ underscore-ci does not stand alone. Knowing which of the three repos owns which 
 
 ```mermaid
 flowchart LR
-  desktop["underscore-desktop<br/>(Clojure CLI + Roslyn/Kotlin parsers)"]
+  desktop["underscore-desktop<br/>(Clojure CLI + Roslyn parser)"]
   ci["underscore-ci (this repo)<br/>action, entrypoint, renderer, ops"]
   analyzer["intent-drift-analyzer<br/>(hosted FastAPI)"]
   desktop -- "built INTO the image at build time" --> ci
@@ -14,11 +14,10 @@ flowchart LR
 
 ## underscore-desktop is the upstream source of the analysis, and is read-only from here
 
-The Clojure/JVM analysis CLI and the language parsers live in a sibling `underscore-desktop` checkout, under `backend/`. **This repo does not contain that code.** [`scripts/build-image.sh`](../../scripts/build-image.sh) reaches into the desktop checkout at image-build time and produces three of the image's four payloads:
+The Clojure/JVM analysis CLI and the language parsers live in a sibling `underscore-desktop` checkout, under `backend/`. **This repo does not contain that code.** [`scripts/build-image.sh`](../../scripts/build-image.sh) reaches into the desktop checkout at image-build time and produces two of the image's four payloads:
 
 - the backend uberjar, via `clojure -T:build uber` in `backend/`;
-- the framework-dependent Roslyn CLI, via `dotnet publish backend/tools/roslyn-cli/RoslynCli.csproj`;
-- the Kotlin parser JAR, via `./mvnw -DskipTests package` in `backend/tools/kotlin-parser`.
+- the framework-dependent Roslyn CLI, via `dotnet publish backend/tools/roslyn-cli/RoslynCli.csproj`.
 
 **To change what the analysis computes, you change underscore-desktop**, then rebuild the image here.
 

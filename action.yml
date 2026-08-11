@@ -113,7 +113,7 @@ inputs:
     required: false
     default: ''
   lang:
-    description: "Language of the repository: csharp | java | python | kotlin."
+    description: "Language of the repository: csharp | java | python."
     required: false
     default: 'csharp'
   fail-on-error:

@@ -25,7 +25,7 @@ pnpm build:singlefile # -> the single-file HTML template clients actually receiv
 
 ## Building the analysis image
 
-`scripts/build-image.sh [desktop-dir]` builds `ghcr.io/logphase/underscore-ci:dev`. It **requires a sibling `underscore-desktop` checkout** (defaults to `$UNDERSCORE_DESKTOP_DIR`, then `../underscore-desktop`) to build the backend uberjar, Roslyn CLI, and Kotlin parser jar — it fails fast if that checkout has no `backend/`. It also runs `pnpm build` + `pnpm build:singlefile` here. Details: [docs/how-to/build-and-push-the-image.md](docs/how-to/build-and-push-the-image.md).
+`scripts/build-image.sh [desktop-dir]` builds `ghcr.io/logphase/underscore-ci:dev`. It **requires a sibling `underscore-desktop` checkout** (defaults to `$UNDERSCORE_DESKTOP_DIR`, then `../underscore-desktop`) to build the backend uberjar and Roslyn CLI — it fails fast if that checkout has no `backend/`. It also runs `pnpm build` + `pnpm build:singlefile` here. Details: [docs/how-to/build-and-push-the-image.md](docs/how-to/build-and-push-the-image.md).
 
 ## Running the container locally
 
