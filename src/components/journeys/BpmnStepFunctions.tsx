@@ -66,6 +66,32 @@ function functionRefs(element: BpmnElement): FnRef[] {
   return out;
 }
 
+/**
+ * Split the citations into THE function and the supporting cast.
+ *
+ * The agent names `primary_fqn` when an element cites more than one
+ * function (validation rules v5+). Two cases resolve without it, and both
+ * must keep working — diagrams produced before v5 are still on disk and
+ * still render:
+ *
+ *   - exactly one citation → it IS the primary, trivially; the analyzer
+ *     deliberately doesn't spend a repair round saying so.
+ *   - no primary named (pre-v5) → no promotion. Fall back to the flat,
+ *     changed-first list rather than guessing, because a WRONG "this is
+ *     the function" is worse than an honest list of candidates.
+ */
+export function splitPrimary(
+  element: BpmnElement,
+  fns: FnRef[],
+): { primary: FnRef | null; rest: FnRef[] } {
+  if (fns.length === 1) return { primary: fns[0], rest: [] };
+  const named = element.primary_fqn && stripArgs(element.primary_fqn);
+  if (!named) return { primary: null, rest: fns };
+  const idx = fns.findIndex(f => stripArgs(f.fqn) === named);
+  if (idx < 0) return { primary: null, rest: fns };
+  return { primary: fns[idx], rest: fns.filter((_, i) => i !== idx) };
+}
+
 function FunctionStrip({ fn, chapter, onOpenCallGraph, defaultOpen }: {
   fn: FnRef; chapter: Chapter; onOpenCallGraph?: (fqn: string) => void;
   /** Start expanded regardless of PR status — used by the docked CODE
@@ -199,6 +225,36 @@ function FunctionStrip({ fn, chapter, onOpenCallGraph, defaultOpen }: {
   );
 }
 
+/** The other cited functions, folded behind one line. They are real context
+ *  — the caller that reaches this step, the collaborators it delegates to —
+ *  but they are not the answer, so they must not compete with it visually.
+ *  Collapsed by default; one click restores the old flat list. */
+function SupportingCast({ fns, chapter, onOpenCallGraph }: {
+  fns: FnRef[]; chapter: Chapter; onOpenCallGraph?: (fqn: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mt-2.5">
+      <button
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        className="w-full flex items-center gap-1.5 px-0.5 py-1 text-left text-[9.5px] font-mono cursor-pointer transition-colors"
+        style={{ color: 'var(--bpmn-text-dim)' }}
+        onMouseEnter={e => { e.currentTarget.style.color = 'var(--bpmn-text-muted)'; }}
+        onMouseLeave={e => { e.currentTarget.style.color = 'var(--bpmn-text-dim)'; }}
+      >
+        <span>{open ? '▾' : '▸'}</span>
+        <span>
+          {fns.length} more function{fns.length === 1 ? '' : 's'} on this step
+        </span>
+      </button>
+      {open && fns.map(fn => (
+        <FunctionStrip key={fn.fqn} fn={fn} chapter={chapter} onOpenCallGraph={onOpenCallGraph} />
+      ))}
+    </div>
+  );
+}
+
 const TYPE_LABEL: Record<string, string> = {
   'service-task': 'task',
   'user-task': 'task',
@@ -237,6 +293,10 @@ export function BpmnStepFunctions({ element, chapter, onClose, onOpenCallGraph, 
     return st === 'modified' || st === 'added' ? 0 : st ? 1 : 2;
   };
   fns.sort((a, b) => rank(a) - rank(b));
+  // The agent's answer beats the PR-status sort. Ranking by "changed
+  // first" cannot separate these at all when every citation changed —
+  // which was the case on 4 of the 10 multi-citation steps in iris PR553.
+  const { primary, rest } = splitPrimary(element, fns);
   return (
     <div
       className={`relative flex-1 min-w-0 flex flex-col overflow-hidden ${bare ? '' : 'rounded-xl'}`}
@@ -304,7 +364,45 @@ export function BpmnStepFunctions({ element, chapter, onClose, onOpenCallGraph, 
             No functions cited on this element — start/end events carry none.
           </div>
         )}
-        {fns.map(fn => <FunctionStrip key={fn.fqn} fn={fn} chapter={chapter} onOpenCallGraph={onOpenCallGraph} defaultOpen={defaultOpen} />)}
+        {primary && (
+          <>
+            {/* Only worth an eyebrow when something is being ranked BELOW
+                it; on a single-citation step the label would be noise. */}
+            {rest.length > 0 && (
+              <div
+                className="mt-2.5 mb-0.5 px-0.5 text-[8.5px] font-mono uppercase"
+                style={{ color: 'var(--bpmn-cyan)', letterSpacing: 1.2 }}
+              >
+                The function
+              </div>
+            )}
+            <FunctionStrip
+              fn={primary}
+              chapter={chapter}
+              onOpenCallGraph={onOpenCallGraph}
+              // The named primary is the answer to "which one is it" — it
+              // opens with its code showing, whatever its PR status.
+              defaultOpen={defaultOpen || rest.length > 0}
+            />
+            {element.primary_why && (
+              <div
+                className="mt-1 px-0.5 text-[10.5px] leading-relaxed"
+                style={{ color: 'var(--bpmn-text-muted)' }}
+              >
+                {element.primary_why}
+              </div>
+            )}
+          </>
+        )}
+        {primary && rest.length > 0 && <SupportingCast
+          fns={rest}
+          chapter={chapter}
+          onOpenCallGraph={onOpenCallGraph}
+        />}
+        {/* No named primary (pre-v5 diagram): the honest flat list. */}
+        {!primary && fns.map(fn => (
+          <FunctionStrip key={fn.fqn} fn={fn} chapter={chapter} onOpenCallGraph={onOpenCallGraph} defaultOpen={defaultOpen} />
+        ))}
       </div>
     </div>
   );

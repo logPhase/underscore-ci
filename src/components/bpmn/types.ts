@@ -50,6 +50,15 @@ export interface BpmnElement {
   /** Rich per-element citation: signature, snippet, comment, file:line.
    *  Mandatory for service-task / gateway / end-event in v5+ output. */
   code_evidence?: BpmnCodeEvidence[];
+  /** THE function this element is — the one its label describes, chosen by
+   *  the agent from its own `code_fqns` (validation rules v5+). An element
+   *  may legitimately cite the caller that reaches it and the collaborators
+   *  it uses; without this, all of them render as equal peers and the reader
+   *  cannot tell which one does the work. Absent on diagrams produced before
+   *  v5, and on elements citing 0-1 functions where it is unambiguous. */
+  primary_fqn?: string;
+  /** One line, business voice, on why that function is the primary. */
+  primary_why?: string;
   outcome?: EndOutcome;
 }
 
