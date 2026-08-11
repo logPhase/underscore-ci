@@ -30,33 +30,41 @@ export interface Layout {
 const GRID = 24;
 const snap = (n: number) => Math.round(n / GRID) * GRID;
 
+// Node sizing is a CAMERA decision, not just a styling one. On-screen
+// legibility is `fontSize × fitScale`, and fitScale falls as the graph's
+// bounding box grows — so growing a card trades against the very
+// readability it's meant to buy. Measured on a real 15-element iris flow at
+// a 1400×760 canvas: bbox 3811×847 ⇒ fit 0.35 (the floor) ⇒ a 16px title
+// painted at 5.6px. Cards therefore grow only MODESTLY here, the growth is
+// paid for by tighter rank spacing below, and the actual legibility win
+// comes from BpmnCanvas's raised fit floor (FIT_FLOOR) — see the note there.
 export function sizeFor(type: BpmnElement["type"]): NodeSize {
   switch (type) {
     case "start-event":
-      return { w: 64, h: 64 };
+      return { w: 72, h: 72 };
     case "end-event":
     case "error-end-event":
-      return { w: 70, h: 70 };
+      return { w: 78, h: 78 };
     case "exclusive-gateway":
     case "parallel-gateway":
       // Big enough that the amber decision glyph reads clearly at the
-      // readable default zoom (see BpmnFlow's fit floor) rather than only
+      // readable default zoom (see the fit floor) rather than only
       // after the user zooms in.
-      return { w: 84, h: 84 };
+      return { w: 100, h: 100 };
     case "call-activity":
     case "missing-call-activity":
       // Larger than service-task so the `+` marker / "no journey yet" label
       // have breathing room without truncating the title.
-      return { w: 340, h: 152 };
+      return { w: 368, h: 176 };
     case "service-task":
     case "user-task":
     default:
       // Premium card: an uppercase kind eyebrow + a BOLD Space-Grotesk
-      // title (~18px). Sized so a real business-step title reads WITHOUT
-      // zooming in at the fit floor — legibility is bought with card size +
-      // weight, not by shrinking. Wide enough that most titles fit in 2-3
-      // lines; height leaves card-like padding.
-      return { w: 324, h: 136 };
+      // title (~19px). Grown on the HEIGHT axis more than the width axis —
+      // height is nearly free (the canvas is width-bound on LR flows, fitH
+      // measured 0.79 vs fitW 0.35), whereas every extra px of width is
+      // multiplied by the rank count and pushes the fit scale down.
+      return { w: 352, h: 168 };
   }
 }
 
@@ -86,8 +94,18 @@ export function layoutGraph(
     // spread grows with them; the extra ranksep also gives the condition-chip
     // solver room to place pills on the horizontal runs between ranks without
     // colliding with the downstream shape's caption.
-    nodesep: 208,
-    ranksep: 200,
+    // Cards grew (324×136 → 352×168) for legibility. The instinct is to pay
+    // for that width by cutting the rank gap, but ranksep is ALSO the
+    // corridor the condition-chip solver places pills in: swept 156/168/180/
+    // 192/204 against flow-graph.test's dense-gateway case and everything
+    // below 204 puts a long condition pill ("no matching entitlement (plate
+    // unknown, outside validity)") on top of a shape. So ranksep is pinned by
+    // chip geometry, not by taste — leave it at 204 unless the chip solver or
+    // the pill cap changes, and re-run that test if you touch it.
+    // nodesep 208 → 168 is where the width came from instead; vertical air is
+    // comparatively free on an LR flow.
+    nodesep: 168,
+    ranksep: 204,
     edgesep: 56,
     marginx: 64,
     marginy: 64,
@@ -451,11 +469,16 @@ export function resolveChipPlacements(
       n.type === "exclusive-gateway" ||
       n.type === "parallel-gateway"
     ) {
+      // Must mirror NodeLabelBelow's real footprint or chips get placed on
+      // top of the captions: gateways render at width 236 (±118), events at
+      // 210 (±105), and the box is the 10px offset + 66px of text. Take the
+      // gateway width for both — over-reserving by 13px on an event is
+      // cheaper than a collision.
       occupied.push({
-        x1: n.x - 108,
+        x1: n.x - 118,
         y1: n.y + n.h / 2,
-        x2: n.x + 108,
-        y2: n.y + n.h / 2 + 58,
+        x2: n.x + 118,
+        y2: n.y + n.h / 2 + 76,
       });
     }
   }

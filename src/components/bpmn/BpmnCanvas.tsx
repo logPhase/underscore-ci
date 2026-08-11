@@ -57,6 +57,12 @@ interface ViewState {
 const MIN_K = 0.25;
 const MAX_K = 2.5;
 
+/** Lower bound for AUTO-fit (manual zoom-out still goes to MIN_K).
+ *  0.68 keeps a 19px card title at ~13px on screen — the point where a
+ *  business-voice label is actually readable without zooming. See the long
+ *  note in `fitToScreen` for why this is a camera problem, not a font one. */
+const FIT_FLOOR = 0.68;
+
 /** True when `cite` looks like an http(s) URL — rendered as a link;
  *  otherwise it's a `:Knowledge` id, rendered as plain text. */
 function isUrl(cite: string): boolean {
@@ -534,6 +540,28 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
     return { ...baseLayout, nodes, edges };
   }, [baseLayout, posOverrides]);
 
+  /** Entrance stagger order: id → animation delay (ms), ordered along the
+   *  flow (left-to-right, then top-to-bottom within a rank) so the diagram
+   *  assembles the way it is READ rather than all at once. Motion here is
+   *  doing a job — it teaches reading direction on first sight and gives the
+   *  eye a path through an unfamiliar flow (the alternative, everything
+   *  appearing simultaneously, is exactly the change-blindness case). Capped
+   *  so a 15-node flow finishes in well under a second, and the whole thing
+   *  is disabled under prefers-reduced-motion in CSS.
+   *
+   *  Keyed off `baseLayout` — NOT `layout` — so dragging a node (which only
+   *  changes posOverrides) never restarts the entrance. */
+  const enterDelays = useMemo(() => {
+    const ordered = [...baseLayout.nodes].sort((a, b) =>
+      a.x !== b.x ? a.x - b.x : a.y - b.y,
+    );
+    const STEP = 38; // ms — inside the 30-50ms stagger band
+    const MAX_STEPS = 10; // cap total sequence at ~380ms + the 260ms tween
+    return new Map(
+      ordered.map((n, i) => [n.id, Math.min(i, MAX_STEPS) * STEP] as const),
+    );
+  }, [baseLayout]);
+
   // One collision-solved center per conditioned edge — recomputed whenever
   // the (possibly drag-re-routed) edges change, so chips never stack on each
   // other, a node, or a caption zone (see layout.resolveChipPlacements).
@@ -725,26 +753,37 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
       minX = Math.min(minX, n.x - n.w / 2);
       minY = Math.min(minY, n.y - n.h / 2 - 12);
       maxX = Math.max(maxX, n.x + n.w / 2);
-      maxY = Math.max(maxY, n.y + n.h / 2 + 52);
+      // 76 = NodeLabelBelow's 10px offset + its 66px box, so a 3-line
+      // gateway question is never cropped by the fit.
+      maxY = Math.max(maxY, n.y + n.h / 2 + 76);
     }
     const bw = maxX - minX;
     const bh = maxY - minY;
     const padTop = 48; // toolbar floats top-right now — no full-width bar
     const padBottom = 40;
     const padX = 40;
-    // Fit-to-screen scale. We prefer label readability (≥0.7), but
-    // when the diagram is too wide to fit at 0.7 in the available
-    // canvas, prioritising readability hides half the diagram off-
-    // screen — strictly worse than a smaller-but-visible view. So:
-    //   - normal case: clamp to [0.7, 2] (good label legibility)
-    //   - fallback:    if the diagram needs <0.7 to fit, accept down to 0.35
-    // 0.35 keeps the structure recognisable; users can zoom in to read
-    // specifics. Earlier hard floor of 0.7 left wide diagrams clipped.
+    // Fit-to-screen scale. On-screen legibility is `fontSize × k`, so this
+    // clamp — not the font sizes — is what decides whether the diagram can be
+    // read. Measured on a real 15-element iris flow at a 1400×760 canvas:
+    // bbox 3811×847 ⇒ raw fit 0.346, which the old 0.35 floor accepted, and a
+    // 16px card title landed on screen at 5.6px. Unreadable. There is no font
+    // size that survives a 0.35 camera.
+    //
+    // A 15-element left-to-right flow simply cannot be BOTH fully visible and
+    // readable on a laptop canvas — that is arithmetic, not styling. Given the
+    // choice, a readable diagram the user pans beats a whole diagram nobody
+    // can read, so the floor is raised to FIT_FLOOR and wide flows now open
+    // legible-but-clipped. Panning, the toolbar Fit button, and ⌘+scroll zoom
+    // are all already available for recovering the overview.
+    //
+    // The real fix for very wide flows is FEWER ELEMENTS per diagram, not a
+    // smaller camera — see the ≤15-entity rule in the root CLAUDE.md.
+    //
     // Cap the auto-fit at 1.0 — small diagrams used to balloon to 2×,
     // which read as cartoonish and left users to zoom back out. 1.0 is
     // the layout's native, most readable scale; users can still zoom in.
     const fit = Math.min((cw - padX * 2) / bw, (ch - padTop - padBottom) / bh);
-    const k = Math.min(1, Math.max(0.35, fit));
+    const k = Math.min(1, Math.max(FIT_FLOOR, fit));
     const x = (cw - bw * k) / 2 - minX * k;
     // Place the diagram slightly ABOVE centre (42% of the free vertical
     // space above, 58% below). Wide/linear flows fit width-first and leave a
@@ -1065,6 +1104,7 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
           />
 
           <g transform={`translate(${view.x}, ${view.y}) scale(${view.k})`}>
+            <g className="bpmn-edges-enter">
             {layout.edges.map((edge, edgeIndex) => {
               // Two flows can share the same from/to and differ only by
               // condition (e.g. a gateway whose branches both converge on
@@ -1112,6 +1152,7 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
                 </g>
               );
             })}
+            </g>
 
             {layout.nodes.map((node) => {
               const isSel =
@@ -1122,7 +1163,11 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
                 ? `${nodeRevealed ? "bpmn-revealed" : "bpmn-ghosted"}${isSpotlit ? " bpmn-spotlight-active" : ""}`
                 : undefined;
               return (
-                <g key={node.id} className={nodeClass}>
+                <g
+                  key={node.id}
+                  className={`bpmn-node-enter${nodeClass ? ` ${nodeClass}` : ""}`}
+                  style={{ animationDelay: `${enterDelays.get(node.id) ?? 0}ms` }}
+                >
                   {/* Spotlight underlay — sits BEHIND the actual node
                       and pulses cyan when the parent g has the
                       .bpmn-spotlight-active class. Always rendered;

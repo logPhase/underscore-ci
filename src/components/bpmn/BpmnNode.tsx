@@ -275,7 +275,7 @@ export function BpmnNode({
             <line x1={cx} y1={cy - 9} x2={cx} y2={cy + 9} />
           </g>
         )}
-        <NodeLabelBelow node={node} color={VAR_TEXT} weight={600} width={188} />
+        <NodeLabelBelow node={node} color={VAR_TEXT} weight={600} width={236} />
         {knowledgeBadge}
       </g>
     );
@@ -305,12 +305,12 @@ export function BpmnNode({
       : (hovered ? VAR_BORDER_EM : VAR_BORDER);
   const strokeWidth = prAccent || isCallActivity || isMissing ? 1.3 : 1;
   const strokeDasharray = isMissing ? "5 4" : prChange === "deleted" ? "6 4" : undefined;
-  const pad = 16;
+  const pad = 20;
   // Title sits below the eyebrow band and is vertically centred in the
   // remaining space — so a one-line title reads as a confident single
   // headline while a three-liner fills the card, both feeling composed.
-  const titleTop = y + 32;
-  const titleBottom = y + node.h - (isCallActivity ? 22 : 14);
+  const titleTop = y + 38;
+  const titleBottom = y + node.h - (isCallActivity ? 26 : 16);
   return (
     <g {...common}>
       {selRing}
@@ -352,10 +352,10 @@ export function BpmnNode({
           kind colour: this is the ambient "what kind of step" channel. */}
       <text
         x={x + pad}
-        y={y + 21}
+        y={y + 25}
         fill={kind.color}
         fontFamily={VAR_FONT_MONO}
-        fontSize={10}
+        fontSize={11}
         fontWeight={600}
         style={{ letterSpacing: 1.3, textTransform: "uppercase" }}
       >
@@ -377,8 +377,8 @@ export function BpmnNode({
             height: "100%",
             color: VAR_TEXT,
             fontFamily: VAR_FONT_TITLE,
-            fontSize: 16,
-            lineHeight: 1.24,
+            fontSize: 19,
+            lineHeight: 1.26,
             fontWeight: 600,
             letterSpacing: 0.1,
             userSelect: "none",
@@ -478,12 +478,19 @@ function SelectionRing({ node }: { node: LaidOutNode }) {
 
 /** Centred caption below events + gateways. `color`/`weight` distinguish a
  *  gateway's business question (white, semibold) from an event's terminal
- *  caption (white, regular). Width widens for gateway questions. */
+ *  caption (white, regular). Width widens for gateway questions.
+ *
+ *  Set in the TITLE face, not mono. These captions carry prose written for a
+ *  non-engineer ("Barrier already opened for this vehicle occupancy?"), and a
+ *  monospace face is the worst possible choice for prose at small sizes: it
+ *  is optimised for column alignment, so it runs ~15% wider per character,
+ *  wraps sooner, and loses the varying letter widths the eye uses for word
+ *  shape recognition. Mono stays where it belongs — FQNs, code, the eyebrow. */
 function NodeLabelBelow({
   node,
   color = VAR_TEXT_MUTED,
   weight = 400,
-  width = 180,
+  width = 210,
 }: {
   node: LaidOutNode;
   color?: string;
@@ -493,20 +500,20 @@ function NodeLabelBelow({
   return (
     <foreignObject
       x={node.x - width / 2}
-      y={node.y + node.h / 2 + 9}
+      y={node.y + node.h / 2 + 10}
       width={width}
-      height={52}
+      height={66}
     >
       <div
         title={node.label}
         style={{
           color,
-          fontFamily: VAR_FONT_MONO,
-          fontSize: 11,
-          lineHeight: 1.32,
+          fontFamily: VAR_FONT_TITLE,
+          fontSize: 15,
+          lineHeight: 1.3,
           textAlign: "center",
           fontWeight: weight,
-          letterSpacing: 0.1,
+          letterSpacing: 0.05,
           userSelect: "none",
           display: "-webkit-box",
           WebkitBoxOrient: "vertical",
