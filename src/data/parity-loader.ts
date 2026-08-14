@@ -41,8 +41,60 @@ function data(): TransformedData | null {
   if (d !== _memoSource) {
     _memoSource = d;
     _prChangeByFqn = null;
+    _callersByFqn = null;
   }
   return d;
+}
+
+// ── Reverse call index ───────────────────────────────────────────────
+// `calls` is fqn → callees. A journey's own edge list often does NOT
+// contain a method's caller — the composed journey is a slice, and a
+// method whose caller fell outside that slice has no inbound edge, so
+// `deriveRoots` draws it as an entry point. Observed on iris PR-685:
+// BarrierOpenDispatcher.RecordBarrierOpenAsShadowEventAsync rendered as a
+// starting method, while the global map plainly recorded
+// DispatchActuationAsync calling it.
+//
+// The whole map is already in the payload, so the honest answer to "who
+// calls this?" costs one lazily-built reverse index.
+let _callersByFqn: Map<string, string[]> | null = null;
+
+const paramless = (fqn: string) => fqn.split("(")[0];
+
+function callersIndex(): Map<string, string[]> {
+  // `data()` is what DETECTS a payload swap and clears the memo, so it has
+  // to run before the cache is consulted. Checking `_callersByFqn` first
+  // returns the previous report's index forever — the caller list would
+  // silently belong to whichever payload happened to load first.
+  const d = data();
+  if (_callersByFqn) return _callersByFqn;
+  const idx = new Map<string, string[]>();
+  const calls = d?.calls ?? {};
+  for (const [caller, callees] of Object.entries(calls)) {
+    for (const callee of (callees as string[]) ?? []) {
+      // Key on the paramless form: callers cite overloads inconsistently,
+      // and a caller list that silently misses an overload is worse than
+      // one that occasionally merges two.
+      const k = paramless(callee);
+      const list = idx.get(k);
+      if (list) {
+        if (!list.includes(caller)) list.push(caller);
+      } else {
+        idx.set(k, [caller]);
+      }
+    }
+  }
+  _callersByFqn = idx;
+  return idx;
+}
+
+/** Every method that calls `fqn`, from the GLOBAL call map — including
+ *  callers the current journey's slice leaves out. Empty for a genuine
+ *  entry point, which is what makes it worth showing: "no callers" and
+ *  "callers exist but not in this journey" must not look identical. */
+export function getCallers(fqn: string): string[] {
+  if (!fqn) return [];
+  return callersIndex().get(paramless(fqn)) ?? [];
 }
 
 // ── Chapter store accessors ──────────────────────────────────────────

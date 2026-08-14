@@ -19,6 +19,11 @@ interface Props {
    *  the canvas solves ALL chips together so none can stack. When absent
    *  (defensive) the edge falls back to its own local anchor. */
   chipPos?: { x: number; y: number } | null;
+  /** PR-change status carried by this CONNECTION: set when the step at
+   *  either end changed. Highlighting only the boxes leaves the reader to
+   *  infer which paths the change actually moved through — the flow between
+   *  two changed steps is itself part of the diff. */
+  prChange?: 'added' | 'modified' | 'deleted' | null;
 }
 
 const VAR_BORDER     = "var(--bpmn-border)";
@@ -27,6 +32,7 @@ const VAR_TEXT_MUTED = "var(--bpmn-text-muted)";
 const VAR_CYAN       = "var(--bpmn-cyan)";
 const VAR_MINT       = "var(--bpmn-mint)";
 const VAR_ROSE       = "var(--bpmn-rose)";
+const VAR_AMBER      = "var(--bpmn-amber)";
 const VAR_TEXT       = "var(--bpmn-text)";
 const VAR_CANVAS     = "var(--bpmn-canvas)";
 const VAR_FONT_MONO  = "var(--bpmn-font-mono)";
@@ -47,6 +53,7 @@ export function BpmnEdge({
   onPointerEnter,
   onPointerLeave,
   chipPos,
+  prChange,
 }: Props) {
   const d = roundedPath(edge.points, 12);
 
@@ -56,14 +63,27 @@ export function BpmnEdge({
   // holds still.
   const dimmed = focusActive && !onPath && !selected && !hovered;
   const lit = selected || hovered || (focusActive && onPath);
+  // A changed connection keeps the ambient grey family for its RESTING
+  // state but takes the status hue, so the diff reads as one continuous
+  // route through the flow rather than a scatter of lit boxes. Selection
+  // and focus still win — the reader's current intent outranks the diff.
+  const changeHue = prChange
+    ? prChange === 'added'
+      ? VAR_MINT
+      : prChange === 'deleted'
+        ? VAR_ROSE
+        : VAR_AMBER
+    : null;
   const stroke = selected
     ? VAR_CYAN
     : lit
       ? VAR_TEXT_MUTED
       : dimmed
         ? VAR_BORDER
-        : VAR_BORDER_EM;
-  const width = selected ? 7 : lit ? 6.5 : dimmed ? 5 : 5.5;
+        : changeHue
+          ? `color-mix(in srgb, ${changeHue} 62%, var(--bpmn-border-em))`
+          : VAR_BORDER_EM;
+  const width = selected ? 7 : lit ? 6.5 : dimmed ? 5 : changeHue ? 6 : 5.5;
   const flowing = !dimmed;
 
   const conditionPositive =
