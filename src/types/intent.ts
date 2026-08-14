@@ -12,7 +12,18 @@ export interface PrOverviewRole {
   /** core = implements the PR's purpose; supporting = adapted to enable
    *  it; ripple = touched mechanically. */
   role: "core" | "supporting" | "ripple" | string;
+  /** Why the journey holds that role — its relationship to the change. */
   why?: string;
+  /** What this PR did to THIS journey, in business voice, written by the
+   *  PR-overview agent. For a ripple it says so plainly ("Nothing
+   *  observable changes here; permission requests are unaffected") — which
+   *  is the single most useful sentence on the page, because the diagram
+   *  still marks every element citing the touched code and therefore looks
+   *  changed either way.
+   *
+   *  Present in the payload since the PR-overview agent shipped; it was
+   *  missing from this type, so nothing could render it. */
+  whatChanged?: string;
 }
 
 export interface PrOverviewLink {
