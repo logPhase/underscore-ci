@@ -206,6 +206,31 @@ export function getPrOverview(): PrOverview | null {
 }
 
 /** Role entry for one journey id (exact match). */
-export function getJourneyRole(journeyId: string): PrOverviewRole | null {
-  return getPrOverview()?.journeys?.find((j) => j.id === journeyId) ?? null;
+/**
+ * The PR overview's verdict on one journey: is it core to this change, or
+ * merely a ripple that calls touched code without behaving differently?
+ *
+ * Matched on the journey id FIRST, then its ENTRY FQN. The second lookup is
+ * the one that matters: the overview keys every entry by method FQN, while a
+ * COMPOSED journey's id is a synthetic `synth-<hash>`. Composed journeys are
+ * exactly the ones that carry BPMN diagrams, so an id-only match missed
+ * every journey a reader actually opens.
+ *
+ * Measured on iris pr-690 — all 7 diagram-bearing journeys failed the id
+ * match; 4 of them match on entryFqn, and all 4 are ripples. One of those
+ * says "Nothing observable changes here; permission requests are
+ * unaffected", while its diagram was busy painting change markers on four
+ * elements. The reader's report was "I can't figure out what changed" —
+ * correct, because nothing had, and the page never said so.
+ */
+export function getJourneyRole(
+  journeyId: string,
+  entryFqn?: string,
+): PrOverviewRole | null {
+  const journeys = getPrOverview()?.journeys;
+  if (!journeys) return null;
+  return (
+    journeys.find((j) => j.id === journeyId) ??
+    (entryFqn ? journeys.find((j) => j.id === entryFqn) ?? null : null)
+  );
 }

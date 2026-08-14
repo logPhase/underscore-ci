@@ -67,3 +67,51 @@ describe("getCallers", () => {
     expect(getCallers("Ns.T.go")).toEqual(["Ns.New.caller"]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// The PR-role join. Measured on iris pr-690: all 7 diagram-bearing journeys
+// failed the id match, because the overview keys entries by method FQN while
+// a COMPOSED journey's id is `synth-<hash>`. The verdict — including "nothing
+// observable changes here" — was computed, shipped, and never displayed.
+// ---------------------------------------------------------------------------
+import { getJourneyRole } from "./parity-loader";
+
+const ENTRY = "Apcoa.IRIS.SkiData.SkiDataController.Permission(RequestDto, CancellationToken)";
+
+const seedOverview = (journeys: unknown[]) =>
+  useAnalysis.setState({
+    transformedData: { prOverview: { journeys } } as unknown as TransformedData,
+  });
+
+describe("getJourneyRole", () => {
+  it("finds a composed journey's verdict by entry FQN", () => {
+    seedOverview([{ id: ENTRY, role: "ripple", whatChanged: "Nothing observable changes here." }]);
+    // `synth-<hash>` is what a composed journey carries as its id.
+    const r = getJourneyRole("synth-0f4e88a4eecd", ENTRY);
+    expect(r?.role).toBe("ripple");
+    expect(r?.whatChanged).toBe("Nothing observable changes here.");
+  });
+
+  it("still matches on journey id when the overview keys it that way", () => {
+    seedOverview([{ id: ENTRY, role: "core" }]);
+    expect(getJourneyRole(ENTRY)?.role).toBe("core");
+  });
+
+  it("prefers the id match over the entry-FQN match", () => {
+    seedOverview([
+      { id: "j1", role: "core" },
+      { id: ENTRY, role: "ripple" },
+    ]);
+    expect(getJourneyRole("j1", ENTRY)?.role).toBe("core");
+  });
+
+  it("returns null rather than guessing when neither matches", () => {
+    seedOverview([{ id: "someone-else", role: "core" }]);
+    expect(getJourneyRole("synth-abc", ENTRY)).toBeNull();
+  });
+
+  it("is null with no overview at all", () => {
+    useAnalysis.setState({ transformedData: null });
+    expect(getJourneyRole("synth-abc", ENTRY)).toBeNull();
+  });
+});

@@ -49,8 +49,8 @@ export const JourneyIntro: React.FC<Props> = ({ chapter, badges }) => {
   const transformedData = useAnalysis((s) => s.transformedData);
   const prOverview = useMemo(() => getPrOverview(), [transformedData]);
   const role = useMemo(
-    () => getJourneyRole(chapter.id),
-    [chapter.id, transformedData]
+    () => getJourneyRole(chapter.id, chapter.entryFqn),
+    [chapter.id, chapter.entryFqn, transformedData]
   );
   const [showAll, setShowAll] = useState(false);
 
@@ -109,6 +109,54 @@ export const JourneyIntro: React.FC<Props> = ({ chapter, badges }) => {
         <span className="flex-1" />
         {badges}
       </div>
+
+      {/* What this PR did to THIS journey — the question a reviewer opens
+          the page with. `whatChanged` is written per journey by the PR
+          overview and was previously computed, shipped and never shown:
+          the lookup matched on journey id, which a composed journey
+          (`synth-<hash>`) never satisfies. Saying "nothing changed here"
+          out loud matters most of all — a ripple journey still paints
+          change markers on every element citing the touched code, so
+          silence reads as "something changed and you missed it". */}
+      {role?.whatChanged && (
+        <div
+          className="mb-3 rounded-md px-3 py-2"
+          style={{
+            background:
+              role.role === "ripple"
+                ? "color-mix(in srgb, var(--bpmn-text-dim) 8%, transparent)"
+                : "color-mix(in srgb, var(--bpmn-amber) 10%, transparent)",
+            borderLeft: `3px solid ${
+              role.role === "ripple"
+                ? "var(--bpmn-text-dim)"
+                : "var(--bpmn-amber)"
+            }`,
+          }}
+        >
+          <div
+            className="font-mono text-[9px] uppercase"
+            style={{
+              color:
+                role.role === "ripple"
+                  ? "var(--bpmn-text-dim)"
+                  : "var(--bpmn-amber)",
+              letterSpacing: 1.6,
+            }}
+          >
+            {role.role === "ripple"
+              ? "not changed by this PR"
+              : role.role === "core"
+                ? "changed by this PR · core"
+                : `changed by this PR · ${role.role}`}
+          </div>
+          <div
+            className="mt-1 text-[12.5px] leading-relaxed"
+            style={{ color: "var(--bpmn-text)" }}
+          >
+            {role.whatChanged}
+          </div>
+        </div>
+      )}
 
       {/* the journey, named */}
       <h1
