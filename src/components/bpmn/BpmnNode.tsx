@@ -18,6 +18,10 @@ interface Props {
   knowledgeCount?: number | null;
   /** Invoked when the knowledge marker is clicked — opens the knowledge panel. */
   onKnowledgeClick?: () => void;
+  /** Open the call graph focused on this element's function. Rendered as an
+   *  explicit target on the card, because the alternative — opening on plain
+   *  selection — fires while the reader is just dragging boxes around. */
+  onCallGraphClick?: () => void;
 }
 
 // Colour tokens — all sourced from CSS variables on `.bpmn-canvas-root`.
@@ -142,6 +146,45 @@ function KnowledgeBadge({ node, count, onClick }: { node: LaidOutNode; count: nu
   );
 }
 
+/** ⌁ marker, bottom-RIGHT — opens the call graph focused on this step's
+ *  function. Mirrors KnowledgeBadge's affordance on the opposite corner so
+ *  the two never collide. Only drawn on cards that cite code. */
+function CallGraphBadge({ node, onClick }: { node: LaidOutNode; onClick: () => void }) {
+  const bx = node.x + node.w / 2 - 15;
+  const by = node.y + node.h / 2 - 15;
+  return (
+    <g
+      style={{ cursor: 'pointer' }}
+      onPointerDown={e => e.stopPropagation()}
+      onClick={e => { e.stopPropagation(); onClick(); }}
+    >
+      <title>Open the call graph focused on this step (or double-click the card)</title>
+      <circle cx={bx} cy={by} r={13} fill="transparent" />
+      <circle
+        cx={bx}
+        cy={by}
+        r={8.5}
+        fill="color-mix(in srgb, var(--bpmn-cyan) 14%, var(--bpmn-canvas))"
+        stroke={VAR_CYAN}
+        strokeWidth={1.3}
+      />
+      <text
+        x={bx}
+        y={by + 0.5}
+        textAnchor="middle"
+        dominantBaseline="middle"
+        fontSize={11}
+        fontWeight={700}
+        fontFamily={VAR_FONT_MONO}
+        fill={VAR_CYAN}
+        pointerEvents="none"
+      >
+        ⌁
+      </text>
+    </g>
+  );
+}
+
 export function BpmnNode({
   node,
   selected,
@@ -153,6 +196,7 @@ export function BpmnNode({
   prChange,
   knowledgeCount,
   onKnowledgeClick,
+  onCallGraphClick,
 }: Props) {
   const cx = node.x;
   const cy = node.y;
@@ -161,6 +205,9 @@ export function BpmnNode({
     knowledgeCount && knowledgeCount > 0
       ? <KnowledgeBadge node={node} count={knowledgeCount} onClick={onKnowledgeClick} />
       : null;
+  const callGraphBadge = onCallGraphClick
+    ? <CallGraphBadge node={node} onClick={onCallGraphClick} />
+    : null;
 
   const common = {
     onPointerDown,
@@ -421,6 +468,7 @@ export function BpmnNode({
         </text>
       )}
       {knowledgeBadge}
+      {callGraphBadge}
     </g>
   );
 }

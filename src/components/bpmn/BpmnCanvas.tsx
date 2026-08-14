@@ -41,6 +41,10 @@ interface Props {
    *  instead of starting the default inline label edit. The read/review
    *  surfaces (ChapterView) wire this to open the step's code. */
   onElementDoubleClick?: (elementId: string) => void;
+  /** Open the call graph focused on an element's function. Wired to the
+   *  card's ⌁ badge AND to double-click — deliberately never to plain
+   *  selection, which fires while the reader is dragging boxes around. */
+  onOpenElementCallGraph?: (elementId: string) => void;
 }
 
 type Selection =
@@ -293,7 +297,7 @@ function KnowledgePanel({
 }
 
 export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanvas(
-  { journey: initial, onChange, getSource: _getSource, onSelectionChange, elementPrStatus, elementKnowledge, onElementDoubleClick },
+  { journey: initial, onChange, getSource: _getSource, onSelectionChange, elementPrStatus, elementKnowledge, onElementDoubleClick, onOpenElementCallGraph },
   ref,
 ) {
   const [journey, setJourney] = useState(initial);
@@ -1136,6 +1140,18 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
                   <BpmnEdge
                     edge={edge}
                     chipPos={chipPlacements[edgeIndex]}
+                    // A connection is part of the diff when a step at
+                    // EITHER end changed: that is the path the change
+                    // moved through. `deleted` wins over `added` wins over
+                    // `modified` so a removed route reads as removed even
+                    // when its other end merely changed.
+                    prChange={(() => {
+                      const a = elementPrStatus?.get(edge.from) ?? null;
+                      const b = elementPrStatus?.get(edge.to) ?? null;
+                      if (a === 'deleted' || b === 'deleted') return 'deleted';
+                      if (a === 'added' || b === 'added') return 'added';
+                      return a ?? b;
+                    })()}
                     selected={isSel}
                     hovered={hoverEdge === key}
                     focusActive={!!throughPath}
@@ -1222,6 +1238,11 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
                     return k ? k.docs.length + k.facts.length : null;
                   })()}
                   onKnowledgeClick={() => setKnowledgeNodeId(node.id)}
+                  onCallGraphClick={
+                    onOpenElementCallGraph
+                      ? () => onOpenElementCallGraph(node.id)
+                      : undefined
+                  }
                   onPointerDown={(e) => {
                     e.stopPropagation();
                     setSelection({ kind: "node", id: node.id });
@@ -1238,7 +1259,8 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
                     // (parent-provided). Selection already happened on the
                     // preceding pointerdown, so this never fights click or
                     // drag. Falls back to inline label editing otherwise.
-                    if (onElementDoubleClick) onElementDoubleClick(node.id);
+                    if (onOpenElementCallGraph) onOpenElementCallGraph(node.id);
+                    else if (onElementDoubleClick) onElementDoubleClick(node.id);
                     else setEditingId(node.id);
                   }}
                 />

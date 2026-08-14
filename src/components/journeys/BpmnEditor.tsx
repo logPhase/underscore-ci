@@ -52,6 +52,9 @@ interface Props {
    *  canvas routes dblclick here (open the code) instead of its default
    *  inline label edit. */
   onElementDoubleClick?: (elementId: string) => void;
+  /** Open the call graph focused on an element's function (⌁ badge or
+   *  double-click). */
+  onOpenElementCallGraph?: (elementId: string) => void;
 }
 
 // Walk the chapter looking for a method matching `fqn`. Match strategies
@@ -68,7 +71,7 @@ const REFINE_API =
     : 'http://localhost:9100');
 
 export const BpmnEditor = forwardRef<BpmnCanvasHandle, Props>(function BpmnEditor(
-  { diagram, chapter, height = '100%', onSelectedFqnsChange, onSelectedElementChange, onElementDoubleClick },
+  { diagram, chapter, height = '100%', onSelectedFqnsChange, onSelectedElementChange, onElementDoubleClick, onOpenElementCallGraph },
   canvasRef,
 ) {
   const fillParent = height === '100%';
@@ -214,6 +217,7 @@ export const BpmnEditor = forwardRef<BpmnCanvasHandle, Props>(function BpmnEdito
         elementPrStatus={elementPrStatus}
         elementKnowledge={elementKnowledge}
         onElementDoubleClick={onElementDoubleClick}
+        onOpenElementCallGraph={onOpenElementCallGraph}
       />
 
       {/* PR-change legend removed per user feedback (visually noisy

@@ -39,6 +39,7 @@ import { useUIStore } from "@/store/use-ui-store";
 import { useAnalysis } from "@/store/use-analysis-store";
 import { AskPanel } from "@/components/journeys/AskPanel";
 import { CodePanel } from "@/components/journeys/CodePanel";
+import { CallGraphPopup } from "@/components/journeys/CallGraphPopup";
 import { useCodeView } from "@/components/journeys/code-view-store";
 
 /** Maps the classifier's `intentReclass` enum to a short human label.
@@ -484,6 +485,44 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
     [expandPath, selectFunction, setRightDock]
   );
 
+  // ── Call graph, over the diagram ──────────────────────────────────
+  // The business flow answers "what happens"; the call graph answers
+  // "where". Side by side neither fits on one screen, so the graph
+  // overlays and dismisses back to the same scroll position.
+  //
+  // Opened ONLY from the card's ⌁ badge or a double-click — never from
+  // plain selection, which fires constantly while dragging boxes around.
+  const [callGraphFqn, setCallGraphFqn] = useState<string | null>(null);
+  const [callGraphLabel, setCallGraphLabel] = useState<string | undefined>();
+
+  const focusFqnOf = useCallback((el: BpmnElement): string | null => {
+    // The agent's own answer first (validation rules v5+); otherwise the
+    // first citation, which is what the flat list showed at the top anyway.
+    const primary = el.primary_fqn?.trim();
+    if (primary) return primary;
+    const first = (el.code_fqns ?? [])[0]
+      ?? (el.code_evidence ?? [])[0]?.fqn;
+    return first ?? null;
+  }, []);
+
+  const openCallGraphForFunction = useCallback((fqn: string) => {
+    expandPath(fqn);
+    scrollRequestRef.current = fqn;
+    selectFunction(fqn);
+    setCallGraphFqn(fqn);
+  }, [expandPath, selectFunction]);
+
+  const onOpenElementCallGraph = useCallback((elementId: string) => {
+    const el = (chapter.bpmn?.elements ?? []).find((e) => e.id === elementId) as
+      | BpmnElement
+      | undefined;
+    if (!el) return;
+    const fqn = focusFqnOf(el);
+    if (!fqn) return; // start/end events cite nothing — nothing to focus
+    setCallGraphLabel(el.label);
+    openCallGraphForFunction(fqn);
+  }, [chapter, focusFqnOf, openCallGraphForFunction]);
+
   // The diagram surface itself — header-less. The journey identity lives
   // in the intro above; the frame's own header strip (see pageBody) hosts
   // the diagram-level controls. The step-functions dialog and the right
@@ -516,7 +555,9 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
           height="100%"
           onSelectedElementChange={setBpmnElement}
           // Double-click a step → open its code in the docked CODE panel.
+          // Double-click a step → the call graph focused on its function.
           onElementDoubleClick={openCodeForElement}
+          onOpenElementCallGraph={onOpenElementCallGraph}
         />
         {/* Ask AI — docked to the diagram like the desktop; answers come
             through the viewer's /ask relay (token stays server-side). */}
@@ -540,6 +581,20 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
           chapter={chapter}
           onOpenCallGraph={onOpenCallGraphAt}
         />
+        {callGraphFqn && (
+          <CallGraphPopup
+            chapter={chapter}
+            focusFqn={callGraphFqn}
+            stepLabel={callGraphLabel}
+            expanded={expanded}
+            onToggleExpand={toggleExpand}
+            onExpandAll={expandAll}
+            onCollapseAll={collapseAll}
+            scrollRequestRef={scrollRequestRef}
+            onFocusFunction={openCallGraphForFunction}
+            onClose={() => setCallGraphFqn(null)}
+          />
+        )}
         {bpmnElement && stepFnsOpen ? (
           <div
             className="absolute inset-0 z-30 flex items-center justify-center p-6"
