@@ -46,6 +46,13 @@ const PAPER_PALETTE = `
   --bpmn-cyan:         #1a6c8f;
   --bpmn-paper:        #fbf8f1;
   --bpmn-paper-edge:   #e6e0d2;
+  /* MUST be redefined: condition chips fill their plate with
+     var(--bpmn-canvas) and the PR corner-chip glyph is drawn in it. Omitted
+     here, both kept the DARK theme's #070912 while everything around them
+     went to paper — every branch label exported as an unreadable black box
+     (seen on the SkiData permission-check flow). Matches the paper theme's
+     own --bpmn-canvas in index.css. */
+  --bpmn-canvas:       #f7f2e6;
 `;
 
 export interface ExportOptions {

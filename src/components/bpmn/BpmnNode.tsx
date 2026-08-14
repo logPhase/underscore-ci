@@ -146,6 +146,53 @@ function KnowledgeBadge({ node, count, onClick }: { node: LaidOutNode; count: nu
   );
 }
 
+/**
+ * Change ring for GATEWAYS and EVENTS — the shapes whose own colour is
+ * already spoken for.
+ *
+ * A task card can show its PR status by tinting its surface, but a gateway
+ * is amber because it is a gateway, and an end-event is mint or rose to say
+ * grant or deny. Colouring those by change status would destroy the meaning
+ * they already carry, so before this they carried NO change signal at all —
+ * a modified gateway was pixel-identical to an untouched one.
+ *
+ * Observed on the SkiData permission-check flow: of four elements citing
+ * changed code, only the one task card was marked. The reader's verdict was
+ * exactly right — "I can't figure out what was changed".
+ *
+ * So the status goes OUTSIDE the shape: a halo in the change colour, which
+ * adds a channel instead of overwriting one. Drawn behind the shape so it
+ * never competes with the glyph inside it.
+ */
+function ChangeRing({ node, prChange }: {
+  node: LaidOutNode; prChange: NonNullable<Props['prChange']>;
+}) {
+  const color = PR_COLOR[prChange];
+  const dashed = prChange === 'deleted';
+  const common = {
+    fill: 'none',
+    stroke: color,
+    strokeWidth: 2.5,
+    opacity: 0.9,
+    strokeDasharray: dashed ? '6 4' : undefined,
+    pointerEvents: 'none' as const,
+    style: {
+      filter: `drop-shadow(0 0 7px color-mix(in srgb, ${color} 55%, transparent))`,
+    },
+  };
+  if (node.type === 'exclusive-gateway' || node.type === 'parallel-gateway') {
+    const half = node.w / 2 + 9;
+    return (
+      <polygon
+        points={`${node.x},${node.y - half} ${node.x + half},${node.y} ${node.x},${node.y + half} ${node.x - half},${node.y}`}
+        strokeLinejoin="round"
+        {...common}
+      />
+    );
+  }
+  return <circle cx={node.x} cy={node.y} r={node.w / 2 + 7} {...common} />;
+}
+
 /** ⌁ marker, bottom-RIGHT — opens the call graph focused on this step's
  *  function. Mirrors KnowledgeBadge's affordance on the opposite corner so
  *  the two never collide. Only drawn on cards that cite code. */
@@ -208,6 +255,17 @@ export function BpmnNode({
   const callGraphBadge = onCallGraphClick
     ? <CallGraphBadge node={node} onClick={onCallGraphClick} />
     : null;
+  // Gateways and events encode their own meaning in colour (amber =
+  // decision, mint/rose = grant/deny), so PR status rides OUTSIDE the shape
+  // as a halo plus the same corner chip the task cards use. Without these
+  // two, a changed gateway or outcome was indistinguishable from an
+  // untouched one.
+  const changeRing = prChange
+    ? <ChangeRing node={node} prChange={prChange} />
+    : null;
+  const cornerStatus = prChange
+    ? <CornerStatus node={node} prChange={prChange} />
+    : null;
 
   const common = {
     onPointerDown,
@@ -242,6 +300,8 @@ export function BpmnNode({
         />
         <circle cx={cx} cy={cy} r={r * 0.34} fill={VAR_MINT} />
         <NodeLabelBelow node={node} color={VAR_TEXT} weight={500} />
+        {changeRing}
+        {cornerStatus}
         {knowledgeBadge}
       </g>
     );
@@ -279,6 +339,8 @@ export function BpmnNode({
           <circle cx={cx} cy={cy} r={r * 0.32} fill={stroke} />
         )}
         <NodeLabelBelow node={node} color={VAR_TEXT} weight={500} />
+        {changeRing}
+        {cornerStatus}
         {knowledgeBadge}
       </g>
     );
@@ -323,6 +385,8 @@ export function BpmnNode({
           </g>
         )}
         <NodeLabelBelow node={node} color={VAR_TEXT} weight={600} width={236} />
+        {changeRing}
+        {cornerStatus}
         {knowledgeBadge}
       </g>
     );
