@@ -17,7 +17,13 @@
  */
 import { useEffect } from 'react';
 import { X } from 'lucide-react';
-import CallFlowGraph from './CallFlowGraph';
+// The SAME component the page renders inline below the diagram. Reaching
+// for './CallFlowGraph' instead gives a DIFFERENT graph — a React Flow
+// canvas whose nodes drag around under the pointer and whose layout does
+// not match the one the reader already knows. Two renderings of the same
+// call graph is a bug, not a choice: the popup exists to bring that graph
+// closer, not to introduce a second dialect of it.
+import CallFlowChart from './CallFlowChart';
 import { getCallers, lookupPrChange } from '@/data/parity-loader';
 import { STATUS_STYLES, type ChangeStatus } from '@/lib/status-colors';
 import type { Chapter } from '@/types/journey';
@@ -179,8 +185,9 @@ export function CallGraphPopup({
 
         {/* the graph itself, focused by the parent before mount */}
         <div className="min-h-0 flex-1 overflow-auto">
-          <CallFlowGraph
+          <CallFlowChart
             chapter={chapter}
+            compact={false}
             expanded={expanded}
             onToggleExpand={onToggleExpand}
             onExpandAll={onExpandAll}
