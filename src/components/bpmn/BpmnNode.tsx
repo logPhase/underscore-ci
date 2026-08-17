@@ -1,5 +1,5 @@
 import type { LaidOutNode } from "./layout";
-import type { BpmnElementType } from "./types";
+import type { BpmnElementType, BpmnSpecRef } from "./types";
 
 interface Props {
   node: LaidOutNode;
@@ -13,11 +13,12 @@ interface Props {
    *  added/modified/deleted in the PR. Drives the corner marker + left
    *  accent rail. null = no decoration. */
   prChange?: 'added' | 'modified' | 'deleted' | null;
-  /** Count of journey-knowledge items (docs + facts) surfaced for this
-   *  element's step. Drives a 📚 bottom-LEFT marker. 0/null = no marker. */
-  knowledgeCount?: number | null;
-  /** Invoked when the knowledge marker is clicked — opens the knowledge panel. */
-  onKnowledgeClick?: () => void;
+  /** Spec-check annotations (living-spec verdicts) on this PR-changed
+   *  element. Drives the § bottom-LEFT marker — rose when any verdict is
+   *  "conflicts", cyan otherwise. Empty/null = no marker. */
+  specRefs?: BpmnSpecRef[] | null;
+  /** Invoked when the § marker is clicked — opens the spec popup. */
+  onSpecClick?: () => void;
   /** Open the call graph focused on this element's function. Rendered as an
    *  explicit target on the card, because the alternative — opening on plain
    *  selection — fires while the reader is just dragging boxes around. */
@@ -103,44 +104,53 @@ function CornerStatus({
   return <circle cx={bx} cy={by} r={3} fill={VAR_TEXT_DIM} opacity={0.7} pointerEvents="none" />;
 }
 
-/** 📚 marker anchored to the BOTTOM-LEFT — journey knowledge (Confluence
- *  passages + graph facts) surfaced for this element's step. Shows the item
- *  count beside the book glyph. Clickable — opens the knowledge panel. Hover
- *  tooltip names the signal. */
-function KnowledgeBadge({ node, count, onClick }: { node: LaidOutNode; count: number; onClick?: () => void }) {
+/** § marker anchored to the BOTTOM-LEFT — the living-spec verdicts the
+ *  analyzer attached to this PR-changed element. Rose (with a glow) when any
+ *  verdict is "conflicts" — the pre-attentive "read this" signal — cyan when
+ *  the change aligns with the specs it touches. Clickable — opens the spec
+ *  popup. Hover tooltip names the verdict. */
+function SpecBadge({ node, refs, onClick }: { node: LaidOutNode; refs: BpmnSpecRef[]; onClick?: () => void }) {
+  const conflict = refs.some((r) => r.verdict === 'conflicts');
+  const color = conflict ? VAR_ROSE : VAR_CYAN;
   const bx = node.x - node.w / 2 + 15;
   const by = node.y + node.h / 2 - 15;
+  const n = refs.length;
   return (
     <g
       style={{ cursor: onClick ? 'pointer' : 'default' }}
       // Stop the pointerdown from starting a node drag / selection; the
-      // marker is its own click target that opens the knowledge panel.
+      // marker is its own click target that opens the spec popup.
       onPointerDown={(e) => { if (onClick) e.stopPropagation(); }}
       onClick={(e) => { if (onClick) { e.stopPropagation(); onClick(); } }}
     >
-      <title>{`${count} knowledge ${count === 1 ? 'item' : 'items'} (docs + decisions) — click to view`}</title>
+      <title>{conflict
+        ? `this change CONFLICTS with a living spec (${n} spec ${n === 1 ? 'reference' : 'references'}) — click to read`
+        : `${n} living-spec ${n === 1 ? 'reference' : 'references'} — the change aligns; click to read`}</title>
       {/* Enlarged transparent hit target for an easier click. */}
       <circle cx={bx} cy={by} r={13} fill="transparent" />
       <circle
         cx={bx}
         cy={by}
         r={8}
-        fill="color-mix(in srgb, var(--bpmn-cyan) 16%, var(--bpmn-canvas))"
-        stroke={VAR_CYAN}
+        fill={`color-mix(in srgb, ${color} 16%, var(--bpmn-canvas))`}
+        stroke={color}
         strokeWidth={1.3}
+        style={conflict ? {
+          filter: `drop-shadow(0 0 6px color-mix(in srgb, ${color} 60%, transparent))`,
+        } : undefined}
       />
       <text
         x={bx}
         y={by + 0.5}
         textAnchor="middle"
         dominantBaseline="middle"
-        fontSize={9}
+        fontSize={10}
         fontWeight={700}
         fontFamily={VAR_FONT_MONO}
-        fill={VAR_CYAN}
+        fill={color}
         pointerEvents="none"
       >
-        {count > 9 ? '9+' : count}
+        §
       </text>
     </g>
   );
@@ -241,16 +251,16 @@ export function BpmnNode({
   onPointerLeave,
   onDoubleClick,
   prChange,
-  knowledgeCount,
-  onKnowledgeClick,
+  specRefs,
+  onSpecClick,
   onCallGraphClick,
 }: Props) {
   const cx = node.x;
   const cy = node.y;
   const selRing = selected ? <SelectionRing node={node} /> : null;
-  const knowledgeBadge =
-    knowledgeCount && knowledgeCount > 0
-      ? <KnowledgeBadge node={node} count={knowledgeCount} onClick={onKnowledgeClick} />
+  const specBadge =
+    specRefs && specRefs.length > 0
+      ? <SpecBadge node={node} refs={specRefs} onClick={onSpecClick} />
       : null;
   const callGraphBadge = onCallGraphClick
     ? <CallGraphBadge node={node} onClick={onCallGraphClick} />
@@ -302,7 +312,7 @@ export function BpmnNode({
         <NodeLabelBelow node={node} color={VAR_TEXT} weight={500} />
         {changeRing}
         {cornerStatus}
-        {knowledgeBadge}
+        {specBadge}
       </g>
     );
   }
@@ -341,7 +351,7 @@ export function BpmnNode({
         <NodeLabelBelow node={node} color={VAR_TEXT} weight={500} />
         {changeRing}
         {cornerStatus}
-        {knowledgeBadge}
+        {specBadge}
       </g>
     );
   }
@@ -387,7 +397,7 @@ export function BpmnNode({
         <NodeLabelBelow node={node} color={VAR_TEXT} weight={600} width={236} />
         {changeRing}
         {cornerStatus}
-        {knowledgeBadge}
+        {specBadge}
       </g>
     );
   }
@@ -531,7 +541,7 @@ export function BpmnNode({
           no journey yet
         </text>
       )}
-      {knowledgeBadge}
+      {specBadge}
       {callGraphBadge}
     </g>
   );

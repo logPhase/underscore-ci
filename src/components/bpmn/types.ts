@@ -34,6 +34,29 @@ export interface BpmnCodeEvidence {
   comment: string;      // 1-2 sentences in business voice
 }
 
+/**
+ * Spec-check annotation the diagrammer attaches to PR-CHANGED elements —
+ * the changed behaviour compared against a living spec (this repo's or a
+ * same-project sibling's). Grounded analyzer-side: the capability resolves
+ * to a real spec and `requirement` is a verified verbatim quote, so the
+ * renderer may trust both.
+ */
+export interface BpmnSpecRef {
+  /** Capability slug — matches SpecEntry.capability in the specs payload
+   *  when the spec belongs to the analyzed repo. */
+  capability: string;
+  /** Analyzer repo id the spec belongs to. Compare against the specs
+   *  payload's repo_id: a mismatch means a sibling repo's spec (full text
+   *  not baked into this report — the quoted requirement carries it). */
+  repo?: string;
+  /** conflicts = the changed code contradicts the quoted requirement. */
+  verdict: "conflicts" | "aligned";
+  /** The requirement, quoted verbatim from the spec. */
+  requirement: string;
+  /** One sentence: how the changed code meets or contradicts it. */
+  why?: string;
+}
+
 export interface BpmnElement {
   id: string;
   type: BpmnElementType;
@@ -60,6 +83,9 @@ export interface BpmnElement {
   /** One line, business voice, on why that function is the primary. */
   primary_why?: string;
   outcome?: EndOutcome;
+  /** Spec-check verdicts on a PR-changed element (v7+ diagrams). Absent on
+   *  unchanged elements and on diagrams produced before the spec check. */
+  spec_refs?: BpmnSpecRef[];
 }
 
 /**
