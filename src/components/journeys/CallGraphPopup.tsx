@@ -15,7 +15,7 @@
  * "Called by" strip reads the GLOBAL call map, so a root node can say which
  * it is: a real entry point, or merely a root of this slice.
  */
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 // The SAME component the page renders inline below the diagram. Reaching
 // for './CallFlowGraph' instead gives a DIFFERENT graph — a React Flow
@@ -24,6 +24,7 @@ import { X } from 'lucide-react';
 // call graph is a bug, not a choice: the popup exists to bring that graph
 // closer, not to introduce a second dialect of it.
 import CallFlowChart from './CallFlowChart';
+import FunctionBodyPanel from './FunctionBodyPanel';
 import { getCallers, lookupPrChange } from '@/data/parity-loader';
 import { STATUS_STYLES, type ChangeStatus } from '@/lib/status-colors';
 import type { Chapter } from '@/types/journey';
@@ -60,6 +61,10 @@ export function CallGraphPopup({
   onFocusFunction: (fqn: string) => void;
   onClose: () => void;
 }) {
+  // The panel's dock control is local to the popup: changing it here must
+  // not rearrange the page underneath, which the reader cannot even see.
+  const [dock, setDock] = useState<'bottom' | 'right' | 'left'>('right');
+
   // Escape closes — a popup you can't dismiss by reflex is a trap.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -85,7 +90,7 @@ export function CallGraphPopup({
         style={{ background: 'rgb(0 0 0 / 0.55)', backdropFilter: 'blur(3px)' }}
       />
       <div
-        className="bpmn-popup-frame relative flex w-full max-w-5xl flex-col overflow-hidden rounded-xl"
+        className="bpmn-popup-frame relative flex w-full max-w-7xl flex-col overflow-hidden rounded-xl"
         style={{
           height: '86%',
           background: 'var(--bpmn-bg)',
@@ -183,17 +188,35 @@ export function CallGraphPopup({
           )}
         </div>
 
-        {/* the graph itself, focused by the parent before mount */}
-        <div className="min-h-0 flex-1 overflow-auto">
-          <CallFlowChart
-            chapter={chapter}
-            compact={false}
-            expanded={expanded}
-            onToggleExpand={onToggleExpand}
-            onExpandAll={onExpandAll}
-            onCollapseAll={onCollapseAll}
-            scrollRequestRef={scrollRequestRef}
-          />
+        {/* Graph left, CODE right — both inside the popup.
+            Selecting a node already set `activeFunctionId`, and
+            FunctionBodyPanel reads that from the store. Before this it
+            rendered in the page layout BEHIND the scrim, so the code was
+            technically open and completely invisible: click a function, see
+            nothing. A popup that answers "where is this?" has to answer
+            "and what does it say?" in the same frame. */}
+        <div className="flex min-h-0 flex-1">
+          <div className="min-h-0 min-w-0 flex-1 overflow-auto">
+            <CallFlowChart
+              chapter={chapter}
+              compact={false}
+              expanded={expanded}
+              onToggleExpand={onToggleExpand}
+              onExpandAll={onExpandAll}
+              onCollapseAll={onCollapseAll}
+              scrollRequestRef={scrollRequestRef}
+            />
+          </div>
+          <div
+            className="min-h-0 w-[46%] max-w-[640px] shrink-0 overflow-hidden"
+            style={{ borderLeft: '1px solid var(--bpmn-border-soft)' }}
+          >
+            <FunctionBodyPanel
+              chapter={chapter}
+              dockPosition={dock}
+              onDockChange={setDock}
+            />
+          </div>
         </div>
       </div>
     </div>

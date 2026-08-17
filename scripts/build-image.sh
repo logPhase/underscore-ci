@@ -4,6 +4,7 @@
 # Stages into .docker-context/:
 #   underscore-cli.jar                backend uberjar
 #   roslyn-cli/                       dotnet publish of backend/tools/roslyn-cli
+#   python-analyzer/                  backend/tools/python-analyzer-pyright sources
 #   report-dist/                      static report build (pnpm build)
 #   underscore-report.template.html   singlefile report build (pnpm build:singlefile)
 #
@@ -37,6 +38,19 @@ echo "==> Roslyn CLI publish (framework-dependent DLL)"
 dotnet publish "$DESKTOP_DIR/backend/tools/roslyn-cli/RoslynCli.csproj" \
   -c Release -o "$CTX/roslyn-cli"
 [[ -f "$CTX/roslyn-cli/RoslynCli.dll" ]] || { echo "RoslynCli.dll missing after publish" >&2; exit 1; }
+
+# Sources only — the venv is built INSIDE the image (a macOS venv would ship
+# Darwin binaries into a Linux container). Exclude any local .venv/tests for
+# the same reason and to keep the layer small.
+echo "==> Python analyzer sources (Pyright)"
+PYSRC="$DESKTOP_DIR/backend/tools/python-analyzer-pyright"
+[[ -d "$PYSRC/pyright_analyzer" ]] || {
+  echo "python analyzer sources not found at $PYSRC" >&2; exit 1; }
+mkdir -p "$CTX/python-analyzer"
+tar -C "$PYSRC" --exclude='.venv' --exclude='tests' --exclude='__pycache__' \
+    -cf - . | tar -C "$CTX/python-analyzer" -xf -
+[[ -f "$CTX/python-analyzer/requirements.txt" ]] || {
+  echo "python analyzer requirements.txt missing after staging" >&2; exit 1; }
 
 echo "==> Report build (pnpm build + build:singlefile)"
 (cd "$CI_DIR" && pnpm install --frozen-lockfile && pnpm build && pnpm build:singlefile)

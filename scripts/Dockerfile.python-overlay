@@ -1,0 +1,53 @@
+# Python analysis, layered onto the published image — a SEPARATE tag.
+#
+# `lang: python` has been an advertised action input from the start, but
+# nothing shipped behind it: the image carries no python3 at all, so every
+# Python run dies on "pyright analyzer package not found". This adds the
+# interpreter, the Pyright analyzer sources, and a baked venv.
+#
+# Why an overlay rather than a Dockerfile change + full rebuild:
+#
+#   1. It does not touch the tag client CI depends on. Building this pushes
+#      :python; :v2 keeps serving whatever it serves today. A regression here
+#      cannot reach a repo that never opted in.
+#   2. The full build cannot run on Apple Silicon anyway — extracting the
+#      .NET SDK under qemu fails with "tar: Cannot open: Function not
+#      implemented" long before any of this is reached.
+#
+# UNDERSCORE_PYTHON_BIN is the load-bearing env var. Without it the backend
+# bootstraps a venv at RUN time (python3 -m venv + pip install pyright), which
+# needs network from inside a client's CI runner and fails closed on a
+# restricted one. Baking the venv here makes analysis hermetic.
+#
+#   docker build --platform linux/amd64 \
+#     --build-arg BASE=ghcr.io/logphase/underscore-ci:v2 \
+#     -t ghcr.io/logphase/underscore-ci:python \
+#     -f scripts/Dockerfile.python-overlay .
+ARG BASE=ghcr.io/logphase/underscore-ci:v2
+FROM ${BASE}
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends python3 python3-venv npm \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY .docker-context/python-analyzer/ /opt/underscore/python-analyzer/
+
+# Use the Node already in the image. Left to itself, pyright-python builds a
+# private nodeenv and shells out to ITS npm — which exits 127 here, because
+# the base installs `nodejs` from apt without npm. Reusing the system Node
+# avoids a second toolchain inside the image entirely.
+ENV PYRIGHT_PYTHON_GLOBAL_NODE=true
+
+# The prewarm is NOT optional. The `pyright` PyPI package is a thin wrapper
+# that fetches its own Node on first invocation; skip this and the venv looks
+# complete while the language server dies at runtime with "LSP server closed
+# the connection" — which is exactly how it failed the first time.
+RUN python3 -m venv /opt/underscore/python-analyzer/.venv \
+ && /opt/underscore/python-analyzer/.venv/bin/pip install -q --no-cache-dir \
+      -r /opt/underscore/python-analyzer/requirements.txt \
+ && /opt/underscore/python-analyzer/.venv/bin/pyright --version \
+ && /opt/underscore/python-analyzer/.venv/bin/python -c \
+      "import subprocess,sys; subprocess.run([sys.executable,'-m','pyright','--version'],check=True)"
+
+ENV UNDERSCORE_PYTHON_ANALYZER=/opt/underscore/python-analyzer \
+    UNDERSCORE_PYTHON_BIN=/opt/underscore/python-analyzer/.venv/bin/python
