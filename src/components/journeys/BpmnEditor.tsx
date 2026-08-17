@@ -28,7 +28,6 @@ import type { BpmnElement } from '@/components/bpmn/types';
 export type { BpmnCanvasHandle };
 import { mostProminentChange, type PrChange } from '@/data/parity-loader';
 import { useAnalysis } from '@/store/use-analysis-store';
-import { knowledgeByElement, type StepKnowledge } from '@/lib/transform-data/journey-knowledge';
 
 interface Props {
   diagram: BpmnDiagram;
@@ -123,17 +122,6 @@ export const BpmnEditor = forwardRef<BpmnCanvasHandle, Props>(function BpmnEdito
     }
   }, [selectedElementId, active, onSelectedFqnsChange, onSelectedElementChange]);
 
-  // Per-element journey knowledge: Confluence passages + graph facts the
-  // analyzer surfaced for the step whose code each BPMN element cites. Same
-  // leaf-match pattern as the PR-status lookup. Scoped to the active journey
-  // by journey_id. Drives the 📚 marker.
-  const journeyKnowledge = useAnalysis((s) => s.transformedData.journeyKnowledge);
-  const elementKnowledge = useMemo<Map<string, StepKnowledge>>(() => {
-    const jid = (active as { journey_id?: string }).journey_id;
-    const journey = journeyKnowledge?.journeys?.find((j) => j.journey_id === jid);
-    return knowledgeByElement(active.elements as BpmnElement[], journey?.steps);
-  }, [active, journeyKnowledge]);
-
   // Per-element PR-change status: which BPMN elements cite a method that
   // was added/modified in this PR? Computed once per diagram via set
   // intersection — pure, free, deterministic. Nothing from the LLM here.
@@ -215,7 +203,6 @@ export const BpmnEditor = forwardRef<BpmnCanvasHandle, Props>(function BpmnEdito
         getSource={sourceLookup}
         onSelectionChange={setSelectedElementId}
         elementPrStatus={elementPrStatus}
-        elementKnowledge={elementKnowledge}
         onElementDoubleClick={onElementDoubleClick}
         onOpenElementCallGraph={onOpenElementCallGraph}
       />

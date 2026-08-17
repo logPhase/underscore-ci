@@ -1,11 +1,10 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { ChevronRight, Eye, EyeOff, Maximize2, Minus, MousePointer2, Plus, RotateCcw } from "lucide-react";
 import type { BpmnElement, BpmnJourney } from "./types";
-import type { Doc, Fact, KnowledgeSummary } from "@/types/intent";
-import type { StepKnowledge } from "@/lib/transform-data/journey-knowledge";
 import { layoutGraph, resolveChipPlacements } from "./layout";
 import { BpmnNode } from "./BpmnNode";
 import { BpmnEdge, chipGeometry } from "./BpmnEdge";
+import { SpecPopup } from "./SpecPopup";
 import { exportBpmnSvgAsPng, type ExportOptions } from "@/lib/exportBpmnPng";
 
 export interface BpmnCanvasHandle {
@@ -33,10 +32,6 @@ interface Props {
    *  snapshot set). Drives node decorations (left border + corner
    *  badge). Elements not in the map render normally. */
   elementPrStatus?: Map<string, 'added' | 'modified' | 'deleted'>;
-  /** Per-element journey knowledge (from knowledgeByElement) — the Confluence
-   *  passages + graph facts surfaced for each step. Drives the 📚 knowledge
-   *  marker and the side panel. */
-  elementKnowledge?: Map<string, StepKnowledge>;
   /** When set, double-clicking a node fires this with the element id
    *  instead of starting the default inline label edit. The read/review
    *  surfaces (ChapterView) wire this to open the step's code. */
@@ -67,237 +62,8 @@ const MAX_K = 2.5;
  *  note in `fitToScreen` for why this is a camera problem, not a font one. */
 const FIT_FLOOR = 0.68;
 
-/** True when `cite` looks like an http(s) URL — rendered as a link;
- *  otherwise it's a `:Knowledge` id, rendered as plain text. */
-function isUrl(cite: string): boolean {
-  return /^https?:\/\//i.test(cite.trim());
-}
-
-/** ISO timestamp → a short human date ("Jun 19, 2026"); falls back to the
- *  date part if unparseable, null when absent. */
-function fmtDate(iso: string | null): string | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso.slice(0, 10);
-  return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
-}
-
-/** A short, friendly label for a cite — "Confluence" for Atlassian wiki URLs,
- *  the host for other URLs, the file/page name for paths and :Knowledge ids. */
-function citeLabel(cite: string): string {
-  const c = (cite || "").trim();
-  if (/atlassian\.net/i.test(c)) return "Confluence";
-  if (isUrl(c)) {
-    try {
-      return new URL(c).hostname.replace(/^www\./, "");
-    } catch {
-      return "Open link";
-    }
-  }
-  return c.split("/").pop() || c;
-}
-
-/** Snippets arrive as passages joined by " · ". Split into clean lines so the
- *  panel renders them as a readable list instead of one wall of text. */
-function splitSnippet(snippet: string): string[] {
-  return (snippet || "")
-    .split(/\s*·\s*/)
-    .map((p) => p.replace(/^[-•\s]+/, "").trim())
-    .filter(Boolean);
-}
-
-/** Anchored journey-knowledge side panel — the docs + decisions surfaced for
- *  the clicked step. Shows Confluence passages (Docs) and graph facts
- *  (Decisions), anchored beside the step with click-away / Esc dismiss. */
-function KnowledgePanel({
-  left,
-  top,
-  knowledge,
-  docs,
-  facts,
-  onClose,
-}: {
-  left: number;
-  top: number;
-  knowledge?: KnowledgeSummary | null;
-  docs: Doc[];
-  facts: Fact[];
-  onClose: () => void;
-}) {
-  const summary = knowledge?.summary?.trim();
-  // Strongest doc first. With no analyzer summary, the top doc carries the
-  // headline (title + a short snippet) and the rest are Sources; with a
-  // summary, every doc is just a Source link.
-  const sortedDocs = [...docs].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-  const leadDoc = !summary && sortedDocs.length ? sortedDocs[0] : null;
-  const sourceDocs = leadDoc ? sortedDocs.slice(1) : sortedDocs;
-  const hasLead = !!summary || !!leadDoc;
-  return (
-    <div
-      className="absolute z-30 flex flex-col rounded-lg border shadow-xl"
-      style={{
-        left,
-        top,
-        width: 420,
-        maxHeight: "75%",
-        background: "var(--bpmn-surface)",
-        borderColor: "var(--bpmn-cyan)",
-        color: "var(--bpmn-text)",
-        fontFamily: "var(--bpmn-font-mono)",
-      }}
-      onPointerDown={(e) => e.stopPropagation()}
-    >
-      <div
-        className="flex items-center justify-between border-b px-3 py-2"
-        style={{ borderColor: "var(--bpmn-border)" }}
-      >
-        <span
-          className="text-[10px] font-semibold uppercase tracking-wider"
-          style={{ color: "var(--bpmn-cyan)" }}
-        >
-          📚 Journey knowledge
-        </span>
-        <button
-          onClick={onClose}
-          className="rounded px-1 text-zinc-400 hover:text-zinc-100"
-          aria-label="Close"
-        >
-          ✕
-        </button>
-      </div>
-      <div className="overflow-auto px-3 py-3 text-[11.5px] leading-relaxed">
-        {/* Summary — the analyzer's synthesized prose for this step (the
-            headline). Falls back to the top doc (title + short snippet) when
-            absent, so the step never blanks. */}
-        {summary ? (
-          <p className="m-0 leading-relaxed" style={{ color: "var(--bpmn-text)" }}>
-            {summary}
-          </p>
-        ) : leadDoc ? (
-          <div>
-            <div className="mb-1 font-semibold leading-snug" style={{ color: "var(--bpmn-text)" }}>
-              {leadDoc.title}
-            </div>
-            <p className="m-0 leading-snug" style={{ color: "var(--bpmn-text-muted)" }}>
-              {splitSnippet(leadDoc.snippet)[0] ?? leadDoc.snippet}
-            </p>
-          </div>
-        ) : null}
-
-        {/* Decisions — graph facts; superseded struck. */}
-        {facts.length > 0 && (
-          <div
-            className={hasLead ? "mt-3 border-t pt-3" : ""}
-            style={hasLead ? { borderColor: "var(--bpmn-border)" } : undefined}
-          >
-            <div
-              className="mb-1.5 text-[9px] font-semibold uppercase tracking-wider"
-              style={{ color: "var(--bpmn-text-muted)" }}
-            >
-              Decisions
-            </div>
-            {facts.map((f, i) => {
-              const superseded = !!f.invalid_at;
-              return (
-                <div
-                  key={i}
-                  className="mt-2 rounded-md border px-2.5 py-2 first:mt-0"
-                  style={{
-                    borderColor: "var(--bpmn-border)",
-                    background: superseded
-                      ? "transparent"
-                      : "color-mix(in srgb, var(--bpmn-mint) 5%, transparent)",
-                  }}
-                >
-                  <p
-                    className="mb-1 leading-snug"
-                    style={{
-                      color: superseded ? "var(--bpmn-text-muted)" : "var(--bpmn-text)",
-                      textDecoration: superseded ? "line-through" : undefined,
-                    }}
-                  >
-                    {f.fact}
-                  </p>
-                  <div
-                    className="flex flex-wrap items-center gap-1.5 text-[9px]"
-                    style={{ color: "var(--bpmn-text-dim)" }}
-                  >
-                    {fmtDate(f.valid_at) && <span>✓ valid {fmtDate(f.valid_at)}</span>}
-                    {superseded && (
-                      <span
-                        className="inline-block rounded px-1 py-0.5 uppercase tracking-wider"
-                        style={{
-                          background: "color-mix(in srgb, var(--bpmn-rose) 18%, transparent)",
-                          color: "var(--bpmn-rose)",
-                        }}
-                      >
-                        superseded{fmtDate(f.invalid_at) ? ` ${fmtDate(f.invalid_at)}` : ""}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Sources — raw docs as title → cite links. The summary already
-            distilled the snippets, so they are not shown here. */}
-        {sourceDocs.length > 0 && (
-          <div
-            className={hasLead || facts.length > 0 ? "mt-3 border-t pt-3" : ""}
-            style={
-              hasLead || facts.length > 0
-                ? { borderColor: "var(--bpmn-border)" }
-                : undefined
-            }
-          >
-            <div
-              className="mb-1.5 flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-wider"
-              style={{ color: "var(--bpmn-text-muted)" }}
-            >
-              <span>Sources</span>
-              <span style={{ color: "var(--bpmn-text-dim)" }}>· {sourceDocs.length}</span>
-            </div>
-            <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
-              {sourceDocs.map((d, i) => (
-                <li key={i} className="leading-snug">
-                  {d.cite && isUrl(d.cite) ? (
-                    <a
-                      href={d.cite}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-start gap-1 hover:underline"
-                      style={{ color: "var(--bpmn-cyan)" }}
-                    >
-                      <span>{d.title}</span>
-                      <span aria-hidden>↗</span>
-                    </a>
-                  ) : (
-                    <span
-                      className="inline-flex items-start gap-1"
-                      style={{ color: "var(--bpmn-text-muted)" }}
-                    >
-                      <span aria-hidden>📄</span>
-                      <span>{d.title}</span>
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {!summary && sortedDocs.length === 0 && facts.length === 0 && (
-          <div style={{ color: "var(--bpmn-text-muted)" }}>No knowledge captured for this step.</div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanvas(
-  { journey: initial, onChange, getSource: _getSource, onSelectionChange, elementPrStatus, elementKnowledge, onElementDoubleClick, onOpenElementCallGraph },
+  { journey: initial, onChange, getSource: _getSource, onSelectionChange, elementPrStatus, onElementDoubleClick, onOpenElementCallGraph },
   ref,
 ) {
   const [journey, setJourney] = useState(initial);
@@ -323,8 +89,8 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
     },
     [],
   );
-  // Node id whose journey-knowledge panel is open (click the 📚 marker).
-  const [knowledgeNodeId, setKnowledgeNodeId] = useState<string | null>(null);
+  // Node id whose spec popup is open (click the § marker).
+  const [specNodeId, setSpecNodeId] = useState<string | null>(null);
   // Per-node manual position overrides. Keyed by element id; absent means
   // "use the auto-layout position". Reset by the toolbar Reset button.
   const [posOverrides, setPosOverrides] = useState<Map<string, { x: number; y: number }>>(
@@ -866,7 +632,7 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
     if (e.target !== e.currentTarget) return;
     userNavRef.current = true; // canvas pan — camera is the user's now
     setSelection(null);
-    setKnowledgeNodeId(null); // click-away dismisses the knowledge panel
+    setSpecNodeId(null); // click-away dismisses the spec popup
     panRef.current = {
       startX: e.clientX,
       startY: e.clientY,
@@ -1019,7 +785,7 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
         if (e.defaultPrevented) return;
         setSelection(null);
         setEditingId(null);
-        setKnowledgeNodeId(null);
+        setSpecNodeId(null);
       }
       if ((e.key === "f" || e.key === "F") && !e.metaKey && !e.ctrlKey) {
         fitToScreen();
@@ -1233,11 +999,8 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
                   selected={isSel}
                   hovered={hoverNode === node.id}
                   prChange={elementPrStatus?.get(node.id) ?? null}
-                  knowledgeCount={(() => {
-                    const k = elementKnowledge?.get(node.id);
-                    return k ? k.docs.length + k.facts.length : null;
-                  })()}
-                  onKnowledgeClick={() => setKnowledgeNodeId(node.id)}
+                  specRefs={journey.elements.find((el) => el.id === node.id)?.spec_refs ?? null}
+                  onSpecClick={() => setSpecNodeId(node.id)}
                   onCallGraphClick={
                     onOpenElementCallGraph
                       ? () => onOpenElementCallGraph(node.id)
@@ -1283,31 +1046,19 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
           />
         )}
 
-        {/* Journey-knowledge panel — anchored beside the clicked step's 📚
-            marker. Click-away / Esc dismiss. */}
+        {/* Spec popup — a centered modal over the diagram, opened by a
+            step's § marker. Backdrop click / Esc / ✕ dismiss. */}
         {(() => {
-          if (!knowledgeNodeId) return null;
-          const n = layout.nodes.find((nd) => nd.id === knowledgeNodeId);
-          const k = elementKnowledge?.get(knowledgeNodeId);
-          if (!n || !k || (k.docs.length === 0 && k.facts.length === 0)) return null;
-          const W = 420;
-          const cw = containerRef.current?.clientWidth ?? 900;
-          const ch = containerRef.current?.clientHeight ?? 600;
-          const sLeft = (n.x - n.w / 2) * view.k + view.x;
-          const sRight = (n.x + n.w / 2) * view.k + view.x;
-          const sTop = (n.y - n.h / 2) * view.k + view.y;
-          const openLeft = sRight + 14 + W > cw;
-          const left = openLeft ? Math.max(8, sLeft - 14 - W) : sRight + 14;
-          const top = Math.min(Math.max(8, sTop), Math.max(8, ch - 140));
+          if (!specNodeId) return null;
+          const el = journey.elements.find((e) => e.id === specNodeId);
+          const refs = el?.spec_refs ?? [];
+          if (!el || refs.length === 0) return null;
           return (
-            <KnowledgePanel
-              key={knowledgeNodeId}
-              left={left}
-              top={top}
-              knowledge={k.knowledge}
-              docs={k.docs}
-              facts={k.facts}
-              onClose={() => setKnowledgeNodeId(null)}
+            <SpecPopup
+              key={specNodeId}
+              refs={refs}
+              elementLabel={el.label}
+              onClose={() => setSpecNodeId(null)}
             />
           );
         })()}
