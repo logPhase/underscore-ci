@@ -11,8 +11,11 @@
 # published image instead: the backend that ships is bit-for-bit the one
 # already running in client CI, and no unreviewed backend code can ride along.
 #
-# Use this ONLY for report/renderer changes. Anything touching analysis,
-# entrypoint.sh, or the injector script must go through build-image.sh.
+# Use this for report/renderer AND entrypoint changes. Anything touching the
+# BACKEND (the jar, the analyzers) must go through build-image.sh — which
+# currently cannot run from desktop@main at all (the enrichment layer only
+# exists on unmerged branches), one more reason this overlay carries
+# everything the CI repo itself owns.
 #
 #   docker build --platform linux/amd64 \
 #     --build-arg BASE=ghcr.io/logphase/underscore-ci:v2 \
@@ -23,3 +26,4 @@ FROM ${BASE}
 
 COPY .docker-context/report-dist/ /opt/underscore/report-dist/
 COPY .docker-context/underscore-report.template.html /opt/underscore/underscore-report.template.html
+COPY entrypoint.sh /entrypoint.sh
