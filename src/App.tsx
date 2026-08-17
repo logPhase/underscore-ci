@@ -11,6 +11,7 @@ import FindingsPage from "./pages/findings";
 import ArchitecturePage from "./pages/architecture";
 import EntryLoader from "./pages/entry";
 import SpecsPage from "./pages/specs";
+import VocabularyPage from "./pages/vocabulary";
 
 const App = () => {
   return (
@@ -31,6 +32,7 @@ const App = () => {
             <Route path="/journeys" element={<JourneyPage />} />
             <Route path="/journeys/:chapterSlug" element={<ChapterPage />} />
             <Route path="/specs" element={<SpecsPage />} />
+            <Route path="/vocabulary" element={<VocabularyPage />} />
             <Route path="/findings" element={<FindingsPage />} />
           </Route>
           {/* Legacy canvas path — kept working for old deep links. */}

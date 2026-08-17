@@ -12,7 +12,7 @@ import {
   Route,
   ScrollText,
   ShieldAlert,
-} from "lucide-react";
+BookOpenText } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Navigate, NavLink, Outlet } from "react-router-dom";
 import { RouteErrorBoundary } from "@/components/layout/RouteErrorBoundary";
@@ -139,6 +139,9 @@ const SessionRail = () => {
   const journeyCount = composedCount > 0 ? composedCount : allChapters.length;
   const specCount = transformedData?.specs?.specs.length ?? 0;
   const hasSpecs = transformedData?.specs != null;
+  // Present (even empty) = the run baked vocabulary; absent = pre-vocabulary
+  // report — hide the tab rather than show dead chrome.
+  const vocabTerms = transformedData?.vocabulary?.terms ?? null;
   // OPEN findings only — resolved ones are ledger history (struck on the
   // page), not something the rail should keep shouting about.
   const findingItems = (transformedData?.findings?.items ?? []).filter(
@@ -313,6 +316,16 @@ const SessionRail = () => {
             icon={ScrollText}
             label="Specs"
             badge={specCount > 0 ? String(specCount) : null}
+            badgeColor="var(--bpmn-text-dim)"
+            collapsed={collapsed}
+          />
+        )}
+        {vocabTerms != null && (
+          <RailNavItem
+            to="/vocabulary"
+            icon={BookOpenText}
+            label="Vocabulary"
+            badge={vocabTerms.length > 0 ? String(vocabTerms.length) : null}
             badgeColor="var(--bpmn-text-dim)"
             collapsed={collapsed}
           />
