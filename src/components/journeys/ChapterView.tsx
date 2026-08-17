@@ -40,6 +40,7 @@ import { useAnalysis } from "@/store/use-analysis-store";
 import { AskPanel } from "@/components/journeys/AskPanel";
 import { CodePanel } from "@/components/journeys/CodePanel";
 import { CallGraphPopup } from "@/components/journeys/CallGraphPopup";
+import { FlowNarrative } from "@/components/journeys/FlowNarrative";
 import { useCodeView } from "@/components/journeys/code-view-store";
 
 /** Maps the classifier's `intentReclass` enum to a short human label.
@@ -547,6 +548,12 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
           </span>
         </div>
       )}
+      {/* The agent's prose for this flow — intent + narrative. See
+          FlowNarrative for why this exists. */}
+      <FlowNarrative
+        intent={chapter.bpmn?.intent}
+        narrative={chapter.bpmn?.narrative}
+      />
       <div className="bpmn-popup-canvas relative min-h-0 flex-1">
         <BpmnEditor
           ref={bpmnCanvasRef}
