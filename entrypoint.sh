@@ -440,6 +440,25 @@ echo "Running: java -jar underscore-cli.jar ${ANALYSIS_ARGS[*]}"
 java -jar "$UNDERSCORE_HOME/underscore-cli.jar" "${ANALYSIS_ARGS[@]}" || on_analysis_failure
 [[ -s "$OUT_DIR/pr-output.json" ]] || on_analysis_failure
 
+# --- Bake the living vocabulary ----------------------------------------------
+# The domain-vocabulary payload (GET /vocabulary — the ubiquitous language the
+# synth agent maintains in the repo's memory store) is merged into
+# pr-output.json HERE, not in the jar, deliberately: the analyzer-enrichment
+# layer of the CLI lives on unmerged desktop branches, so a jar-side bake
+# could only be built from unreviewed code. This is three lines of curl+jq
+# against the same analyzer the run already talked to. Best-effort, like every
+# enrichment: any failure leaves the payload without a `vocabulary` key and
+# the report's Vocabulary view says "none recorded yet".
+if [[ -n "${INTENT_DRIFT_URL:-}" && -n "${INTENT_DRIFT_TOKEN:-}" ]]; then
+  VOCAB_REPO_ID="${INTENT_DRIFT_REPO_ID:-${GITHUB_REPOSITORY##*/}}"
+  if VOCAB_JSON=$(curl -fsS --max-time 60         -H "Authorization: Bearer $INTENT_DRIFT_TOKEN"         "${INTENT_DRIFT_URL%/}/vocabulary?repo_id=$(jq -rn --arg v "$VOCAB_REPO_ID" '$v|@uri')")      && jq -e '.terms' <<<"$VOCAB_JSON" >/dev/null 2>&1; then
+    jq --argjson v "$VOCAB_JSON" '. + {vocabulary: $v}'         "$OUT_DIR/pr-output.json" >"$OUT_DIR/pr-output.json.tmp"       && mv "$OUT_DIR/pr-output.json.tmp" "$OUT_DIR/pr-output.json"
+    echo "Vocabulary: $(jq '.terms | length' <<<"$VOCAB_JSON") terms baked"
+  else
+    echo "Vocabulary: fetch failed or malformed — report ships without it"
+  fi
+fi
+
 # --- Stage the report --------------------------------------------------------
 mkdir -p "$PUBLISH_DIR"
 cp -R "$UNDERSCORE_HOME/report-dist/." "$PUBLISH_DIR/"

@@ -257,6 +257,9 @@ export interface RawAnalysisJSON {
   fileGroups?: import("./grouping").ServiceFileGroups[];
   /** Living-specs bundle (list + history + version contents), baked in. */
   specs?: import("./specs").SpecsPayload;
+  /** Living domain vocabulary — flat, capability-tagged terms. Baked by
+   *  entrypoint.sh from GET /vocabulary; absent on pre-vocabulary reports. */
+  vocabulary?: import("./vocabulary").VocabPayload;
   /** Correctness-audit findings from the analyzer's review agent, baked in. */
   findings?: import("./findings").FindingsPayload;
   /** Repository architecture diagram (component/integration graph), baked in. */
@@ -290,6 +293,8 @@ export interface AnalysisData {
 }
 
 export interface TransformedData extends AnalysisData {
+  /** Living domain vocabulary — passthrough from the raw payload. */
+  vocabulary?: import("./vocabulary").VocabPayload | null;
   chapters: Chapter[];
   chapterById: Map<string, Chapter>;
   chapterBySlug: Map<string, Chapter>;

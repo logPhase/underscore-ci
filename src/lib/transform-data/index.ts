@@ -169,6 +169,7 @@ export function transformToFrontendFormat(
   // Analyzer repo key + baked-in analyzer bundles (specs, module groups).
   transformedData.analyzerRepoId = raw.analyzerRepoId ?? null;
   transformedData.specs = raw.specs ?? null;
+  transformedData.vocabulary = raw.vocabulary ?? null;
   transformedData.findings = raw.findings ?? null;
   transformedData.architecture = raw.architecture ?? null;
 

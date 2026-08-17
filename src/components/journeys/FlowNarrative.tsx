@@ -14,12 +14,17 @@
  * trades ~100px against the canvas.
  */
 import { useState } from 'react';
+import { useAnalysis } from '@/store/use-analysis-store';
+import { linkTerms } from '@/lib/vocab-links';
 
 export function FlowNarrative({ intent, narrative }: {
   intent?: string;
   narrative?: string;
 }) {
   const [open, setOpen] = useState(true);
+  // Known vocabulary terms render as glossary links — ambient discovery of
+  // the house language, in the prose that uses it.
+  const vocabTerms = useAnalysis((s) => s.transformedData?.vocabulary?.terms) ?? [];
   // Synthetic fallback diagrams carry neither field — render nothing rather
   // than an empty chrome strip.
   if (!intent && !narrative) return null;
@@ -43,7 +48,7 @@ export function FlowNarrative({ intent, narrative }: {
             className="min-w-0 text-[13px] leading-snug"
             style={{ color: 'var(--bpmn-text)', fontWeight: 550 }}
           >
-            {intent}
+            {linkTerms(intent, vocabTerms)}
           </span>
         )}
         {narrative && (
@@ -64,7 +69,7 @@ export function FlowNarrative({ intent, narrative }: {
           className="mt-1.5 max-w-[92ch] text-[12.5px] leading-relaxed"
           style={{ color: 'var(--bpmn-text-muted)', margin: '6px 0 0' }}
         >
-          {narrative}
+          {linkTerms(narrative, vocabTerms)}
         </p>
       )}
     </div>
