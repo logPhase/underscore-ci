@@ -1,22 +1,24 @@
 /**
- * The Vocabulary view — the repo's ubiquitous language as a graph.
+ * The Vocabulary view — the repo's ubiquitous language as a LIVE graph.
  *
- * Nodes are terms, sized by connectedness; hulls tint each capability's
- * cluster — the DDD context map, emergent rather than drawn. The layout is
- * force-directed but SEEDED and run once at build (see vocab-layout.ts):
- * same terms, same picture, every load. A node can be dragged to untangle a
- * local knot — deliberate, reader-initiated motion — but nothing moves on
- * its own, ever.
+ * The graph is Obsidian-style force physics (an explicit product decision,
+ * 2026-08-18): terms drift into place on load, a dragged node pulls its
+ * neighbours elastically and the graph re-settles, hovering a term lights
+ * its neighbourhood and fades the rest. Capability = node colour — the DDD
+ * context map reads through the clustering the springs produce. The
+ * simulation is seeded from the term slugs with a fixed timestep, so an
+ * untouched graph still settles into the same picture every load
+ * (vocab-sim.ts); `prefers-reduced-motion` snaps it to rest.
  *
  * Left rail: search + capability-grouped term list. Click (node or list
  * row) → detail panel: definition, code anchors, business usage, journeys,
  * language notes. Terms whose notes record drift carry an amber tick.
  */
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAnalysis } from "@/store/use-analysis-store";
 import { getChapterById, getMethodInfo } from "@/data/parity-loader";
-import { layoutVocabulary } from "@/lib/vocab-layout";
+import { VocabForceGraph } from "@/components/vocab/VocabForceGraph";
 import type { VocabTerm } from "@/types/vocabulary";
 import { X } from "lucide-react";
 
@@ -33,24 +35,12 @@ export default function VocabularyPage() {
   const terms = useMemo(() => vocabulary?.terms ?? [], [vocabulary]);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
-  // Reader-initiated drag overrides, on top of the deterministic layout.
-  const [dragged, setDragged] = useState<Map<string, { x: number; y: number }>>(new Map());
-  const dragRef = useRef<{ slug: string; dx: number; dy: number } | null>(null);
-  const svgRef = useRef<SVGSVGElement | null>(null);
 
-  const layout = useMemo(() => layoutVocabulary(terms), [terms]);
   const bySlug = useMemo(() => new Map(terms.map(t => [t.slug, t])), [terms]);
   const capColor = useMemo(() => {
     const caps = [...new Set(terms.map(t => t.capability))].sort();
     return new Map(caps.map((c, i) => [c, CAP_COLORS[i % CAP_COLORS.length]]));
   }, [terms]);
-
-  const pos = (slug: string) => {
-    const o = dragged.get(slug);
-    if (o) return o;
-    const n = layout.nodes.find(n => n.slug === slug)!;
-    return { x: n.x, y: n.y };
-  };
 
   const q = query.trim().toLowerCase();
   const matches = (t: VocabTerm) =>
@@ -58,16 +48,6 @@ export default function VocabularyPage() {
     t.code.some(c => c.fqn.toLowerCase().includes(q) || c.alias.toLowerCase().includes(q));
 
   const sel = selected ? bySlug.get(selected) ?? null : null;
-
-  const svgPoint = (e: React.PointerEvent) => {
-    const svg = svgRef.current!;
-    const r = svg.getBoundingClientRect();
-    const vb = svg.viewBox.baseVal;
-    return {
-      x: ((e.clientX - r.left) / r.width) * vb.width,
-      y: ((e.clientY - r.top) / r.height) * vb.height,
-    };
-  };
 
   if (terms.length === 0) {
     return (
@@ -137,90 +117,13 @@ export default function VocabularyPage() {
 
       {/* ── the graph ───────────────────────────────────────────────── */}
       <div className="relative min-w-0 flex-1" style={{ background: "var(--bpmn-bg)" }}>
-        <svg
-          ref={svgRef}
-          viewBox={`0 0 ${layout.width} ${layout.height}`}
-          className="h-full w-full"
-          onPointerMove={(e) => {
-            const d = dragRef.current;
-            if (!d) return;
-            const p = svgPoint(e);
-            setDragged(prev => new Map(prev).set(d.slug, { x: p.x - d.dx, y: p.y - d.dy }));
-          }}
-          onPointerUp={() => { dragRef.current = null; }}
-          onPointerLeave={() => { dragRef.current = null; }}
-        >
-          {/* capability hulls — the wash that makes clusters legible */}
-          {layout.hulls.map(h => h.points.length >= 3 && (
-            <polygon
-              key={h.capability}
-              points={h.points.map(p => `${p.x},${p.y}`).join(" ")}
-              fill={`color-mix(in srgb, ${capColor.get(h.capability)} 7%, transparent)`}
-              stroke={`color-mix(in srgb, ${capColor.get(h.capability)} 22%, transparent)`}
-              strokeWidth={26}
-              strokeLinejoin="round"
-              pointerEvents="none"
-            />
-          ))}
-          {/* related-term edges */}
-          {layout.edges.map(e => {
-            const a = pos(e.from), b = pos(e.to);
-            const dim = q && !(matches(bySlug.get(e.from)!) && matches(bySlug.get(e.to)!));
-            return (
-              <line
-                key={`${e.from}|${e.to}`}
-                x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-                stroke="var(--bpmn-border-em)"
-                strokeWidth={1.4}
-                opacity={dim ? 0.15 : 0.55}
-              />
-            );
-          })}
-          {/* term nodes */}
-          {terms.map(t => {
-            const p = pos(t.slug);
-            const n = layout.nodes.find(n => n.slug === t.slug)!;
-            const r = 7 + Math.min(9, n.degree * 2.2);
-            const dim = q ? !matches(t) : false;
-            const isSel = selected === t.slug;
-            return (
-              <g
-                key={t.slug}
-                opacity={dim ? 0.22 : 1}
-                style={{ cursor: "pointer" }}
-                onPointerDown={(e) => {
-                  e.preventDefault();
-                  const sp = svgPoint(e);
-                  dragRef.current = { slug: t.slug, dx: sp.x - p.x, dy: sp.y - p.y };
-                }}
-                onClick={() => setSelected(t.slug)}
-              >
-                <circle
-                  cx={p.x} cy={p.y} r={r}
-                  fill={`color-mix(in srgb, ${capColor.get(t.capability)} ${isSel ? 42 : 24}%, var(--bpmn-surface))`}
-                  stroke={isSel ? "var(--bpmn-cyan)" : capColor.get(t.capability)}
-                  strokeWidth={isSel ? 2.4 : 1.4}
-                />
-                {t.notes.length > 0 && (
-                  <circle cx={p.x + r * 0.85} cy={p.y - r * 0.85} r={3} fill="var(--bpmn-amber)" pointerEvents="none">
-                    <title>language notes recorded</title>
-                  </circle>
-                )}
-                <text
-                  x={p.x} y={p.y + r + 13}
-                  textAnchor="middle"
-                  fontSize={12.5}
-                  fontFamily="var(--bpmn-font-title)"
-                  fontWeight={isSel ? 650 : 480}
-                  fill="var(--bpmn-text)"
-                  pointerEvents="none"
-                >
-                  {t.name}
-                </text>
-              </g>
-            );
-          })}
-        </svg>
+        <VocabForceGraph
+          terms={terms}
+          capColor={capColor}
+          selected={selected}
+          onSelect={setSelected}
+          isMatch={q ? matches : null}
+        />
 
         {/* ── detail panel ──────────────────────────────────────────── */}
         {sel && (

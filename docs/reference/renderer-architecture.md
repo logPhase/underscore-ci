@@ -26,6 +26,7 @@ The exact boot contract, routes, stores, pages and types of the `src/` report re
 | `/journeys` | `JourneyPage` | the departures-board index |
 | `/journeys/:chapterSlug` | `ChapterPage` | one journey's deep dive |
 | `/specs` | `SpecsPage` | living EARS specs — payload-gated |
+| `/vocabulary` | `VocabularyPage` | the ubiquitous language as a live Obsidian-style force graph (`lib/vocab-sim.ts` — seeded, fixed-timestep, deterministic at rest) — payload-gated |
 | `/findings` | `FindingsPage` | correctness audit — payload-gated |
 | `/home` | → `/canvas` | legacy deep-link redirect |
 | `*` | `NotFound` | |
