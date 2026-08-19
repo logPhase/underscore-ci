@@ -4,7 +4,6 @@ import { PointerEventsGuard } from "./components/pointer-events-guard";
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import SessionShell from "./components/layout/session-shell";
 import NotFound from "./pages/NotFound";
-import { CanvasWorldPage } from "./pages/canvas-world";
 import ChapterPage from "./pages/chapter";
 import JourneyPage from "./pages/journeys";
 import FindingsPage from "./pages/findings";
@@ -27,7 +26,6 @@ const App = () => {
               routes; SessionShell redirects to the loader when no report
               is loaded. */}
           <Route element={<SessionShell />}>
-            <Route path="/canvas" element={<CanvasWorldPage />} />
             <Route path="/architecture" element={<ArchitecturePage />} />
             <Route path="/journeys" element={<JourneyPage />} />
             <Route path="/journeys/:chapterSlug" element={<ChapterPage />} />
@@ -35,8 +33,12 @@ const App = () => {
             <Route path="/vocabulary" element={<VocabularyPage />} />
             <Route path="/findings" element={<FindingsPage />} />
           </Route>
-          {/* Legacy canvas path — kept working for old deep links. */}
-          <Route path="/home" element={<Navigate to="/canvas" replace />} />
+          {/* The canvas view was removed (2026-08-19): it was the only
+              consumer of the analyzer's module grouping, an agent run per
+              repo that nothing else needed. Its deep links — and the older
+              /home alias that pointed at it — land on the journeys board. */}
+          <Route path="/canvas" element={<Navigate to="/journeys" replace />} />
+          <Route path="/home" element={<Navigate to="/journeys" replace />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </HashRouter>

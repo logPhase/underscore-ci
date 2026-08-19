@@ -3,7 +3,6 @@ import { useUIStore } from "@/store/use-ui-store";
 import { Chapter, StatusKey } from "@/types/journey";
 import { motion } from "motion/react";
 import {
-  ArrowLeft,
   ChevronDown,
   Workflow,
   ChevronRight,
@@ -18,15 +17,13 @@ import {
   useMemo,
   useState,
   SetStateAction,
-  useCallback,
 } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAnalysis } from "@/store/use-analysis-store";
 import { FilterPill } from "@/components/journeys/filter-pill";
-import { Button } from "@/components/ui/button";
 import { impactRank } from "@/lib/transform-data/utils";
 
-import PRSummaryBanner from "@/components/canvas/PRSummaryBanner";
+import PRSummaryBanner from "@/components/layout/PRSummaryBanner";
 import {
   deriveJourneyRoute,
   type JourneyRoute,
@@ -288,7 +285,6 @@ const PRIntro = () => {
 };
 
 interface JourneyHeaderProps {
-  onBack: () => void;
   chapters: Chapter[];
   hasPR: boolean;
   impacted: Chapter[];
@@ -302,7 +298,6 @@ interface JourneyHeaderProps {
 }
 
 const JourneyHeader = ({
-  onBack,
   chapters,
   hasPR,
   impacted,
@@ -334,14 +329,6 @@ const JourneyHeader = ({
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
       >
-        <Button
-          onClick={onBack}
-          variant="ghost"
-          className="mb-3 gap-1.5 px-2 py-1 text-zinc-500 hover:bg-[color:var(--bpmn-surface-hi)] hover:text-zinc-200"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Canvas
-        </Button>
         {/* Departures identity: mono teal eyebrow + serif-italic headline. */}
         <div
           className="font-mono text-[10.5px] tracking-[0.3em] uppercase"
@@ -556,26 +543,23 @@ const JourneyPage = () => {
   );
 
   const navigate = useNavigate();
-  const onBack = useCallback(() => navigate("/home"), [navigate]);
   const onSelectChapter = (id: string) =>
     navigate(`/journeys/${encodeURIComponent(id)}`);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       // Cmd+K belongs to the global command palette (command-palette.tsx);
-      // chapter search opens via the index toolbar button.
-      if (e.key === "Escape") {
-        if (searchOpen) {
-          setSearchOpen(false);
-          setSearchQuery("");
-        } else {
-          onBack();
-        }
+      // chapter search opens via the index toolbar button. Escape closes
+      // search; with the canvas gone this board is the top of the session,
+      // so Escape has nowhere further to go.
+      if (e.key === "Escape" && searchOpen) {
+        setSearchOpen(false);
+        setSearchQuery("");
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [searchOpen, onBack]);
+  }, [searchOpen]);
 
   const { impacted, primary, secondary, noise, unimpacted, statusCounts, hasIntent } =
     useMemo(() => {
@@ -722,7 +706,6 @@ const JourneyPage = () => {
       <div className="min-h-0 flex-1 overflow-y-auto">
         {/* Header */}
         <JourneyHeader
-          onBack={onBack}
           hasPR={hasPR}
           chapters={chapters}
           impacted={impacted}
