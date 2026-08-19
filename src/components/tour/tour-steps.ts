@@ -25,7 +25,7 @@ export interface TourContext {
 
 export function buildTourSteps(ctx: TourContext): TourStep[] {
   const views =
-    "Canvas is the map, Journeys are the flows" +
+    "Journeys are the flows" +
     (ctx.hasSpecs ? ", Specs is the agreed behavior" : "") +
     (ctx.hasFindings ? ", Findings is what disagrees with it" : "") +
     ".";
@@ -111,16 +111,6 @@ export function buildTourSteps(ctx: TourContext): TourStep[] {
             "pull request changes — same map, different ink.",
         }
       : null,
-    {
-      id: "canvas",
-      route: "/canvas",
-      target: '[data-tour="canvas-root"]',
-      placement: "bottom",
-      title: "The city map",
-      body:
-        "Districts are functional groups; the colored lines are the journeys " +
-        "you just met. Same code, seen from above.",
-    },
   ];
   return steps.filter((s): s is TourStep => s !== null);
 }

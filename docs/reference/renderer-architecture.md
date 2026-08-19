@@ -21,17 +21,16 @@ The exact boot contract, routes, stores, pages and types of the `src/` report re
 | Path | Component | Notes |
 |---|---|---|
 | `/` | `EntryLoader` | boots; renders hub/portal or redirects to `/journeys` |
-| `/canvas` | `CanvasWorldPage` | the architecture map (biological world) |
 | `/architecture` | `ArchitecturePage` | the analyzer's repository architecture diagram |
 | `/journeys` | `JourneyPage` | the departures-board index |
 | `/journeys/:chapterSlug` | `ChapterPage` | one journey's deep dive |
 | `/specs` | `SpecsPage` | living EARS specs — payload-gated |
 | `/vocabulary` | `VocabularyPage` | the ubiquitous language as a live Obsidian-style force graph (`lib/vocab-sim.ts` — seeded, fixed-timestep, deterministic at rest) — payload-gated |
 | `/findings` | `FindingsPage` | correctness audit — payload-gated |
-| `/home` | → `/canvas` | legacy deep-link redirect |
+| `/canvas`, `/home` | → `/journeys` | legacy deep-link redirects; the canvas view was removed 2026-08-19 |
 | `*` | `NotFound` | |
 
-Everything but `/` nests under a pathless `SessionShell` layout route (`src/components/layout/session-shell.tsx`): a persistent left rail, its own 12-second load watchdog, and a redirect to `/` on load error. In repo mode the rail hides the Canvas and Journeys items. `sessionsIndexHref()` and `askEndpointHref()` both return `null` off http(s), so `file://` artifacts degrade quietly. HashRouter is mandatory — `file://` and hosted subpaths both depend on it.
+Everything but `/` nests under a pathless `SessionShell` layout route (`src/components/layout/session-shell.tsx`): a persistent left rail, its own 12-second load watchdog, and a redirect to `/` on load error. In repo mode the rail hides the Journeys item. `sessionsIndexHref()` and `askEndpointHref()` both return `null` off http(s), so `file://` artifacts degrade quietly. HashRouter is mandatory — `file://` and hosted subpaths both depend on it.
 
 ## Repo hub and portal (`src/lib/repo/`)
 
@@ -47,13 +46,10 @@ Everything but `/` nests under a pathless `SessionShell` layout route (`src/comp
 | Store | Holds |
 |---|---|
 | `use-analysis-store` | Boot lifecycle: `status`, `error`, `transformedData`, `repoMode`, `repoManifest`, `repoViewers`, `portalMode`; actions `boot()`, `loadReport()`. The root data source. |
-| `use-journey-store` | Active journey and phase, lit canvas transit lines (`activeLineIds`, FIFO-capped at `MAX_JOURNEY_LINES = 3`), and a viewport snapshot taken on enter/exit. |
-| `use-navigation-store` | Canvas breadcrumb history (capped at 7 entries) plus pin toggling. |
+| `use-journey-store` | Active journey and phase, plus vestigial transit-line state (`activeLineIds`) and a viewport snapshot the removed canvas used. |
 | `use-selection-store` | Selected function context, its call-chain graph (`callChainNodes`, `activeCallChain`, cursor) and the active param trace. |
 | `use-ui-store` | Chrome: `activeView`, `healthSubStain`, `prMode`, `searchOpen`, `helpOpen`, `groupingVisible`, `railCollapsed`, `loadPhase`, and `codePanelWidth` (360–900, default 576, persisted under `underscore.codePanelWidth`). |
 | `use-specs-store` | Payload-driven specs mirror: `specs`, `history`, `versions`, `selected`, `view`, computed `diff` and change-bar data. No network. |
-| `use-viewport-store` | High-frequency canvas viewport: `pan`, `zoom` (clamped 0.1–12), `animating`, `semanticZoomLevel`, animated `zoomTo()` (clears `animating` after 950 ms). |
-| `use-focus-store` | Canvas drill-down: `focusedServiceId`/`focusedPackageId`/`focusedFileId` plus `codePanelFileId`, kept separate so dismissing the panel does not collapse method circles. |
 | `use-hover-store` | Isolated pointer state: `hoveredElement`, `blastTarget` — separate so hover never re-renders selection or journey state. |
 | `use-journey-ui-store` | Chapter ↔ graph sync: `hoveredFunctionId`, `activeFunctionId`, `hoveredServiceId`, and `interactionSource` ("chapter" \| "graph") to break feedback loops. |
 
@@ -63,7 +59,6 @@ Everything but `/` nests under a pathless `SessionShell` layout route (`src/comp
 |---|---|
 | `entry.tsx` | The boot route; hub, portal or report. |
 | `journeys.tsx` | The departures board: each journey a lettered transit line of stops, Δ chips on PR-touched stops, a badge for journeys with a real composed BPMN diagram. |
-| `canvas-world.tsx` | `ReactFlowProvider` + `BiologicalWorld` with the canvas overlays (PR banner, stats, help, grouping control, method detail, file code panel and chip, tooltip, journey lines). Redirects to `/` with no data. |
 | `chapter.tsx` | Thin wrapper resolving `:chapterSlug` into `ChapterView` (business-flow frame, inline call graph, code panes, Ask). |
 | `architecture.tsx` | The architecture diagram, including the derived system-context collapse. |
 | `specs.tsx` | Capability list plus the EARS reader, revision history and version diff. Redirects to `/journeys` when `transformedData.specs` is absent. |
@@ -93,4 +88,4 @@ The chapter's call graph is `CallFlowGraph.tsx` (React Flow, with built-in pan/z
 
 The live business-flow renderer is `bpmn/BpmnCanvas.tsx` — a hand-rolled SVG canvas, **not** React Flow. `ChapterView.tsx` → `BpmnEditor.tsx` → `BpmnCanvas`. `BpmnEditor.tsx` and `CodePanel.tsx` are both live; `ChapterView.tsx` imports and renders each.
 
-Two components under `src/components/journeys/` and `src/components/bpmn/` have no importers at all: `CallFlowChart.tsx` and `bpmn/BpmnFlow.tsx`. `BpmnFlow` is a React-Flow implementation of the same diagram that nothing mounts; it still shares `layout.ts` (via `flow-graph.ts`) with the live canvas, so layout changes are covered by `flow-graph.test.ts` even though the component itself is dead. Edit `BpmnCanvas` when you mean to change what users see.
+Two components under `src/components/journeys/` and `src/components/bpmn/` have no importers at all: `CallFlowGraph.tsx` and `bpmn/BpmnFlow.tsx`. `BpmnFlow` is a React-Flow implementation of the same diagram that nothing mounts; it still shares `layout.ts` (via `flow-graph.ts`) with the live canvas, so layout changes are covered by `flow-graph.test.ts` even though the component itself is dead. Edit `BpmnCanvas` when you mean to change what users see.

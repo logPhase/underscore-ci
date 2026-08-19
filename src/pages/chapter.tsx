@@ -1,4 +1,4 @@
-import PRSummaryBanner from "@/components/canvas/PRSummaryBanner";
+import PRSummaryBanner from "@/components/layout/PRSummaryBanner";
 import ChapterView from "@/components/journeys/ChapterView";
 import { useMatch, useNavigate } from "react-router-dom";
 

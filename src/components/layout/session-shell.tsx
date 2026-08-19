@@ -287,9 +287,6 @@ const SessionRail = () => {
         aria-label="Session views"
         data-tour="rail-nav"
       >
-        {!repoMode && (
-          <RailNavItem to="/canvas" icon={MapIcon} label="Canvas" collapsed={collapsed} />
-        )}
         {hasArchitecture && (
           <RailNavItem
             to="/architecture"
