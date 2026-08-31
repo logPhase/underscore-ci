@@ -121,3 +121,23 @@ export const useAnalysis = create<AnalysisState>()((set, get) => ({
     }
   },
 }));
+
+/** Live data hot-swap — the local journey-focus mirror dispatches fresh
+ *  payloads on this event instead of reloading the page, so the diagram
+ *  updates in place (scroll, pan/zoom, open panels all survive). Inert in
+ *  published reports: nothing there dispatches it. `__underscoreLiveReady`
+ *  is how the dispatcher detects support and falls back to a full reload
+ *  against templates built before this hook existed. */
+if (typeof window !== "undefined") {
+  window.addEventListener("underscore:live-data", (ev) => {
+    try {
+      const raw = (ev as CustomEvent).detail;
+      const transformedData = transformToFrontendFormat(raw as any);
+      useAnalysis.setState({ status: "complete", error: null, transformedData });
+      useUIStore.getState().setPrMode(transformedData.prOverlay !== null);
+    } catch (err) {
+      console.error("underscore:live-data payload rejected", err);
+    }
+  });
+  (window as unknown as { __underscoreLiveReady: boolean }).__underscoreLiveReady = true;
+}
