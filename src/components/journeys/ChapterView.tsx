@@ -620,7 +620,15 @@ const ChapterViewInner: React.FC<{ chapter: Chapter; onBack: () => void }> = ({
               onClick={(e) => e.stopPropagation()}
             >
               <BpmnStepFunctions
-                element={bpmnElement}
+                // Re-resolve by id so a live-data hot-swap (the local
+                // mirror updating mid-session) refreshes an OPEN dialog —
+                // the selection state holds a reference into the previous
+                // payload's diagram.
+                element={
+                  chapter.bpmn?.elements?.find(
+                    (e) => e.id === bpmnElement.id
+                  ) ?? bpmnElement
+                }
                 chapter={chapter}
                 onClose={() => setStepFnsOpen(false)}
                 onOpenCallGraph={onOpenCallGraphAt}

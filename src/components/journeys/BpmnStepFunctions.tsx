@@ -25,6 +25,7 @@ import type { Chapter } from '@/types/journey';
 import type { BpmnElement } from '@/components/bpmn/types';
 import { getMethodInfo } from '@/data/parity-loader';
 import { CodeHighlight, langFromFile } from '@/components/ui/CodeHighlight';
+import { StepInOut, StepState } from './StepIO';
 
 const stripArgs = (s: string) => s.replace(/\(.*$/, '').trim();
 const shortName = (fqn: string) => {
@@ -285,7 +286,18 @@ export function BpmnStepFunctions({ element, chapter, onClose, onOpenCallGraph, 
    *  so the list blends into a host panel instead of reading as a card. */
   bare?: boolean;
 }) {
+  // Data-contract tabs exist only when the element carries `io` (filled by
+  // the journey-focus session) — published diagrams without it render the
+  // plain function list, unchanged. Hook lives above the null-return.
+  const [tab, setTab] = useState<'fns' | 'io' | 'state'>('fns');
   if (!element) return null;
+  const io = element.io;
+  const hasInOut = !!io && (io.inputs !== undefined || io.outputs !== undefined);
+  const hasState = !!io && (io.state !== undefined ||
+    (io.state_writes?.length ?? 0) > 0 || (io.state_reads?.length ?? 0) > 0);
+  const showTabs = hasInOut || hasState;
+  const activeTab: 'fns' | 'io' | 'state' =
+    (tab === 'io' && !hasInOut) || (tab === 'state' && !hasState) ? 'fns' : tab;
   const fns = functionRefs(element);
   // Changed functions first — they are why the reviewer opened this.
   const rank = (f: FnRef) => {
@@ -354,17 +366,51 @@ export function BpmnStepFunctions({ element, chapter, onClose, onOpenCallGraph, 
           </button>
         )}
       </div>}
+      {/* Data-contract tabs — only when the session captured io for this
+          element. The diagram stays clean; the contract lives here. */}
+      {showTabs && (
+        <div
+          className="shrink-0 flex items-center gap-1 px-3 pt-2"
+          role="tablist"
+          aria-label="Step detail tabs"
+        >
+          {([
+            ['fns', 'functions'],
+            ...(hasInOut ? [['io', 'in / out']] : []),
+            ...(hasState ? [['state', 'state']] : []),
+          ] as Array<['fns' | 'io' | 'state', string]>).map(([key, label]) => (
+            <button
+              key={key}
+              role="tab"
+              aria-selected={activeTab === key}
+              onClick={() => setTab(key)}
+              className="rounded-sm px-2 py-1 font-mono text-[9.5px] uppercase transition-colors"
+              style={{
+                letterSpacing: 1.1,
+                color: activeTab === key ? 'var(--bpmn-cyan)' : 'var(--bpmn-text-dim)',
+                border: `1px solid ${activeTab === key
+                  ? 'color-mix(in srgb, var(--bpmn-cyan) 45%, transparent)'
+                  : 'var(--bpmn-border-soft)'}`,
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
       {/* body — the lens strips, code on demand. flex-1 + min-h-0 makes THIS
           the bounded scroll region (was unconstrained → content clipped by
           the parent's overflow-hidden and only the scrollbar could move it;
           now a two-finger/wheel scroll moves the whole list). */}
       <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-3">
-        {fns.length === 0 && (
+        {activeTab === 'io' && io && <StepInOut io={io} />}
+        {activeTab === 'state' && io && <StepState io={io} />}
+        {activeTab === 'fns' && fns.length === 0 && (
           <div className="mt-2.5 px-0.5 text-[10.5px] font-mono leading-relaxed" style={{ color: 'var(--bpmn-text-dim)' }}>
             No functions cited on this element — start/end events carry none.
           </div>
         )}
-        {primary && (
+        {activeTab === 'fns' && primary && (
           <>
             {/* Only worth an eyebrow when something is being ranked BELOW
                 it; on a single-citation step the label would be noise. */}
@@ -394,13 +440,13 @@ export function BpmnStepFunctions({ element, chapter, onClose, onOpenCallGraph, 
             )}
           </>
         )}
-        {primary && rest.length > 0 && <SupportingCast
+        {activeTab === 'fns' && primary && rest.length > 0 && <SupportingCast
           fns={rest}
           chapter={chapter}
           onOpenCallGraph={onOpenCallGraph}
         />}
         {/* No named primary (pre-v5 diagram): the honest flat list. */}
-        {!primary && fns.map(fn => (
+        {activeTab === 'fns' && !primary && fns.map(fn => (
           <FunctionStrip key={fn.fqn} fn={fn} chapter={chapter} onOpenCallGraph={onOpenCallGraph} defaultOpen={defaultOpen} />
         ))}
       </div>
