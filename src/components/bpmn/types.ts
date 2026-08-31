@@ -97,6 +97,12 @@ export interface BpmnElement {
   outcome?: EndOutcome;
   /** Data contract for the in/out + state panes (see BpmnElementIO). */
   io?: BpmnElementIO;
+  /** Declared change status — colors the box (left border + corner badge)
+   *  exactly like the PR-diff-computed decoration. Written by the
+   *  journey-focus session (its edits stamp it automatically; it can also
+   *  set it explicitly) so a live mirror shows WHERE the session changed
+   *  the flow. Takes precedence over the code_fqns/diff intersection. */
+  prStatus?: "added" | "modified" | "deleted";
 }
 
 /**
