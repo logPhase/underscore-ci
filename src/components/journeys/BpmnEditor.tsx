@@ -139,9 +139,11 @@ export const BpmnEditor = forwardRef<BpmnCanvasHandle, Props>(function BpmnEdito
   // intersection — pure, free, deterministic. Nothing from the LLM here.
   const elementPrStatus = useMemo<Map<string, PrChange>>(() => {
     const out = new Map<string, PrChange>();
-    type Elem = { id: string; code_fqns?: string[] };
+    type Elem = { id: string; code_fqns?: string[]; prStatus?: PrChange };
     for (const e of (active.elements ?? []) as Elem[]) {
-      const change = mostProminentChange(e.code_fqns);
+      // A status declared ON the element (journey-focus live session) beats
+      // the diff intersection — the mirror has no PR overlay to intersect.
+      const change = e.prStatus ?? mostProminentChange(e.code_fqns);
       if (change) out.set(e.id, change);
     }
     return out;
