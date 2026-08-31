@@ -230,6 +230,9 @@ export interface ComponentFunction {
 /** The shape of the JSON file produced by export.clj after data-model normalization. */
 export interface RawAnalysisJSON {
   isRealData: boolean;
+  /** Set by the journey-focus mirror at injection — see
+   *  TransformedData.liveSession. */
+  liveSession?: boolean;
   services: RawService[];
   sharedLibs: RawSharedLib[];
   dependencies: RawDependency[];
@@ -293,6 +296,12 @@ export interface AnalysisData {
 }
 
 export interface TransformedData extends AnalysisData {
+  /** True when this payload is a journey-focus LIVE MIRROR (set by the
+   *  local MCP server at injection). Keeps step-level PR data (prStatus,
+   *  beforeBody) alive without a PR overlay, so the step pane can show
+   *  the focus session's code diffs — a whole-repo report otherwise
+   *  strips those as stale leftovers. */
+  liveSession?: boolean;
   /** Living domain vocabulary — passthrough from the raw payload. */
   vocabulary?: import("./vocabulary").VocabPayload | null;
   chapters: Chapter[];

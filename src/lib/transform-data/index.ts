@@ -127,6 +127,7 @@ export function transformToFrontendFormat(
     crossModuleFlows: raw.crossModuleFlows,
     callChainData: buildCallChainData(calls, methods, files),
     prOverlay: prOverlayData,
+    liveSession: raw.liveSession === true,
     globalMethodIndex,
     methods: functions,
     calls: calls,
