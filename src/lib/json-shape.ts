@@ -73,6 +73,16 @@ function normalized(path: string): string {
 
 export type WriteMatch = "hit" | "contains" | null;
 
+/** Normalize mixed write declarations (plain path strings or
+ *  {path, from, to} transitions) to their paths for matching. */
+export function declaredPathsOf(
+  writes: Array<string | { path: string }>
+): string[] {
+  return writes
+    .map((w) => (typeof w === "string" ? w : w.path))
+    .filter(Boolean);
+}
+
 /**
  * How a line relates to the declared write paths:
  *  - "hit": the line IS a written path or lives inside one — this value is

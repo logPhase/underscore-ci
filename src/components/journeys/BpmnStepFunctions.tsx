@@ -25,7 +25,7 @@ import type { Chapter } from '@/types/journey';
 import type { BpmnElement } from '@/components/bpmn/types';
 import { getMethodInfo } from '@/data/parity-loader';
 import { CodeHighlight, langFromFile } from '@/components/ui/CodeHighlight';
-import { StepInOut, StepState } from './StepIO';
+import { StepInOut, StepState, defaultTab, hasInOutData, hasStateData, type StepTab } from './StepIO';
 
 const stripArgs = (s: string) => s.replace(/\(.*$/, '').trim();
 const shortName = (fqn: string) => {
@@ -288,15 +288,15 @@ export function BpmnStepFunctions({ element, chapter, onClose, onOpenCallGraph, 
 }) {
   // Data-contract tabs exist only when the element carries `io` (filled by
   // the journey-focus session) — published diagrams without it render the
-  // plain function list, unchanged. Hook lives above the null-return.
-  const [tab, setTab] = useState<'fns' | 'io' | 'state'>('fns');
+  // plain function list, unchanged. Cockpit ordering: a stage with
+  // variables opens ON them. Hook lives above the null-return.
+  const [tab, setTab] = useState<StepTab>(() => defaultTab(element));
   if (!element) return null;
   const io = element.io;
-  const hasInOut = !!io && (io.inputs !== undefined || io.outputs !== undefined);
-  const hasState = !!io && (io.state !== undefined ||
-    (io.state_writes?.length ?? 0) > 0 || (io.state_reads?.length ?? 0) > 0);
+  const hasInOut = hasInOutData(io);
+  const hasState = hasStateData(io);
   const showTabs = hasInOut || hasState;
-  const activeTab: 'fns' | 'io' | 'state' =
+  const activeTab: StepTab =
     (tab === 'io' && !hasInOut) || (tab === 'state' && !hasState) ? 'fns' : tab;
   const fns = functionRefs(element);
   // Changed functions first — they are why the reviewer opened this.
@@ -377,8 +377,8 @@ export function BpmnStepFunctions({ element, chapter, onClose, onOpenCallGraph, 
           {([
             ['fns', 'functions'],
             ...(hasInOut ? [['io', 'in / out']] : []),
-            ...(hasState ? [['state', 'state']] : []),
-          ] as Array<['fns' | 'io' | 'state', string]>).map(([key, label]) => (
+            ...(hasState ? [['state', 'variables']] : []),
+          ] as Array<[StepTab, string]>).map(([key, label]) => (
             <button
               key={key}
               role="tab"

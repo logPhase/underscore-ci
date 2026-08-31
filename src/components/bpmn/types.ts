@@ -41,6 +41,13 @@ export interface BpmnCodeEvidence {
  * would mislead), never prose. Filled by the journey-focus session as it
  * reads the code; absent on diagrams that predate the feature.
  */
+/** A write with its value transition — "score: 0.42 → 0.87". */
+export interface StateWrite {
+  path: string;
+  from?: unknown;
+  to?: unknown;
+}
+
 export interface BpmnElementIO {
   /** What this step receives (example-shaped JSON). */
   inputs?: unknown;
@@ -49,10 +56,12 @@ export interface BpmnElementIO {
   /** The ACCUMULATED system state when this step runs — the whole picture,
    *  not just this step's slice. */
   state?: unknown;
-  /** Dot-paths into `state` that THIS step writes ("company.score",
-   *  "events[].weight") — rendered highlighted so modified-by-this-box is
-   *  distinguishable from merely-present. */
-  state_writes?: string[];
+  /** What THIS step writes into `state` — rendered highlighted so
+   *  modified-by-this-box is distinguishable from merely-present. A plain
+   *  dot-path ("company.score", "events[].weight"), or {path, from, to}
+   *  when the value transition is known (cockpit-style: the variable's
+   *  value before and after this stage). */
+  state_writes?: Array<string | StateWrite>;
   /** Dot-paths this step only reads. */
   state_reads?: string[];
   /** One line on provenance (e.g. "derived by the focus session from the

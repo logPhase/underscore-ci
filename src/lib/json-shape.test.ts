@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { jsonLines, matchPaths } from "./json-shape";
+import { declaredPathsOf, jsonLines, matchPaths } from "./json-shape";
 
 describe("jsonLines", () => {
   it("flattens nested objects with dot-paths", () => {
@@ -23,6 +23,14 @@ describe("jsonLines", () => {
   it("renders type-string leaves as plain strings", () => {
     const lines = jsonLines({ score: "float 0-100" });
     expect(lines.find((l) => l.path === "score")?.text).toBe('"float 0-100"');
+  });
+});
+
+describe("declaredPathsOf", () => {
+  it("normalizes mixed string and transition writes to paths", () => {
+    expect(
+      declaredPathsOf(["company.score", { path: "events[].weight" }])
+    ).toEqual(["company.score", "events[].weight"]);
   });
 });
 

@@ -9,8 +9,45 @@
  * by the journey-focus session (set_element_io); the tabs only exist when
  * it is present, so published diagrams without it are untouched.
  */
-import { jsonLines, matchPaths, type JsonLine } from "@/lib/json-shape";
-import type { BpmnElementIO } from "@/components/bpmn/types";
+import {
+  declaredPathsOf,
+  jsonLines,
+  matchPaths,
+  type JsonLine,
+} from "@/lib/json-shape";
+import type {
+  BpmnElement,
+  BpmnElementIO,
+  StateWrite,
+} from "@/components/bpmn/types";
+
+export type StepTab = "fns" | "io" | "state";
+
+export function hasInOutData(io?: BpmnElementIO): boolean {
+  return !!io && (io.inputs !== undefined || io.outputs !== undefined);
+}
+
+export function hasStateData(io?: BpmnElementIO): boolean {
+  return (
+    !!io &&
+    (io.state !== undefined ||
+      (io.state_writes?.length ?? 0) > 0 ||
+      (io.state_reads?.length ?? 0) > 0)
+  );
+}
+
+/** Cockpit ordering: a stage opens on its process variables when it has
+ *  them — the state view IS the point of clicking a stage; code stays one
+ *  tab away. */
+export function defaultTab(element: BpmnElement | null): StepTab {
+  const io = element?.io;
+  if (hasStateData(io)) return "state";
+  if (hasInOutData(io)) return "io";
+  return "fns";
+}
+
+const fmtValue = (v: unknown): string =>
+  v === undefined ? "?" : JSON.stringify(v);
 
 function Line({
   line,
@@ -139,11 +176,18 @@ export function StepInOut({ io }: { io: BpmnElementIO }) {
   );
 }
 
-/** The "state" tab: the accumulated system state at this point, with the
- *  paths this step writes highlighted against the overall picture. */
+/** The "state" tab — the cockpit variables view: the accumulated process
+ *  variables at this stage, the paths this step writes highlighted against
+ *  the overall picture, and the value transitions (from → to) when the
+ *  session captured them. */
 export function StepState({ io }: { io: BpmnElementIO }) {
-  const writes = io.state_writes ?? [];
+  const declared = io.state_writes ?? [];
+  const writes = declaredPathsOf(declared);
   const reads = io.state_reads ?? [];
+  const transitions = declared.filter(
+    (w): w is StateWrite =>
+      typeof w !== "string" && (w.from !== undefined || w.to !== undefined)
+  );
   return (
     <div className="px-0.5">
       <div
@@ -165,7 +209,33 @@ export function StepState({ io }: { io: BpmnElementIO }) {
         reads={reads}
         empty="state shape not captured yet — ask the session"
       />
-      {io.state === undefined && writes.length > 0 && (
+      {transitions.length > 0 && (
+        <>
+          <Eyebrow>changed by this step</Eyebrow>
+          {transitions.map((t) => (
+            <div
+              key={t.path}
+              className="flex items-baseline gap-1.5 px-1 py-0.5 font-mono text-[10.5px]"
+            >
+              <span style={{ color: "var(--bpmn-amber)" }}>✎ {t.path}:</span>
+              <span
+                className="whitespace-pre"
+                style={{ color: "var(--bpmn-text-dim)" }}
+              >
+                {fmtValue(t.from)}
+              </span>
+              <span style={{ color: "var(--bpmn-amber)" }}>→</span>
+              <span
+                className="whitespace-pre"
+                style={{ color: "var(--bpmn-text)" }}
+              >
+                {fmtValue(t.to)}
+              </span>
+            </div>
+          ))}
+        </>
+      )}
+      {io.state === undefined && transitions.length === 0 && writes.length > 0 && (
         <>
           <Eyebrow>writes</Eyebrow>
           <div className="flex flex-wrap gap-1.5 px-1 py-1">
