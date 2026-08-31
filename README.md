@@ -33,10 +33,13 @@ Then set two repository secrets and one variable:
 
 That's it. On a **pull request** it posts a PR comment and publishes a
 **PR-scoped** report (only the journeys the diff touches). On **Run workflow**
-(workflow_dispatch) it publishes a **whole-repo** report. Both land on the
-`underscore-reports` branch and refresh the hosted viewer — no branch,
-worktree, or `runs.json` plumbing in your repo. Because you track `@v2`, every
-improvement we ship reaches you with no change on your side.
+(workflow_dispatch) it publishes a **whole-repo** report — unless the branch
+you dispatch on is the head of an **open PR**, in which case that PR is
+analyzed and published exactly as a pull_request run would (the on-demand
+selective run: works even while automatic PR analysis is gated off). Both
+land on the `underscore-reports` branch and refresh the hosted viewer — no
+branch, worktree, or `runs.json` plumbing in your repo. Because you track
+`@v2`, every improvement we ship reaches you with no change on your side.
 
 The reusable workflow does the checkout and calls the action with
 `mode: auto` + `publish: branch`; see
@@ -82,15 +85,29 @@ cleanup job prunes the folder (see the commented block in the example
 workflow). Note: *private* Pages requires GitHub Enterprise Cloud — that is
 why artifact is the default.
 
-## On-demand full-repo report
+## On-demand runs (workflow_dispatch)
 
-A whole-repo report (every journey and chapter — no PR diff) needs no extra
-workflow: the caller in [`examples/underscore.yml`](examples/underscore.yml)
-triggers on `workflow_dispatch`, and `mode: auto` resolves that to `full`. Run
-it from the Actions tab.
+Manual dispatch serves two cases, resolved by which branch you pick in the
+**Run workflow** dropdown:
 
-- Runs on `workflow_dispatch` — no `pull_request` event or payload is needed,
-  and no PR comment is posted (`pr-number` output stays empty).
+- **A PR's head branch** → on-demand **PR analysis** of that open PR: the
+  action resolves the branch to its PR via the API, synthesizes the event
+  payload, and the run is indistinguishable from a pull_request run (PR
+  comment, `pr-<n>` publish dir, viewer entry). This is the selective-run
+  path when automatic PR analysis is switched off — e.g. gated behind a repo
+  variable — so one PR can still be analyzed on demand without re-enabling
+  the fleet.
+- **Any other branch** (typically `main`) → a whole-repo report (every
+  journey and chapter — no PR diff), `mode: auto` resolves to `full`.
+
+No extra workflow needed for either: the caller in
+[`examples/underscore.yml`](examples/underscore.yml) triggers on
+`workflow_dispatch` already.
+
+Full-mode specifics:
+
+- No `pull_request` event or payload is needed, and no PR comment is posted
+  (`pr-number` output stays empty).
 - Report staging and delivery are identical to PR mode: the single-file HTML
   lands at the `report-file` output. The example workflow commits it to an
   orphan **`underscore-reports`** branch as

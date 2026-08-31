@@ -20,8 +20,12 @@ branding:
 inputs:
   mode:
     description: >-
-      Analysis mode. 'auto' (default) picks 'pr' on a pull_request event and
-      'full' otherwise (e.g. workflow_dispatch) — so one workflow serves both.
+      Analysis mode. 'auto' (default) picks 'pr' on a pull_request event; on
+      any other event (e.g. workflow_dispatch) it picks 'pr' when the
+      dispatched ref is the head branch of an open PR — the on-demand
+      selective run: dispatch the workflow on a PR's branch and THAT PR is
+      analyzed and published, even while automatic PR runs are switched off —
+      and 'full' otherwise, so one workflow serves both.
       'pr' analyzes the PR diff (only the journeys it touches) and posts a PR
       comment. 'full' produces a whole-repo report; an analysis failure always
       fails the step in full mode (no PR to comment on, so a green no-op would
@@ -205,7 +209,42 @@ runs:
         # Resolve 'auto' here so any image (incl. older ones) receives a
         # concrete pr|full — the container never needs to know about 'auto'.
         if [[ "$MODE" == "auto" ]]; then
-          if [[ "${GITHUB_EVENT_NAME:-}" == "pull_request" ]]; then MODE=pr; else MODE=full; fi
+          if [[ "${GITHUB_EVENT_NAME:-}" == "pull_request" ]]; then
+            MODE=pr
+          else
+            # On-demand PR analysis: a manual dispatch pointed at a branch
+            # with an open PR analyzes THAT PR — the selective-run path when
+            # automatic PR analysis is switched off. The event payload a
+            # pull_request run would carry is synthesized from the API; a
+            # ref with no open PR keeps the whole-repo behavior.
+            export GH_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+            PR_JSON=""
+            if [[ -n "$GH_TOKEN" && -n "${GITHUB_REF_NAME:-}" ]]; then
+              PR_JSON=$(gh api "repos/$GITHUB_REPOSITORY/pulls?state=open&head=${GITHUB_REPOSITORY%%/*}:$GITHUB_REF_NAME" \
+                        --jq '.[0] // empty' 2>/dev/null || true)
+            fi
+            if [[ -n "$PR_JSON" ]]; then
+              MODE=pr
+              SYNTH_EVENT="${RUNNER_TEMP:-/tmp}/underscore-dispatch-event.json"
+              jq '{pull_request: {number: .number, title: .title,
+                                  body: (.body // ""),
+                                  base: {sha: .base.sha},
+                                  head: {sha: .head.sha, ref: .head.ref}}}' \
+                <<<"$PR_JSON" > "$SYNTH_EVENT"
+              GITHUB_EVENT_PATH="$SYNTH_EVENT"
+              export GITHUB_EVENT_NAME=pull_request
+              # Hand the resolved PR to the publish step — github.event has
+              # no pull_request on a dispatch, so it reads these outputs.
+              {
+                echo "resolved-pr=$(jq -r .pull_request.number "$SYNTH_EVENT")"
+                echo "resolved-head-ref=$(jq -r .pull_request.head.ref "$SYNTH_EVENT")"
+                echo "resolved-head-sha=$(jq -r .pull_request.head.sha "$SYNTH_EVENT")"
+              } >> "$GITHUB_OUTPUT"
+              echo "On-demand PR analysis: dispatch ref '$GITHUB_REF_NAME' has open PR #$(jq -r .pull_request.number "$SYNTH_EVENT")"
+            else
+              MODE=full
+            fi
+          fi
         fi
         echo "Underscore mode: $MODE (event: ${GITHUB_EVENT_NAME:-n/a})"
         # Stable per-repo analyzer id — scopes the analyzer graph, BPMN cache, and
@@ -277,6 +316,12 @@ runs:
         PR_TITLE: ${{ github.event.pull_request.title }}
         PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
         PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        # On-demand dispatch (analyze step resolved the ref to an open PR):
+        # github.event carries no pull_request, so the resolved coordinates
+        # arrive as step outputs and publish-report.sh flips itself to pr.
+        DISPATCH_PR_NUMBER: ${{ steps.analyze.outputs.resolved-pr }}
+        DISPATCH_PR_HEAD_REF: ${{ steps.analyze.outputs.resolved-head-ref }}
+        DISPATCH_PR_HEAD_SHA: ${{ steps.analyze.outputs.resolved-head-sha }}
         GH_TOKEN: ${{ github.token }}
       run: |
         bash "$GITHUB_ACTION_PATH/scripts/publish-report.sh"
@@ -285,8 +330,10 @@ runs:
     # of this PR had C# and left a published report, retire it now — a PR that
     # currently changes no source must not keep showing a stale analysis on
     # the dashboard. No-op when nothing was ever published.
+    # (Gated on a real pull_request event — an on-demand dispatch never
+    # retires anything; its PR number lives in step outputs, not the event.)
     - name: Retire stale report for infra-only PR
-      if: inputs.publish == 'branch' && steps.analyze.outputs.skipped == 'true'
+      if: inputs.publish == 'branch' && steps.analyze.outputs.skipped == 'true' && github.event.pull_request.number
       shell: bash
       env:
         REPORTS_BRANCH: ${{ inputs.reports-branch }}
