@@ -1127,15 +1127,19 @@ const ChapterView: React.FC<ChapterViewProps> = ({ chapterSlug, onBack }) => {
   );
 
   const prMode = useUIStore((state) => state.prMode);
+  // A live-mirror payload carries step diffs (prStatus/beforeBody written
+  // by the focus session) with no PR overlay — stripping them there would
+  // erase exactly the "what did the session change" view.
+  const liveSession = transformedData?.liveSession === true;
 
   const chapter = useMemo(
     () =>
       rawChapter
-        ? prMode
+        ? prMode || liveSession
           ? rawChapter
           : stripPRFromChapter(rawChapter)
         : null,
-    [rawChapter, prMode]
+    [rawChapter, prMode, liveSession]
   );
 
   if (!chapter) {
