@@ -22,6 +22,15 @@ MODE="${MODE_INPUT:-auto}"
 if [[ "$MODE" == "auto" ]]; then
   [[ "${EVENT_NAME:-}" == "pull_request" ]] && MODE=pr || MODE=full
 fi
+# On-demand dispatch: the analyze step resolved the dispatched ref to an
+# open PR (github.event has no pull_request there) — publish as THAT PR,
+# not as a whole-repo run dir.
+if [[ "$MODE" != "pr" && -n "${DISPATCH_PR_NUMBER:-}" ]]; then
+  MODE=pr
+  PR_NUMBER="$DISPATCH_PR_NUMBER"
+  PR_HEAD_REF="${DISPATCH_PR_HEAD_REF:-}"
+  PR_HEAD_SHA="${DISPATCH_PR_HEAD_SHA:-}"
+fi
 
 git config user.name  "underscore-bot"
 git config user.email "bot@logphase.io"
