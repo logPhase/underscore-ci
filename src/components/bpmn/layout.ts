@@ -20,11 +20,22 @@ export interface LaidOutEdge {
   points: { x: number; y: number }[];
 }
 
+/** A swim lane band, computed by the lane post-pass: full-width horizontal
+ *  region owning every node assigned to that actor. */
+export interface LaidOutLane {
+  id: string;
+  label: string;
+  y: number;
+  h: number;
+}
+
 export interface Layout {
   nodes: LaidOutNode[];
   edges: LaidOutEdge[];
   width: number;
   height: number;
+  /** Present only when ≥2 declared actors have assigned nodes. */
+  lanes?: LaidOutLane[];
 }
 
 const GRID = 24;
@@ -68,9 +79,65 @@ export function sizeFor(type: BpmnElement["type"]): NodeSize {
   }
 }
 
+const LANE_PAD = 56;
+const LANE_GAP = 40;
+
+/** Swim-lane post-pass. Dagre owns the horizontal story (ranks, x); lanes
+ *  own the vertical one: each declared actor with assigned nodes becomes a
+ *  stacked band, and its members shift vertically AS A GROUP — intra-lane
+ *  geometry (and therefore dagre's collision guarantees) survive intact,
+ *  and the edge router downstream just sees the final coordinates.
+ *  Unassigned nodes form a trailing unlabeled band. Mutates node y. */
+function applyLanes(
+  nodes: LaidOutNode[],
+  laneDefs: { id: string; label: string }[],
+): LaidOutLane[] | undefined {
+  const laneOf = (n: LaidOutNode): string | null => {
+    const a = (n.actor || "").trim().toLowerCase();
+    if (!a) return null;
+    const hit = laneDefs.find(
+      (l) =>
+        l.id.trim().toLowerCase() === a || l.label.trim().toLowerCase() === a,
+    );
+    return hit ? hit.id : null;
+  };
+  const members = new Map<string | null, LaidOutNode[]>();
+  for (const n of nodes) {
+    const k = laneOf(n);
+    if (!members.has(k)) members.set(k, []);
+    members.get(k)!.push(n);
+  }
+  const populated = laneDefs.filter((l) => members.has(l.id));
+  if (populated.length < 2) return undefined; // one lane = no lanes
+  const order: { id: string; label: string; key: string | null }[] = [
+    ...populated.map((l) => ({ id: l.id, label: l.label, key: l.id })),
+    ...(members.has(null)
+      ? [{ id: "~unassigned", label: "", key: null as string | null }]
+      : []),
+  ];
+  let cursor = 0;
+  const out: LaidOutLane[] = [];
+  for (const lane of order) {
+    const ns = members.get(lane.key)!;
+    const top = Math.min(...ns.map((n) => n.y - n.h / 2));
+    const bottom = Math.max(...ns.map((n) => n.y + n.h / 2));
+    const shift = cursor + LANE_PAD - top;
+    for (const n of ns) n.y += shift;
+    out.push({
+      id: lane.id,
+      label: lane.label,
+      y: cursor,
+      h: bottom - top + 2 * LANE_PAD,
+    });
+    cursor += bottom - top + 2 * LANE_PAD + LANE_GAP;
+  }
+  return out;
+}
+
 export function layoutGraph(
   elements: BpmnElement[],
   flows: BpmnFlow[],
+  laneDefs?: { id: string; label: string }[],
 ): Layout {
   const g = new dagre.graphlib.Graph({ multigraph: true });
   g.setGraph({
@@ -138,6 +205,9 @@ export function layoutGraph(
     };
   });
 
+  // Lane pass BEFORE edge routing — edges derive from final node coords.
+  const lanes = laneDefs?.length ? applyLanes(nodes, laneDefs) : undefined;
+
   const nodeById = new Map(nodes.map((n) => [n.id, n]));
 
   // Group flows by source and target so we can fan multiple connections
@@ -186,6 +256,12 @@ export function layoutGraph(
 
   const { width, height } = g.graph() as { width: number; height: number };
 
+  if (lanes) {
+    // Banding restacked the vertical extent — recompute from reality.
+    const last = lanes[lanes.length - 1];
+    return { nodes, edges, width: width || 0, height: last.y + last.h + 64,
+             lanes };
+  }
   return { nodes, edges, width: width || 0, height: height || 0 };
 }
 

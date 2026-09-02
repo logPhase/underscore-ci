@@ -507,8 +507,8 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
   // future *programmatic* selection sync (e.g. call-graph → BPMN).
 
   const baseLayout = useMemo(
-    () => layoutGraph(journey.elements, journey.flows),
-    [journey.elements, journey.flows],
+    () => layoutGraph(journey.elements, journey.flows, journey.actors),
+    [journey.elements, journey.flows, journey.actors],
   );
 
   // Apply manual overrides on top of the auto-layout. Edges re-route from
@@ -1108,6 +1108,46 @@ export const BpmnCanvas = forwardRef<BpmnCanvasHandle, Props>(function BpmnCanva
           />
 
           <g transform={`translate(${view.x}, ${view.y}) scale(${view.k})`}>
+            {/* Swim lanes — figure-ground: bands are quiet "ground" behind
+                everything, labels small-caps on the left rail. Alternating
+                tint so adjacent lanes separate without hard borders. */}
+            {layout.lanes?.map((lane, i) => (
+              <g key={`lane-${lane.id}`} pointerEvents="none">
+                <rect
+                  x={-40}
+                  y={lane.y}
+                  width={Math.max(layout.width, 400) + 80}
+                  height={lane.h}
+                  fill={
+                    i % 2 === 0
+                      ? "color-mix(in srgb, var(--bpmn-text) 3.5%, transparent)"
+                      : "color-mix(in srgb, var(--bpmn-text) 1.2%, transparent)"
+                  }
+                />
+                <line
+                  x1={-40}
+                  x2={Math.max(layout.width, 400) + 40}
+                  y1={lane.y}
+                  y2={lane.y}
+                  stroke="color-mix(in srgb, var(--bpmn-border) 55%, transparent)"
+                  strokeDasharray="2 6"
+                />
+                {lane.label && (
+                  <text
+                    transform={`translate(${-56}, ${lane.y + lane.h / 2}) rotate(-90)`}
+                    textAnchor="middle"
+                    fill="var(--bpmn-text-muted)"
+                    style={{
+                      font: "600 12px var(--bpmn-font-mono, monospace)",
+                      letterSpacing: 2.2,
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {lane.label}
+                  </text>
+                )}
+              </g>
+            ))}
             <g className="bpmn-edges-enter">
             {layout.edges.map((edge, edgeIndex) => {
               // Two flows can share the same from/to and differ only by
